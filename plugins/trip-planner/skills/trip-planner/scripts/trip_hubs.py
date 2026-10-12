@@ -127,6 +127,15 @@ US_ZONES = {"America/New_York", "America/Detroit", "America/Indiana/Indianapolis
 
 # --------------------------------------------------------------------------- utils
 
+def close_quietly(resp):
+    """Close a response or an HTTPError. On Python 3.8 an HTTPError made without a body raises KeyError when
+    closed, so any error here is ignored: there is nothing left to free."""
+    try:
+        resp.close()
+    except Exception:  # noqa: BLE001
+        pass
+
+
 def log(msg):
     """Progress line on stderr (every script's log). TRIP_PLANNER_QUIET=1 silences it; the WARNINGS in the
     output are not affected."""
@@ -654,7 +663,7 @@ def check_network(hosts, timeout=6):
         except Exception as e:  # noqa: BLE001
             out[h] = ("blocked: %s" % e) if _unreachable(e) else "ok"
             if isinstance(e, urllib.error.HTTPError):
-                e.close()
+                close_quietly(e)
         finally:
             _LAST_CALL[h] = time.time()   # counts toward the per-host pacing of the free services
     return out
@@ -945,7 +954,14 @@ def fetch_url(fid, url, max_age_h, refresh, warnings=None):
     tmp = "%s.%d.part" % (path, os.getpid())
     try:
         log("downloading %s: %s" % (fid, safe_url(url)))
-        req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+        sp = urllib.parse.urlsplit(url)
+        if sp.scheme.lower() == "file" and (sp.query or sp.fragment):
+            # a local file has no query: open the path alone (Python 3.12 and older read '?v=2' as part of the
+            # file name); the full URL still names the cache file
+            url_open = urllib.parse.urlunsplit(sp._replace(query="", fragment=""))
+        else:
+            url_open = url
+        req = urllib.request.Request(url_open, headers={"User-Agent": USER_AGENT})
         with urllib.request.urlopen(req, timeout=300) as r, open(tmp, "wb") as out:
             size = int((getattr(r, "headers", None) or {}).get("Content-Length") or 0)
             if size > FEED_MAX_BYTES:
@@ -984,7 +1000,7 @@ def fetch_url(fid, url, max_age_h, refresh, warnings=None):
                 warnings.append("%s could not be refreshed (%s); used a cached copy %.1f days old"
                                 % (fid, _scrub(e, url), age_d))
             if isinstance(e, urllib.error.HTTPError):
-                e.close()
+                close_quietly(e)
             return path
         raise
     finally:

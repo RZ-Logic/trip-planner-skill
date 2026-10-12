@@ -342,7 +342,7 @@ def _nlr_call(path, params, key, warnings, post=False, with_total=False):
             return st, int(d.get("total_results") or len(st))
         return st
     except urllib.error.HTTPError as e:
-        e.close()
+        th.close_quietly(e)
         if e.code == 429:
             warnings.append("NLR charger API hourly limit reached (DEMO_KEY allows about 10 calls per hour); set "
                             "NLR_API_KEY (free at https://developer.nlr.gov/signup/)")
@@ -440,7 +440,7 @@ def _overpass(query, warnings):
         except dc.FetchError as e:
             warnings.append("OpenStreetMap charger fallback failed (%s)" % th.safe_text(str(e)))
         except urllib.error.HTTPError as e:
-            e.close()
+            th.close_quietly(e)
             if e.code == 429 and attempt == 1:
                 log("Overpass busy (429); waiting 30 s")
                 time.sleep(30)

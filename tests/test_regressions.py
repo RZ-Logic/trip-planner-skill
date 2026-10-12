@@ -456,7 +456,7 @@ class ClaudeAiSandboxRegressions(unittest.TestCase):
         self.assertTrue(th._unreachable(refused))
         self.assertFalse(th._unreachable(answered))
         self.assertFalse(th._unreachable(reset))
-        answered.close()
+        th.close_quietly(answered)   # Python 3.8: closing an HTTPError made without a body raises
         saved = th.http_get
         th.http_get = lambda *a, **k: (_ for _ in ()).throw(dns)
         try:

@@ -525,5 +525,49 @@ class NetworkGuard(unittest.TestCase):
         self.assertNotIn("network guard", out.stderr)
 
 
+class Python38HttpErrorClose(unittest.TestCase):
+    """On Python 3.8 closing an HTTPError made without a body raises KeyError('file') (CI caught it there).
+    Every place that closes one must survive that; the newer Pythons here simulate it with a patch."""
+
+    def setUp(self):
+        p = mock.patch.object(urllib.error.HTTPError, "close", side_effect=KeyError("file"))
+        p.start()
+        self.addCleanup(p.stop)
+
+    def err(self, code):
+        return urllib.error.HTTPError("https://example.invalid/x", code, "x", {}, None)
+
+    def test_close_quietly(self):
+        th.close_quietly(self.err(500))
+
+    def test_check_network(self):
+        with mock.patch.object(th.urllib.request, "urlopen", side_effect=self.err(404)):
+            self.assertEqual(th.check_network(["example.invalid"]), {"example.invalid": "ok"})
+
+    def test_nrcan_download_warning(self):
+        import vehicles as V
+        self.assertIn("HTTP 403", V._download_warning("ratings", self.err(403)))
+
+    def test_nlr_error(self):
+        import ev_charging as ev
+        warnings = []
+        with mock.patch.object(dc, "fetch", side_effect=self.err(429)):
+            self.assertIsNone(ev._nlr_call("/x.json", {"a": 1}, "DEMO_KEY", warnings))
+        self.assertTrue(any("hourly limit" in w for w in warnings), warnings)
+
+    def test_stale_stand_in(self):
+        tmp = tempfile.mkdtemp()
+        self.addCleanup(_shutil.rmtree, tmp, True)
+        with mock.patch.dict(os.environ, {"TRIP_PLANNER_CACHE": tmp}), mock.patch.object(dc, "_CACHE_OFF", []):
+            path = dc._cache_path("https://example.invalid/y", None)
+            with open(path, "wb") as f:
+                f.write(b"old")
+            old = time.time() - 7200
+            os.utime(path, (old, old))
+            with mock.patch.object(dc._OPENER, "open", side_effect=self.err(500)):
+                self.assertEqual(dc.fetch("https://example.invalid/y", max_age_h=1), b"old")
+        dc.stale_notes()
+
+
 if __name__ == "__main__":
     unittest.main()

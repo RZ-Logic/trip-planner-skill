@@ -184,7 +184,7 @@ def fetch(url, data=None, headers=None, timeout=30, min_interval=0.0, max_age_h=
         old = _stale_copy(path, stale_max_h, validate)
         if old is not None:
             if isinstance(e, urllib.error.HTTPError):
-                e.close()   # its body is not read; the cached copy answers instead
+                th.close_quietly(e)   # its body is not read; the cached copy answers instead
             _STALE[host] = (old[1], type(e).__name__)
             return old[0]
         raise

@@ -929,7 +929,10 @@ def _download_warning(what, e):
     way the lookup goes on with the bundled index."""
     code = getattr(e, "code", None)
     if isinstance(e, urllib.error.HTTPError):
-        e.close()
+        try:
+            e.close()
+        except Exception:  # noqa: BLE001   (Python 3.8: an HTTPError without a body raises on close)
+            pass
     if code in (401, 403, 429):
         why = "NRCan refused the request (HTTP %s)" % code
     elif code:

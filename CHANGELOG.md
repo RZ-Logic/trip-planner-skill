@@ -30,7 +30,7 @@ before release.
 - **Hub finder.** Canada/* time zones work without tzdata; a NOT SHOWN line counts hidden hubs; a
   warning when the window crosses a daylight-saving change; feed URLs with keys are redacted; control
   characters in feed data are not printed; download size caps.
-- **Tests.** 845 tests, independent of today's date and time; every test file uses a temporary saved-car
+- **Tests.** 850 tests, independent of today's date and time; every test file uses a temporary saved-car
   file and cache; CI fails any run that tries the network.
 - **Docs.** SKILL.md cut to about 4,500 tokens, with the manual method in references/manual-method.md;
   plugin listings no longer promise cheap parking; `.env.example` and key setup instructions.

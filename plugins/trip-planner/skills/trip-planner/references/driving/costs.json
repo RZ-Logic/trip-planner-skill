@@ -1,0 +1,114 @@
+{
+ "verified": "2026-10-10",
+ "fuel": {
+  "csv_url": "https://www.ontario.ca/v1/files/fuel-prices/fueltypesall.csv",
+  "source": "https://data.ontario.ca/en/dataset/fuels-price-survey-information",
+  "licence": "Open Government Licence - Ontario (attribution)",
+  "cache_h": 72,
+  "units": "cents per litre, weekly rows dated Mondays; 0.0 = not surveyed",
+  "fuel_types": {"regular": "Regular Unleaded Gasoline", "premium": "Premium Gasoline", "diesel": "Diesel"},
+  "average_columns": ["Southern Average/Moyenne du sud de l'Ontario", "Ontario Average/Moyenne provinciale"],
+  "ontario_bbox": {"min_lat": 41.6, "max_lat": 56.9, "min_lon": -95.2, "max_lon": -74.3},
+  "max_market_km": 100,
+  "max_market_note": "beyond 100 km of a surveyed market the Southern or Northern Ontario average is used (Kingston is 146 km from Peterborough, whose price is not typical of eastern Ontario)",
+  "northern_column": "Northern Average/Moyenne du nord de l'Ontario",
+  "north_from_lat": 46.0,
+  "north_note": "coarse split for origins far from every market: north of 46.0 N uses the Northern Ontario average",
+  "markets_source": "Nominatim (OSM) place centres, 2026-10-10; Toronto West/East use Etobicoke and Scarborough as market centres",
+  "markets": [
+   {"column": "Ottawa", "name": "Ottawa", "lat": 45.4209, "lon": -75.6901, "source": "https://www.openstreetmap.org/relation/4136816"},
+   {"column": "Toronto West/Ouest", "name": "Toronto West", "lat": 43.6436, "lon": -79.5656, "source": "https://www.openstreetmap.org/relation/2520691"},
+   {"column": "Toronto East/Est", "name": "Toronto East", "lat": 43.7730, "lon": -79.2576, "source": "https://www.openstreetmap.org/relation/2520672"},
+   {"column": "Windsor", "name": "Windsor", "lat": 42.2859, "lon": -82.9781, "source": "https://www.openstreetmap.org/relation/7025718"},
+   {"column": "London", "name": "London", "lat": 42.9837, "lon": -81.2496, "source": "https://www.openstreetmap.org/relation/7485368"},
+   {"column": "Peterborough", "name": "Peterborough", "lat": 44.3048, "lon": -78.3199, "source": "https://www.openstreetmap.org/relation/7473849"},
+   {"column": "St. Catharine's", "name": "St. Catharines", "lat": 43.1580, "lon": -79.2441, "source": "https://www.openstreetmap.org/relation/2387995"},
+   {"column": "Sudbury", "name": "Sudbury", "lat": 46.4927, "lon": -80.9912, "source": "https://www.openstreetmap.org/relation/7568929"},
+   {"column": "Sault Saint Marie", "name": "Sault Ste. Marie", "lat": 46.5127, "lon": -84.3330, "source": "https://www.openstreetmap.org/relation/7590370"},
+   {"column": "Thunder Bay", "name": "Thunder Bay", "lat": 48.4064, "lon": -89.2598, "source": "https://www.openstreetmap.org/relation/7596931"},
+   {"column": "North Bay", "name": "North Bay", "lat": 46.3092, "lon": -79.4608, "source": "https://www.openstreetmap.org/relation/7129502"},
+   {"column": "Timmins", "name": "Timmins", "lat": 48.4775, "lon": -81.3304, "source": "https://www.openstreetmap.org/relation/7588071"},
+   {"column": "Kenora", "name": "Kenora", "lat": 49.7662, "lon": -94.4894, "source": "https://www.openstreetmap.org/relation/7678623"},
+   {"column": "Parry Sound", "name": "Parry Sound", "lat": 45.3434, "lon": -80.0349, "source": "https://www.openstreetmap.org/way/1267736867"}
+  ],
+  "fallback": {"date": "2026-10-05", "c_per_l": {"regular": 184.3, "premium": 214.5, "diesel": 250.0},
+               "basis": "Ontario average, week of 2026-10-05", "source": "https://www.ontario.ca/v1/files/fuel-prices/fueltypesall.csv"}
+ },
+ "consumption": {
+  "source": "NRCan MY2026 Fuel Consumption Ratings, median per model, gasoline (fuel types X and Z)",
+  "source_url": "https://open.canada.ca/data/dataset/98f1a129-f628-4ce4-b24d-6f16bf24dd64/resource/9df1b18d-d036-4783-a61c-99f1f75b3ac5/download/my2026-fuel-consumption-ratings.csv",
+  "default_class": "small-suv",
+  "classes": {
+   "compact": {"label": "compact car", "city": 9.9, "hwy": 7.1, "comb": 8.7},
+   "midsize": {"label": "mid-size car", "city": 9.2, "hwy": 7.1, "comb": 8.3},
+   "small-suv": {"label": "small SUV", "city": 10.0, "hwy": 8.1, "comb": 9.1},
+   "suv": {"label": "standard SUV", "city": 13.8, "hwy": 10.6, "comb": 12.4},
+   "pickup": {"label": "standard pickup", "city": 14.1, "hwy": 11.6, "comb": 12.9}
+  },
+  "hybrid": {"label": "hybrid", "city": 5.2, "hwy": 5.8, "source": "NRCan MY2026 ratings, typical compact hybrid SUV and sedan (RAV4 hybrid combined 5.5)"},
+  "diesel_note": "diesel is priced with the gasoline consumption of the car class and the diesel pump price; pass --l-per-100km with your car's figure",
+  "cold": [{"below_c": -5, "factor": 1.15}, {"below_c": 5, "factor": 1.08}],
+  "cold_source": "https://magazine.atlantic.caa.ca/fall-2025/the-cold-hard-facts (NRCan citing US DOE: about 15% more fuel at -7 C than at 25 C)",
+  "wear_per_km": 0.03,
+  "wear_source": "https://carcosts.caa.ca/results/ontario/2025_toyota_corolla (maintenance upper bound / 12,500 km)"
+ },
+ "electricity": {
+  "home_rate": 0.14,
+  "basis": "estimate, all-in $/kWh at home: OEB TOU off-peak 9.8 c/kWh commodity plus delivery and regulatory charges and HST, less the 23.5% Ontario Electricity Rebate",
+  "tou_c_per_kwh": {"off_peak": 9.8, "mid_peak": 15.7, "on_peak": 20.3},
+  "ulo_c_per_kwh": {"overnight": 3.9, "weekend_off_peak": 9.8, "mid_peak": 15.7, "on_peak": 39.1},
+  "effective": "2025-11-01 to 2026-10-31",
+  "source": "https://www.oeb.ca/consumer-information-and-protection/electricity-rates",
+  "default_kwh_100km": {"value": 20.1, "basis": "NRCan MY2026 battery-electric small SUV median, combined",
+                        "source": "https://open.canada.ca/data/dataset/98f1a129-f628-4ce4-b24d-6f16bf24dd64/resource/026e45b4-eb63-451f-b34f-d9308ea3a3d9/download/my2012-2026-battery-electric-vehicles.csv"}
+ },
+ "weather": {
+  "forecast_url": "https://api.open-meteo.com/v1/forecast",
+  "source": "https://open-meteo.com/en/docs (keyless, CC BY 4.0)",
+  "forecast_days": 15,
+  "apply_days": 3,
+  "apply_note": "forecast rain or snow slows the times only within 3 days of today; further out it is shown as a warning",
+  "snow_max_temp_c": 1.0,
+  "rain_mm_h": 0.5, "rain_factor": 1.15,
+  "snow_cm_h": 0.2, "snow_factor": 1.4,
+  "factor_source": "https://ops.fhwa.dot.gov/weather/q1_roadimpact.htm"
+ },
+ "climate_normals": {
+  "basis": "mean of daily mean 2 m temperature 2016 to 2025 per calendar month (ERA5 reanalysis), C",
+  "source": "https://archive-api.open-meteo.com/v1/archive (daily=temperature_2m_mean, 2016-01-01 to 2025-12-31)",
+  "stations": [
+   {"name": "Toronto Pearson", "lat": 43.68, "lon": -79.63, "monthly_c": [-3.9, -3.1, 1.1, 6.5, 13.6, 19.6, 22.6, 21.6, 17.9, 11.3, 4.0, -1.1]},
+   {"name": "Ottawa", "lat": 45.32, "lon": -75.67, "monthly_c": [-7.9, -6.7, -1.3, 5.6, 13.4, 18.7, 21.9, 20.7, 16.8, 10.3, 2.0, -4.4]},
+   {"name": "London", "lat": 43.03, "lon": -81.15, "monthly_c": [-4.0, -2.9, 1.5, 6.7, 13.8, 19.3, 21.7, 20.7, 17.5, 11.2, 3.9, -1.1]},
+   {"name": "Sudbury", "lat": 46.62, "lon": -80.80, "monthly_c": [-10.4, -9.3, -4.0, 2.3, 11.1, 16.9, 19.9, 18.6, 14.6, 8.0, -0.2, -6.9]},
+   {"name": "Thunder Bay", "lat": 48.37, "lon": -89.32, "monthly_c": [-10.4, -10.3, -3.7, 1.5, 8.7, 14.4, 18.6, 18.2, 14.5, 7.7, 0.1, -7.1]}
+  ]
+ },
+ "arrival": {
+  "slack_min": 5,
+  "default_search_min": 5,
+  "border_wait_min": 30,
+  "border_wait_note": "assumption: a planning allowance per border crossing (posted CBSA and CBP waits are commonly 15 to 60 min); check https://www.cbsa-asfc.gc.ca/bwt-taf/menu-eng.html and https://bwt.cbp.gov before you leave",
+  "source": "https://ops.fhwa.dot.gov/publications/tt_reliability/TTR_Report.htm (planning time index: the idea behind the conservative allow time; not measured here)"
+ },
+ "park_and_ride": {
+  "trigger_parking_cad": 15.0,
+  "downtown_toronto": {"min_lat": 43.635, "max_lat": 43.680, "min_lon": -79.425, "max_lon": -79.355},
+  "timeout_s": 300,
+  "hub_limits": [
+   {"name": "GO parking", "match": "GO parking", "max_stay_h": 48, "source": "https://www.gotransit.com/en/free-parking-at-go-stations (via regions/gtha.json: free overnight up to 48 h)"},
+   {"name": "TTC commuter lot", "match": "TTC commuter lot", "no_parking": ["02:00", "05:00"], "source": "https://www.ttc.ca/riding-the-ttc/parking (via regions/gtha.json)"}
+  ]
+ },
+ "geocode": {"reverse_url": "https://nominatim.openstreetmap.org/reverse", "cache_h": 720, "min_interval_s": 1.1, "note": "one reverse lookup per lat,lon end for the DRIVE line, Nominatim policy 1 request per second"},
+ "incidents": {
+  "toronto_url": "https://secure.toronto.ca/opendata/cart/road_restrictions/v3?format=json",
+  "toronto_source": "https://open.toronto.ca/dataset/road-restrictions/",
+  "toronto_bbox": {"min_lat": 43.58, "max_lat": 43.86, "min_lon": -79.64, "max_lon": -79.11},
+  "near_m": 60,
+  "on511_url": "https://511on.ca/api/v2/get/event?format=json&lang=en&key=",
+  "on511_source": "https://511on.ca/help/endpoint/event",
+  "on511_near_m": 150,
+  "max_items": 5
+ }
+}

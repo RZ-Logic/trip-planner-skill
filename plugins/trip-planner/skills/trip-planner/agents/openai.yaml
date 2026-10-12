@@ -1,0 +1,6 @@
+interface:
+  display_name: "Trip Planner"
+  short_description: "Uber/Lyft + transit, every hub checked; drives: tolls, parking, EV"
+  default_prompt: "Use $trip-planner to plan a ride + transit trip from A to B, leaving now"
+policy:
+  allow_implicit_invocation: true

@@ -1,0 +1,4024 @@
+{
+ "verified": "2026-10-10",
+ "description": "Curated parking for tourist places west and north of Toronto (agent PLACES-W). Coordinates are OSM elements (lot centre) or OSM street vertices, never estimated; 'osm' names the element. rule null = price unknown, check signs. 'price_confidence' is the curator's view of the price data (high: current official page; medium: partly inferred; low: no fee published).",
+ "rule_conventions": "hourly is $ per hour; per_min is the billing increment in minutes (charge = ceil(minutes / per_min) x hourly x per_min / 60); flat is per entry or per booking; season ends that move by year use named anchors (labour_day, victoria_day, fri_before_victoria_day, thanksgiving), resolved for the trip year; fixed operator dates for one year carry season_year. Lot hours and no-overnight rules go in the lot's rule as no_parking ([{\"days\": [0-6], \"hours\": [from, to], \"all_days\": true}], plus \"season\": [MM-DD, MM-DD] for a winter ban), not only in notes: notes do not affect whether a lot fits the stay.",
+ "osm_attribution": "Coordinates (c) OpenStreetMap contributors, ODbL 1.0",
+ "places": [
+  {
+   "id": "grand-bend",
+   "name": "Grand Bend (Lambton Shores)",
+   "match": {
+    "lat": 43.314,
+    "lon": -81.759,
+    "radius_km": 2.5
+   },
+   "season": {
+    "from": "05-15",
+    "to": "labour_day",
+    "off_season": "free",
+    "note": "paid May 15 to Labour Day, 08:00 to 18:00 daily"
+   },
+   "source": "https://www.lambtonshores.ca/living-here/parking/",
+   "source_date": "2026 (town page 2026; brochure titled 2026, map revised July 2024)",
+   "confidence": "curated",
+   "price_confidence": "high",
+   "rules": [
+    "Pay with the HotSpot app (zone number on signs) or at the pay-and-display machine in each lot.",
+    "Free lots: Gill Rd lot, Municipal Dr lot (behind the Legion) and the Ontario St S lot south of the Main St intersection (33-37 Ontario St S; not located in OSM, look for the FREE sign).",
+    "Main St and River Rd street parking: $3.00/h, 2 h maximum, 08:00 to 18:00 in season.",
+    "Beach lots open 06:00 to 23:00, no overnight; overnight $10 via HotSpot at Huron Ave, Mid Town and Municipal Dr lots.",
+    "No street parking 03:00 to 06:00 without a permit.",
+    "The free lots are a 5 to 10 min walk from the beach."
+   ],
+   "reservation": {
+    "required": false,
+    "text": "",
+    "url": "",
+    "lead_days": 0
+   },
+   "lots": [
+    {
+     "name": "Main Beach lot (HotSpot zone 5720)",
+     "lat": 43.314281,
+     "lon": -81.765513,
+     "kind": "lot",
+     "rule": {
+      "hourly": 8.0,
+      "daily_max": 40.0,
+      "paid_hours": [
+       "08:00",
+       "18:00"
+      ],
+      "season": [
+       "05-15",
+       "labour_day"
+      ],
+      "off_season": "free",
+      "no_parking": [
+       {
+        "days": [
+         0,
+         1,
+         2,
+         3,
+         4,
+         5,
+         6
+        ],
+        "hours": [
+         "23:00",
+         "06:00"
+        ],
+        "all_days": true
+       }
+      ]
+     },
+     "capacity": null,
+     "notes": "90 Main St W, at the beach on Government Rd; lot open 06:00 to 23:00, no overnight",
+     "source": "https://www.lambtonshores.ca/living-here/parking/",
+     "osm": "way/305890242"
+    },
+    {
+     "name": "North Beach lot (HotSpot zone 5721)",
+     "lat": 43.3155,
+     "lon": -81.763215,
+     "kind": "lot",
+     "rule": {
+      "hourly": 8.0,
+      "daily_max": 40.0,
+      "paid_hours": [
+       "08:00",
+       "18:00"
+      ],
+      "season": [
+       "05-15",
+       "labour_day"
+      ],
+      "off_season": "free",
+      "no_parking": [
+       {
+        "days": [
+         0,
+         1,
+         2,
+         3,
+         4,
+         5,
+         6
+        ],
+        "hours": [
+         "23:00",
+         "06:00"
+        ],
+        "all_days": true
+       }
+      ],
+      "hours_note": "beach lots open 06:00 to 23:00"
+     },
+     "capacity": null,
+     "notes": "at the Main St W beach roundabout; no overnight",
+     "source": "https://www.lambtonshores.ca/living-here/parking/",
+     "osm": "way/305889748"
+    },
+    {
+     "name": "Huron Ave lot (HotSpot zone 5729)",
+     "lat": 43.314596,
+     "lon": -81.761274,
+     "kind": "lot",
+     "rule": {
+      "hourly": 8.0,
+      "daily_max": 35.0,
+      "paid_hours": [
+       "08:00",
+       "18:00"
+      ],
+      "season": [
+       "05-15",
+       "labour_day"
+      ],
+      "off_season": "free"
+     },
+     "capacity": null,
+     "notes": "5 Huron Ave; lot open 06:00 to 03:00",
+     "source": "https://www.lambtonshores.ca/living-here/parking/",
+     "osm": "way/1306964876"
+    },
+    {
+     "name": "Mid Town lot (HotSpot zone 5723)",
+     "lat": 43.31338,
+     "lon": -81.760703,
+     "kind": "lot",
+     "rule": {
+      "hourly": 8.0,
+      "daily_max": 30.0,
+      "paid_hours": [
+       "08:00",
+       "18:00"
+      ],
+      "season": [
+       "05-15",
+       "labour_day"
+      ],
+      "off_season": "free"
+     },
+     "capacity": null,
+     "notes": "7 Eilber Rd; lot open 06:00 to 03:00",
+     "source": "https://www.lambtonshores.ca/living-here/parking/",
+     "osm": "way/1291132379"
+    },
+    {
+     "name": "Gill Rd lot",
+     "lat": 43.31063,
+     "lon": -81.754516,
+     "kind": "lot",
+     "rule": {
+      "free": true,
+      "no_parking": [
+       {
+        "days": [
+         0,
+         1,
+         2,
+         3,
+         4,
+         5,
+         6
+        ],
+        "hours": [
+         "23:00",
+         "06:00"
+        ],
+        "all_days": true
+       }
+      ]
+     },
+     "capacity": null,
+     "notes": "32 Eighty-One Cres, by the library and public school; 06:00 to 23:00, no overnight",
+     "source": "https://www.lambtonshores.ca/living-here/parking/",
+     "osm": "way/1291131232"
+    },
+    {
+     "name": "Municipal Dr lot",
+     "lat": 43.311763,
+     "lon": -81.753973,
+     "kind": "lot",
+     "rule": {
+      "free": true
+     },
+     "capacity": null,
+     "notes": "20 Municipal Dr, behind the Legion (matched by the Legion address); free until 03:00; RV and boat trailer spaces",
+     "source": "https://www.lambtonshores.ca/living-here/parking/",
+     "osm": "way/1291131249"
+    },
+    {
+     "name": "Main St street parking",
+     "lat": 43.313649,
+     "lon": -81.760088,
+     "kind": "street",
+     "rule": {
+      "hourly": 3.0,
+      "paid_hours": [
+       "08:00",
+       "18:00"
+      ],
+      "season": [
+       "05-15",
+       "labour_day"
+      ],
+      "off_season": "free",
+      "max_stay_min": 120,
+      "no_parking": [
+       {
+        "days": [
+         0,
+         1,
+         2,
+         3,
+         4,
+         5,
+         6
+        ],
+        "hours": [
+         "03:00",
+         "06:00"
+        ],
+        "all_days": true
+       }
+      ],
+      "hours_note": "no street parking 03:00 to 06:00 without a permit"
+     },
+     "capacity": null,
+     "notes": "$3.00/h, 2 h max, HotSpot zone 5724",
+     "source": "https://www.lambtonshores.ca/media/q11koqde/2026-grand-bend-parking-brochure.pdf",
+     "osm": "way/116858713"
+    }
+   ]
+  },
+  {
+   "id": "bayfield",
+   "name": "Bayfield (Bluewater)",
+   "match": {
+    "lat": 43.562,
+    "lon": -81.699,
+    "radius_km": 1.5
+   },
+   "season": null,
+   "source": "https://municipalityofbluewater.ca/municipal-office/by-laws/traffic-and-parking-by-law/",
+   "source_date": "2026 (Traffic and Parking By-law 76-2023)",
+   "confidence": "curated",
+   "price_confidence": "medium",
+   "rules": [
+    "No paid parking: Bluewater's traffic and parking by-law has no pay zones in Bayfield; parking is free subject to posted limits.",
+    "Main Beach parking at the west end of Main St is not mapped as a lot in OSM.",
+    "No street parking 03:00 to 06:00 from Nov 15 to Apr 15; several streets west of Tuyll St are permit only 23:00 to 06:00."
+   ],
+   "reservation": {
+    "required": false,
+    "text": "",
+    "url": "",
+    "lead_days": 0
+   },
+   "lots": [
+    {
+     "name": "Town Hall lot (The Square)",
+     "lat": 43.561786,
+     "lon": -81.698538,
+     "kind": "lot",
+     "rule": {
+      "free": true
+     },
+     "capacity": null,
+     "notes": "beside Clan Gregor Square",
+     "source": "https://municipalityofbluewater.ca/municipal-office/by-laws/traffic-and-parking-by-law/",
+     "osm": "way/792376050"
+    },
+    {
+     "name": "Library lot (Main St N)",
+     "lat": 43.564926,
+     "lon": -81.700299,
+     "kind": "lot",
+     "rule": {
+      "free": true
+     },
+     "capacity": null,
+     "notes": "behind the library on Main St N",
+     "source": "https://municipalityofbluewater.ca/municipal-office/by-laws/traffic-and-parking-by-law/",
+     "osm": "way/792183382"
+    },
+    {
+     "name": "River Flats lot (harbour)",
+     "lat": 43.568106,
+     "lon": -81.69681,
+     "kind": "lot",
+     "rule": {
+      "free": true
+     },
+     "capacity": 13,
+     "notes": "13 spaces by the river and marinas",
+     "source": "https://municipalityofbluewater.ca/municipal-office/by-laws/traffic-and-parking-by-law/",
+     "osm": "way/1230313273"
+    }
+   ]
+  },
+  {
+   "id": "goderich",
+   "name": "Goderich",
+   "match": {
+    "lat": 43.743,
+    "lon": -81.718,
+    "radius_km": 2.5
+   },
+   "season": {
+    "from": "05-15",
+    "to": "10-15",
+    "off_season": "free",
+    "note": "waterfront paid daily 09:00 to 17:00, May 15 to Oct 15; downtown lots free all year"
+   },
+   "source": "https://www.goderich.ca/living-here/parking/beaches-and-waterfront-parking/",
+   "source_date": "2026",
+   "confidence": "curated",
+   "price_confidence": "high",
+   "rules": [
+    "The entire waterfront (Main Beach, Rotary Cove, St. Christopher's Beach, harbour) is paid: $7.00/h or $35.00/day, 09:00 to 17:00, May 15 to Oct 15. Pay at machines or Passport Parking, zone 20804.",
+    "Accessible spaces are not exempt at the waterfront; Veteran plates are.",
+    "Free downtown lots: 35 South St (Livery Theatre), 34 Stanley St, 58 Courthouse Square (Lighthouse St, north of the library), 9 Victoria St N (Knox Church), 38 and 44 North St (ServiceOntario).",
+    "No street parking 02:00 to 07:00 from Nov 15 to Mar 15."
+   ],
+   "reservation": {
+    "required": false,
+    "text": "",
+    "url": "",
+    "lead_days": 0
+   },
+   "lots": [
+    {
+     "name": "Main Beach lot (Harbour St)",
+     "lat": 43.744714,
+     "lon": -81.725184,
+     "kind": "lot",
+     "rule": {
+      "hourly": 7.0,
+      "daily_max": 35.0,
+      "paid_hours": [
+       "09:00",
+       "17:00"
+      ],
+      "season": [
+       "05-15",
+       "10-15"
+      ],
+      "off_season": "free"
+     },
+     "capacity": null,
+     "notes": "270 Harbour Rd area; matched to the OSM lot beside the beach concessions",
+     "source": "https://www.goderich.ca/living-here/parking/beaches-and-waterfront-parking/",
+     "osm": "way/793091553"
+    },
+    {
+     "name": "St. Christopher's Beach lot (Cove Rd)",
+     "lat": 43.740078,
+     "lon": -81.726272,
+     "kind": "lot",
+     "rule": {
+      "hourly": 7.0,
+      "daily_max": 35.0,
+      "paid_hours": [
+       "09:00",
+       "17:00"
+      ],
+      "season": [
+       "05-15",
+       "10-15"
+      ],
+      "off_season": "free"
+     },
+     "capacity": null,
+     "notes": "south waterfront",
+     "source": "https://www.goderich.ca/living-here/parking/beaches-and-waterfront-parking/",
+     "osm": "way/1093447646"
+    },
+    {
+     "name": "Free lot, North St (ServiceOntario)",
+     "lat": 43.744777,
+     "lon": -81.711112,
+     "kind": "lot",
+     "rule": {
+      "free": true
+     },
+     "capacity": null,
+     "notes": "one of the free downtown lots",
+     "source": "https://www.goderich.ca/living-here/parking/",
+     "osm": "way/290058317"
+    },
+    {
+     "name": "Free lot, Hamilton St",
+     "lat": 43.744761,
+     "lon": -81.709024,
+     "kind": "lot",
+     "rule": {
+      "free": true
+     },
+     "capacity": null,
+     "notes": "downtown public lot, OSM fee=no; not matched to one of the Town's listed addresses",
+     "source": "https://www.goderich.ca/living-here/parking/",
+     "osm": "way/290058318"
+    }
+   ]
+  },
+  {
+   "id": "southampton",
+   "name": "Southampton (Saugeen Shores)",
+   "match": {
+    "lat": 44.496,
+    "lon": -81.374,
+    "radius_km": 2.0
+   },
+   "season": null,
+   "source": "https://www.saugeenshores.ca/parking",
+   "source_date": "2026",
+   "confidence": "curated",
+   "price_confidence": "high",
+   "rules": [
+    "All Town lots and streets are free year round, overnight allowed up to 24 h in summer.",
+    "No street parking 02:00 to 08:00 from Nov 1 to Mar 31."
+   ],
+   "reservation": {
+    "required": false,
+    "text": "",
+    "url": "",
+    "lead_days": 0
+   },
+   "lots": [
+    {
+     "name": "Beach lot at the foot of High St",
+     "lat": 44.497675,
+     "lon": -81.376635,
+     "kind": "lot",
+     "rule": {
+      "free": true
+     },
+     "capacity": null,
+     "notes": "beside the main beach",
+     "source": "https://www.saugeenshores.ca/parking",
+     "osm": "node/4465522122"
+    },
+    {
+     "name": "Pioneer Park lot (Front St)",
+     "lat": 44.500421,
+     "lon": -81.373676,
+     "kind": "lot",
+     "rule": {
+      "free": true
+     },
+     "capacity": null,
+     "notes": "by the Chantry Island tour dock",
+     "source": "https://www.saugeenshores.ca/parking",
+     "osm": "way/1559886395"
+    },
+    {
+     "name": "Beach Rd lot (south beach)",
+     "lat": 44.489781,
+     "lon": -81.38568,
+     "kind": "lot",
+     "rule": {
+      "free": true
+     },
+     "capacity": null,
+     "notes": "",
+     "source": "https://www.saugeenshores.ca/parking",
+     "osm": "way/561063789"
+    },
+    {
+     "name": "Southampton Coliseum lot",
+     "lat": 44.494468,
+     "lon": -81.371202,
+     "kind": "lot",
+     "rule": {
+      "free": true
+     },
+     "capacity": null,
+     "notes": "High St and Albert St",
+     "source": "https://www.saugeenshores.ca/parking",
+     "osm": "way/1301513722"
+    }
+   ]
+  },
+  {
+   "id": "port-elgin",
+   "name": "Port Elgin (Saugeen Shores)",
+   "match": {
+    "lat": 44.4385,
+    "lon": -81.395,
+    "radius_km": 2.5
+   },
+   "season": null,
+   "source": "https://www.saugeenshores.ca/parking",
+   "source_date": "2026",
+   "confidence": "curated",
+   "price_confidence": "high",
+   "rules": [
+    "All Town lots and streets are free year round, overnight allowed up to 24 h in summer.",
+    "No street parking 02:00 to 08:00 from Nov 1 to Mar 31."
+   ],
+   "reservation": {
+    "required": false,
+    "text": "",
+    "url": "",
+    "lead_days": 0
+   },
+   "lots": [
+    {
+     "name": "Port Elgin Main Beach lot (Harbour St)",
+     "lat": 44.440611,
+     "lon": -81.402989,
+     "kind": "lot",
+     "rule": {
+      "free": true
+     },
+     "capacity": null,
+     "notes": "sand lot at the main beach",
+     "source": "https://www.saugeenshores.ca/parking",
+     "osm": "way/558845305"
+    },
+    {
+     "name": "Library lot (Mill St)",
+     "lat": 44.438382,
+     "lon": -81.388206,
+     "kind": "lot",
+     "rule": {
+      "free": true
+     },
+     "capacity": null,
+     "notes": "behind the Port Elgin library; OSM says fee=yes but the Town lists it as free",
+     "source": "https://www.saugeenshores.ca/parking",
+     "osm": "way/561066830"
+    },
+    {
+     "name": "Gustavus St and Bricker St lot",
+     "lat": 44.43573,
+     "lon": -81.387929,
+     "kind": "lot",
+     "rule": {
+      "free": true
+     },
+     "capacity": null,
+     "notes": "downtown",
+     "source": "https://www.saugeenshores.ca/parking",
+     "osm": "way/559463842"
+    }
+   ]
+  },
+  {
+   "id": "sauble-beach",
+   "name": "Sauble Beach (South Bruce Peninsula)",
+   "match": {
+    "lat": 44.632,
+    "lon": -81.269,
+    "radius_km": 3.0
+   },
+   "season": {
+    "from": "06-01",
+    "to": "labour_day",
+    "off_season": "free",
+    "note": "paid June 1 to Labour Day, 08:00 to 17:00; the 2 h limit still applies off season",
+    "off_season_max_stay_min": 120
+   },
+   "source": "https://southbrucepeninsula.com/parks-recreation-culture/parks-trails/sauble-beach/",
+   "source_date": "2026",
+   "confidence": "curated",
+   "price_confidence": "high",
+   "rules": [
+    "Everything near the beach is paid in season unless signed otherwise: $7.00/h or $30.00/day, 08:00 to 17:00. Passport Parking app (zone 3030) or machines on Lakeshore Blvd N (no bills).",
+    "Hourly and daily passes can only be bought on the day, during paid hours.",
+    "Oversized vehicles: Sauble Community Centre lot, Poechman lot (Poechman Lane and Sauble Falls Rd), or Second and Third Ave N; never on Lakeshore Blvd N.",
+    "Loading and unloading zone in the lot at 104 Second Ave N.",
+    "Off season a 2 h limit still applies."
+   ],
+   "reservation": {
+    "required": false,
+    "text": "",
+    "url": "",
+    "lead_days": 0
+   },
+   "lots": [
+    {
+     "name": "Lakeshore Blvd N beach parking",
+     "lat": 44.633558,
+     "lon": -81.270372,
+     "kind": "street",
+     "rule": {
+      "hourly": 7.0,
+      "daily_max": 30.0,
+      "paid_hours": [
+       "08:00",
+       "17:00"
+      ],
+      "season": [
+       "06-01",
+       "labour_day"
+      ],
+      "off_season": "free",
+      "off_season_max_stay_min": 120
+     },
+     "capacity": null,
+     "notes": "angled parking along the beach; machines on Lakeshore Blvd N; coordinate on Lakeshore Blvd N (not an OSM lot; way/35224609 is Chesley Lane)",
+     "source": "https://southbrucepeninsula.com/parks-recreation-culture/parks-trails/sauble-beach/",
+     "osm": null
+    },
+    {
+     "name": "Sauble Community Centre lot",
+     "lat": 44.627809,
+     "lon": -81.258494,
+     "kind": "lot",
+     "rule": {
+      "hourly": 7.0,
+      "daily_max": 30.0,
+      "paid_hours": [
+       "08:00",
+       "17:00"
+      ],
+      "season": [
+       "06-01",
+       "labour_day"
+      ],
+      "off_season": "free",
+      "off_season_max_stay_min": 120
+     },
+     "capacity": null,
+     "notes": "30 Community Centre Dr; also for oversized vehicles",
+     "source": "https://southbrucepeninsula.com/parks-recreation-culture/parks-trails/sauble-beach/",
+     "osm": "way/561055550"
+    }
+   ]
+  },
+  {
+   "id": "tobermory",
+   "name": "Tobermory (Northern Bruce Peninsula)",
+   "match": {
+    "lat": 45.253,
+    "lon": -81.655,
+    "radius_km": 4.5
+   },
+   "season": {
+    "from": "05-15",
+    "to": "09-15",
+    "off_season": "free",
+    "note": "municipal paid parking and reservations May 15 to Sep 15"
+   },
+   "source": "https://www.northbrucepeninsula.ca/discover/parking/",
+   "source_date": "2026",
+   "confidence": "curated",
+   "price_confidence": "medium",
+   "rules": [
+    "Big Tub Rd and Little Cove need an online reservation May 15 to Sep 15 (book on the municipal parking page). Little Cove books in 4 h slots, at most 14 days ahead; when full there is no access and no roadside parking.",
+    "Little Cove also needs a Parks Canada pass (buy a day pass with the parking booking).",
+    "Tobermory village: 3 h zones $3/h and all-day zones $15/day, May 15 to Sep 15 (2026 town map); pay and display machines throughout town.",
+    "Parks Canada passes are not valid in municipal lots.",
+    "Legion St lot: $15/day May 15 to Sep 15 (all-day zone), free off season.",
+    "The Grotto is not reachable from Tobermory parking: book Cyprus Lake (Grotto) parking separately."
+   ],
+   "reservation": {
+    "required": true,
+    "text": "Big Tub Rd and Little Cove: online reservation required May 15 to Sep 15; Little Cove bookings open 14 days ahead.",
+    "url": "https://www.northbrucepeninsula.ca/discover/parking/",
+    "lead_days": 14
+   },
+   "lots": [
+    {
+     "name": "Big Tub Rd lot (reserve)",
+     "lat": 45.257931,
+     "lon": -81.673383,
+     "kind": "lot",
+     "rule": {
+      "hourly": 5.0,
+      "season": [
+       "05-15",
+       "09-15"
+      ],
+      "off_season": "free"
+     },
+     "capacity": null,
+     "notes": "reservation required May 15 to Sep 15, 1 h blocks at $5",
+     "source": "https://www.northbrucepeninsula.ca/discover/parking/",
+     "osm": "way/450087646",
+     "reservation": "Book online, 1 h blocks"
+    },
+    {
+     "name": "Little Cove lot (reserve)",
+     "lat": 45.246899,
+     "lon": -81.615482,
+     "kind": "lot",
+     "rule": {
+      "flat": 20.0,
+      "max_stay_min": 240,
+      "season": [
+       "05-15",
+       "09-15"
+      ],
+      "off_season": "free"
+     },
+     "capacity": null,
+     "notes": "reservation required May 15 to Sep 15: 4 h slot $20, plus a Parks Canada pass",
+     "source": "https://www.northbrucepeninsula.ca/discover/parking/",
+     "osm": "way/1562299383",
+     "reservation": "Book online up to 14 days ahead; 4 h slots"
+    },
+    {
+     "name": "Legion St lot (all-day)",
+     "lat": 45.252729,
+     "lon": -81.66693,
+     "kind": "lot",
+     "rule": {
+      "flat": 15.0,
+      "season": [
+       "05-15",
+       "09-15"
+      ],
+      "off_season": "free"
+     },
+     "capacity": null,
+     "notes": "green all-day zone, $15/day May 15 to Sep 15 on the 2026 town map (pay and display); free off season; OSM still says free",
+     "source": "https://media-001-ca.cdn.govstack.com/northbrucepeninsula-001-ca/media/gj1btmvq/downtown-tobermory-2026-parking-map.png",
+     "osm": "way/179317215"
+    },
+    {
+     "name": "Bay St S harbour street parking",
+     "lat": 45.255548,
+     "lon": -81.662355,
+     "kind": "street",
+     "rule": {
+      "hourly": 3.0,
+      "max_stay_min": 180,
+      "season": [
+       "05-15",
+       "09-15"
+      ],
+      "off_season": "free"
+     },
+     "capacity": null,
+     "notes": "3 h zone $3/h May 15 to Sep 15 (2026 town map); free off season",
+     "source": "https://media-001-ca.cdn.govstack.com/northbrucepeninsula-001-ca/media/gj1btmvq/downtown-tobermory-2026-parking-map.png",
+     "osm": "way/840282993"
+    },
+    {
+     "name": "Bruce Peninsula NP Visitor Centre lot",
+     "lat": 45.256436,
+     "lon": -81.656151,
+     "kind": "lot",
+     "rule": {
+      "free": true
+     },
+     "capacity": null,
+     "notes": "first come, first served, fills early every morning; OSM fee=no; no Grotto access from here",
+     "source": "https://parks.canada.ca/pn-np/on/bruce/activ/emplacements-locations/parking",
+     "osm": "way/830769544",
+     "often_full": true
+    }
+   ]
+  },
+  {
+   "id": "bruce-grotto-cyprus-lake",
+   "name": "Grotto and Cyprus Lake (Bruce Peninsula National Park)",
+   "match": {
+    "lat": 45.233,
+    "lon": -81.528,
+    "radius_km": 2.0
+   },
+   "season": {
+    "from": "05-01",
+    "to": "10-31",
+    "off_season": "free",
+    "note": "reservation required May 1 to Oct 31 in 4 h slots"
+   },
+   "source": "https://parks.canada.ca/pn-np/on/bruce/activ/emplacements-locations/parking",
+   "source_date": "2026 (page modified 2026-09-02)",
+   "confidence": "curated",
+   "price_confidence": "high",
+   "rules": [
+    "Grotto and Indian Head Cove: a confirmed parking reservation is required May 1 to Oct 31, 4 h slots 08:00-12:00, 09:00-13:00, 12:00-16:00, 13:00-17:00, 16:00-20:00, 17:00-21:00.",
+    "No drop-offs and no walking on Cyprus Lake Rd; without a booking there is no access.",
+    "Cost: parking $17.50 per vehicle plus $3.50 online reservation fee, plus admission (adult $10.00, family $19.50; youth free). Arrive with at least 2 h left in your slot.",
+    "Cyprus Lake Campground closed to Oct 31, 2026 (bear activity); check alerts before going.",
+    "The hike from the lot to the Grotto is about 1 h round trip."
+   ],
+   "reservation": {
+    "required": true,
+    "text": "Parks Canada reservation required May 1 to Oct 31 (4 h slots); book as soon as you know the date (no fixed booking window is published; the park is busiest mid June to mid September and on weekends May to October); changes not allowed, cancellations 2 or more days ahead.",
+    "url": "https://reservation.pc.gc.ca/",
+    "lead_days": 0
+   },
+   "lots": [
+    {
+     "name": "Cyprus Lake P1 (Grotto parking)",
+     "lat": 45.236422,
+     "lon": -81.522614,
+     "kind": "park",
+     "rule": {
+      "flat": 21.0,
+      "max_stay_min": 240,
+      "season": [
+       "05-01",
+       "10-31"
+      ],
+      "off_season_flat": 17.5
+     },
+     "capacity": null,
+     "notes": "May 1 to Oct 31: $17.50 parking + $3.50 online reservation fee; off season $17.50 (winter access not confirmed); admission extra",
+     "source": "https://parks.canada.ca/pn-np/on/bruce/visit/tarifs-fees",
+     "osm": "way/125266512",
+     "reservation": "Parks Canada reservation, 4 h slot"
+    },
+    {
+     "name": "Cyprus Lake P2 (Grotto parking)",
+     "lat": 45.226741,
+     "lon": -81.532409,
+     "kind": "park",
+     "rule": {
+      "flat": 21.0,
+      "max_stay_min": 240,
+      "season": [
+       "05-01",
+       "10-31"
+      ],
+      "off_season_flat": 17.5
+     },
+     "capacity": null,
+     "notes": "May 1 to Oct 31: $17.50 parking + $3.50 online reservation fee; off season $17.50 (winter access not confirmed); admission extra",
+     "source": "https://parks.canada.ca/pn-np/on/bruce/visit/tarifs-fees",
+     "osm": "way/627946308",
+     "reservation": "Parks Canada reservation, 4 h slot"
+    }
+   ]
+  },
+  {
+   "id": "halfway-log-dump",
+   "name": "Halfway Log Dump (Bruce Peninsula National Park)",
+   "match": {
+    "lat": 45.229,
+    "lon": -81.479,
+    "radius_km": 1.5
+   },
+   "season": {
+    "from": "06-19",
+    "to": "09-07",
+    "off_season": "free",
+    "note": "reservation required Jun 19 to Sep 7 (6 h slots); first come with self-registration otherwise",
+    "year": 2026
+   },
+   "source": "https://parks.canada.ca/pn-np/on/bruce/activ/emplacements-locations/parking",
+   "source_date": "2026",
+   "confidence": "curated",
+   "price_confidence": "medium",
+   "rules": [
+    "Reservation required Jun 19 to Sep 7, 6 h slots 07:00-13:00 or 14:00-20:00; Sep 8 to Jun 18 first come, first served with self-registration (park fees still apply).",
+    "No walking on Emmett Lake Rd. Admission extra (adult $10.00)."
+   ],
+   "reservation": {
+    "required": true,
+    "text": "Parks Canada reservation Jun 19 to Sep 7 (6 h slots); book early, no fixed booking window is published.",
+    "url": "https://reservation.pc.gc.ca/",
+    "lead_days": 0
+   },
+   "lots": [
+    {
+     "name": "Halfway Log Dump lot",
+     "lat": 45.227291,
+     "lon": -81.480323,
+     "kind": "park",
+     "rule": {
+      "flat": 21.0,
+      "max_stay_min": 360,
+      "season": [
+       "06-19",
+       "09-07"
+      ],
+      "season_year": 2026,
+      "off_season_flat": 17.5
+     },
+     "capacity": 50,
+     "notes": "Jun 19 to Sep 7: $17.50 parking + $3.50 online reservation fee; Sep 8 to Jun 18: $17.50 with self-registration at the lot; 50 spaces",
+     "source": "https://parks.canada.ca/pn-np/on/bruce/visit/tarifs-fees",
+     "osm": "way/109279567",
+     "reservation": "Parks Canada reservation Jun 19 to Sep 7"
+    }
+   ]
+  },
+  {
+   "id": "dyers-bay",
+   "name": "Dyers Bay and Devil's Monument (Northern Bruce Peninsula)",
+   "match": {
+    "lat": 45.15,
+    "lon": -81.335,
+    "radius_km": 5.0
+   },
+   "season": {
+    "from": "05-15",
+    "to": "09-15",
+    "off_season": "free",
+    "note": "reservations May 15 to Sep 15"
+   },
+   "source": "https://www.northbrucepeninsula.ca/discover/parking/",
+   "source_date": "2026",
+   "confidence": "curated",
+   "price_confidence": "high",
+   "rules": [
+    "Dyers Bay Rd lot (941 Dyers Bay Rd) and Devil's Monument (Borchardt Rd) need online reservations May 15 to Sep 15: 1 h blocks at $5, $30 daily maximum.",
+    "Display a valid Parks Canada pass (buy a day pass with the booking).",
+    "No parking at the Dyers Bay dock. Devil's Monument lot is not mapped in OSM; it is on Borchardt Rd.",
+    "The Dyers Bay lot takes vehicles with trailers."
+   ],
+   "reservation": {
+    "required": true,
+    "text": "Online reservation May 15 to Sep 15 (1 h blocks).",
+    "url": "https://www.northbrucepeninsula.ca/discover/parking/",
+    "lead_days": 0
+   },
+   "lots": [
+    {
+     "name": "Dyers Bay Rd lot (reserve)",
+     "lat": 45.162523,
+     "lon": -81.340632,
+     "kind": "lot",
+     "rule": {
+      "hourly": 5.0,
+      "daily_max": 30.0,
+      "season": [
+       "05-15",
+       "09-15"
+      ],
+      "off_season": "free"
+     },
+     "capacity": null,
+     "notes": "941 Dyers Bay Rd, Miller Lake; Bruce Trail access",
+     "source": "https://www.northbrucepeninsula.ca/discover/parking/",
+     "osm": "way/989693404",
+     "reservation": "Book online, 1 h blocks"
+    }
+   ]
+  },
+  {
+   "id": "lions-head",
+   "name": "Lion's Head (Northern Bruce Peninsula)",
+   "match": {
+    "lat": 44.988,
+    "lon": -81.248,
+    "radius_km": 2.5
+   },
+   "season": {
+    "from": "05-15",
+    "to": "09-15",
+    "off_season": "free",
+    "note": "paid parking May 15 to Sep 15; McCurdy lot reservations May 15 to Oct 15"
+   },
+   "source": "https://www.northbrucepeninsula.ca/discover/parking/",
+   "source_date": "2026",
+   "confidence": "curated",
+   "price_confidence": "medium",
+   "rules": [
+    "McCurdy Dr lot (Lion's Head Lookout trail) needs a reservation May 15 to Oct 15: 4 h $20 or full day $30, booked at least 24 h ahead.",
+    "Lion's Head Arena (4 Tackabury St) is the overflow: $3/h or $15/day, reservations encouraged, free shuttle Jul 3 to Sep 7 (Fri to Sun and holidays, 10:00 to 18:00). Not located in OSM.",
+    "Village lots and on-street spaces are paid May 15 to Sep 15; check signs."
+   ],
+   "reservation": {
+    "required": true,
+    "text": "McCurdy lot: reserve at least 24 h ahead (May 15 to Oct 15).",
+    "url": "https://www.northbrucepeninsula.ca/discover/parking/",
+    "lead_days": 1
+   },
+   "lots": [
+    {
+     "name": "McCurdy Dr lot (Lion's Head Lookout, reserve)",
+     "lat": 44.989846,
+     "lon": -81.242103,
+     "kind": "lot",
+     "rule": {
+      "tiers": [
+       {
+        "up_to_min": 240,
+        "cost": 20.0
+       },
+       {
+        "cost": 30.0
+       }
+      ],
+      "season": [
+       "05-15",
+       "10-15"
+      ],
+      "off_season": "free"
+     },
+     "capacity": null,
+     "notes": "4 h $20 or full day $30, book 24 h ahead",
+     "source": "https://www.northbrucepeninsula.ca/discover/parking/",
+     "osm": "way/1230319131",
+     "reservation": "Book at least 24 h ahead"
+    }
+   ]
+  },
+  {
+   "id": "wasaga-beach",
+   "name": "Wasaga Beach (Beach Areas 1 and 2, Main St, town lots)",
+   "match": {
+    "lat": 44.52,
+    "lon": -80.023,
+    "radius_km": 1.6
+   },
+   "season": null,
+   "source": "https://www.wasagabeach.com/programs-services/parking/",
+   "source_date": "2026 (By-law 2025-66, effective 2026-01-01)",
+   "confidence": "curated",
+   "price_confidence": "medium",
+   "rules": [
+    "Town beach lots: $6.00/h with a 2 h minimum ($12), then $2.00 per 20 min, $35.00/day (standard) or $40.00/day (premium: Playland, First St, Third St, Spruce, Allenwood). Pay with HONK; HST extra.",
+    "Main St lot $6.00/h, $30.00/day. Town Hall lot (30 Lewis St) $10.00/day on weekends and holidays.",
+    "On-street pay and display: $2.00 per 30 min, then $1.00 per 15 min.",
+    "New for 2026: Beach Areas 1 and 2 are town lots (free for residents); visitors pay through HONK.",
+    "Wasaga Beach Provincial Park lots (Beach Areas 3 to 6) need a separate $21.00 Ontario Parks daily vehicle permit; New Wasaga, Allenwood and Beach Areas 1 and 2 are town lots paid through HONK; town and provincial permits are not interchangeable.",
+    "The town paid season is taken as May 14 to Oct 18 (the non-resident season pass dates); exact paid hours are not published, check signs.",
+    "Allenwood Beach (premium, $40/day) and the Municipal Picnic Area lot (standard) are town lots too; not located in OSM, so not listed."
+   ],
+   "reservation": {
+    "required": false,
+    "text": "",
+    "url": "",
+    "lead_days": 0
+   },
+   "lots": [
+    {
+     "name": "Fourth Street Lot (town)",
+     "lat": 44.519613,
+     "lon": -80.022537,
+     "kind": "lot",
+     "rule": {
+      "hourly": 6.0,
+      "per_min": 20,
+      "min_charge": 12.0,
+      "daily_max": 35.0,
+      "season": [
+       "05-14",
+       "10-18"
+      ],
+      "off_season": "free",
+      "season_year": 2026,
+      "tax": 0.13
+     },
+     "capacity": null,
+     "notes": "154 Mosley St; standard beach-area rate; rates exclude HST (By-law 2025-66 Schedule D); 13% added",
+     "source": "https://www.wasagabeach.com/media/0taeexky/schedule-d-parking-and-administrative.pdf",
+     "osm": "way/235061939"
+    },
+    {
+     "name": "Nancy Lot (town)",
+     "lat": 44.519952,
+     "lon": -80.020995,
+     "kind": "lot",
+     "rule": {
+      "hourly": 6.0,
+      "per_min": 20,
+      "min_charge": 12.0,
+      "daily_max": 35.0,
+      "season": [
+       "05-14",
+       "10-18"
+      ],
+      "off_season": "free",
+      "season_year": 2026,
+      "tax": 0.13
+     },
+     "capacity": 68,
+     "notes": "137 Mosley St; standard beach-area rate; rates exclude HST (By-law 2025-66 Schedule D); 13% added",
+     "source": "https://www.wasagabeach.com/media/0taeexky/schedule-d-parking-and-administrative.pdf",
+     "osm": "way/1096096645"
+    },
+    {
+     "name": "Third Street Lot (town, premium)",
+     "lat": 44.521224,
+     "lon": -80.021755,
+     "kind": "lot",
+     "rule": {
+      "hourly": 6.0,
+      "per_min": 20,
+      "min_charge": 12.0,
+      "daily_max": 40.0,
+      "season": [
+       "05-14",
+       "10-18"
+      ],
+      "off_season": "free",
+      "season_year": 2026,
+      "tax": 0.13
+     },
+     "capacity": null,
+     "notes": "123 Beach Dr; rates exclude HST (By-law 2025-66 Schedule D); 13% added",
+     "source": "https://www.wasagabeach.com/media/0taeexky/schedule-d-parking-and-administrative.pdf",
+     "osm": "way/1096105660"
+    },
+    {
+     "name": "First Street Lot (town, premium)",
+     "lat": 44.521979,
+     "lon": -80.020949,
+     "kind": "lot",
+     "rule": {
+      "hourly": 6.0,
+      "per_min": 20,
+      "min_charge": 12.0,
+      "daily_max": 40.0,
+      "season": [
+       "05-14",
+       "10-18"
+      ],
+      "off_season": "free",
+      "season_year": 2026,
+      "tax": 0.13
+     },
+     "capacity": null,
+     "notes": "80 Mosley St; rates exclude HST (By-law 2025-66 Schedule D); 13% added",
+     "source": "https://www.wasagabeach.com/media/0taeexky/schedule-d-parking-and-administrative.pdf",
+     "osm": "way/437560443"
+    },
+    {
+     "name": "Playland lot (town, premium)",
+     "lat": 44.523764,
+     "lon": -80.019337,
+     "kind": "lot",
+     "rule": {
+      "hourly": 6.0,
+      "per_min": 20,
+      "min_charge": 12.0,
+      "daily_max": 40.0,
+      "season": [
+       "05-14",
+       "10-18"
+      ],
+      "off_season": "free",
+      "season_year": 2026,
+      "tax": 0.13
+     },
+     "capacity": null,
+     "notes": "40 Mosley St; rates exclude HST (By-law 2025-66 Schedule D); 13% added",
+     "source": "https://www.wasagabeach.com/media/0taeexky/schedule-d-parking-and-administrative.pdf",
+     "osm": "way/235061937"
+    },
+    {
+     "name": "Spruce Street Lot (town, premium)",
+     "lat": 44.525303,
+     "lon": -80.017912,
+     "kind": "lot",
+     "rule": {
+      "hourly": 6.0,
+      "per_min": 20,
+      "min_charge": 12.0,
+      "daily_max": 40.0,
+      "season": [
+       "05-14",
+       "10-18"
+      ],
+      "off_season": "free",
+      "season_year": 2026,
+      "tax": 0.13
+     },
+     "capacity": null,
+     "notes": "17 Spruce St; rates exclude HST (By-law 2025-66 Schedule D); 13% added",
+     "source": "https://www.wasagabeach.com/media/0taeexky/schedule-d-parking-and-administrative.pdf",
+     "osm": "way/1096110578"
+    },
+    {
+     "name": "Main Street Lot (town)",
+     "lat": 44.522311,
+     "lon": -80.013644,
+     "kind": "lot",
+     "rule": {
+      "hourly": 6.0,
+      "daily_max": 30.0,
+      "season": [
+       "05-14",
+       "10-18"
+      ],
+      "off_season": "free",
+      "season_year": 2026,
+      "tax": 0.13
+     },
+     "capacity": null,
+     "notes": "130 Main St; rates exclude HST (By-law 2025-66 Schedule D); 13% added",
+     "source": "https://www.wasagabeach.com/media/0taeexky/schedule-d-parking-and-administrative.pdf",
+     "osm": "way/381627537"
+    },
+    {
+     "name": "Beach Area 1 and 2 lot (town from 2026)",
+     "lat": 44.515947,
+     "lon": -80.026738,
+     "kind": "lot",
+     "rule": {
+      "hourly": 6.0,
+      "per_min": 20,
+      "min_charge": 12.0,
+      "daily_max": 35.0,
+      "season": [
+       "05-14",
+       "10-18"
+      ],
+      "off_season": "free",
+      "season_year": 2026,
+      "tax": 0.13
+     },
+     "capacity": null,
+     "notes": "town-run from 2026 (OSM still says Ontario Parks); rate inferred from the Schedule D beach-area tier; rates exclude HST, 13% added",
+     "source": "https://www.wasagabeach.com/news/posts/wasaga-beach-expands-free-resident-parking-to-beach-areas-1-and-2-for-first-time/",
+     "osm": "way/496538528",
+     "price_confidence": "medium"
+    }
+   ]
+  },
+  {
+   "id": "wasaga-beach-provincial-park",
+   "name": "Wasaga Beach Provincial Park (Beach Areas 3 to 5)",
+   "match": {
+    "lat": 44.495,
+    "lon": -80.05,
+    "radius_km": 1.8
+   },
+   "season": {
+    "from": "04-06",
+    "to": "10-12",
+    "off_season": "closed",
+    "note": "beach areas operate Apr 6 to Oct 12, 2026; some open later in spring",
+    "year": 2026
+   },
+   "source": "https://blog.ontarioparks.ca/wasaga-beach/",
+   "source_date": "2026 (operating dates from the park page, fee from the park blog)",
+   "confidence": "curated",
+   "price_confidence": "high",
+   "rules": [
+    "Ontario Parks daily vehicle permit $21.00 (Ontario seniors $16.75); not valid in town lots and not transferable between beach areas.",
+    "Book up to 5 days ahead to guarantee entry: the park often reaches capacity on hot summer weekends (busiest 09:00 to 16:00) and gates close when full; re-entry is not guaranteed.",
+    "Dunkerron Ave town lot nearby takes town rates ($6/h, 2 h minimum, $35/day)."
+   ],
+   "reservation": {
+    "required": false,
+    "text": "Advance daily vehicle permit (up to 5 days ahead) strongly recommended; the park reaches capacity on hot weekends.",
+    "url": "https://www.ontarioparks.ca/dayuse",
+    "lead_days": 5
+   },
+   "lots": [
+    {
+     "name": "Beach Area 3",
+     "lat": 44.501114,
+     "lon": -80.044791,
+     "kind": "park",
+     "rule": {
+      "flat": 21.0,
+      "season": [
+       "04-06",
+       "10-12"
+      ],
+      "off_season": "closed",
+      "season_year": 2026
+     },
+     "capacity": null,
+     "notes": "Ontario Parks daily vehicle permit $21.00",
+     "source": "https://blog.ontarioparks.ca/wasaga-beach/",
+     "osm": "way/496538499",
+     "reservation": "Advance permit up to 5 days ahead",
+     "often_full": true
+    },
+    {
+     "name": "Beach Area 4",
+     "lat": 44.494892,
+     "lon": -80.052053,
+     "kind": "park",
+     "rule": {
+      "flat": 21.0,
+      "season": [
+       "04-06",
+       "10-12"
+      ],
+      "off_season": "closed",
+      "season_year": 2026
+     },
+     "capacity": null,
+     "notes": "Ontario Parks daily vehicle permit $21.00",
+     "source": "https://blog.ontarioparks.ca/wasaga-beach/",
+     "osm": "way/496538507",
+     "reservation": "Advance permit up to 5 days ahead",
+     "often_full": true
+    },
+    {
+     "name": "Beach Area 5",
+     "lat": 44.489235,
+     "lon": -80.059739,
+     "kind": "park",
+     "rule": {
+      "flat": 21.0,
+      "season": [
+       "04-06",
+       "10-12"
+      ],
+      "off_season": "closed",
+      "season_year": 2026
+     },
+     "capacity": null,
+     "notes": "Ontario Parks daily vehicle permit $21.00",
+     "source": "https://blog.ontarioparks.ca/wasaga-beach/",
+     "osm": "way/496538516",
+     "reservation": "Advance permit up to 5 days ahead",
+     "often_full": true
+    },
+    {
+     "name": "Dunkerron Avenue Lot (town)",
+     "lat": 44.503353,
+     "lon": -80.040828,
+     "kind": "lot",
+     "rule": {
+      "hourly": 6.0,
+      "per_min": 20,
+      "min_charge": 12.0,
+      "daily_max": 35.0,
+      "season": [
+       "05-14",
+       "10-18"
+      ],
+      "off_season": "free",
+      "season_year": 2026,
+      "tax": 0.13
+     },
+     "capacity": null,
+     "notes": "16 Dunkerron Ave; standard town rate; rates exclude HST (By-law 2025-66 Schedule D); 13% added",
+     "source": "https://www.wasagabeach.com/media/0taeexky/schedule-d-parking-and-administrative.pdf",
+     "osm": "way/1092976038"
+    }
+   ]
+  },
+  {
+   "id": "blue-mountain-village",
+   "name": "Blue Mountain Village (The Blue Mountains)",
+   "match": {
+    "lat": 44.502,
+    "lon": -80.31,
+    "radius_km": 2.5
+   },
+   "season": null,
+   "source": "https://www.bluemountain.ca/discover-blue/getting-here/parking",
+   "source_date": "2026 (resort page; Village 2026 summer map)",
+   "confidence": "curated",
+   "price_confidence": "high",
+   "rules": [
+    "P2 (Village Base) is the only paid resort lot: first hour free, $15 for 1 to 12 h, $30 over 12 h (max 24 h); ticket on entry, pay by card at the kiosk or exit gate; no in/out privileges.",
+    "Free resort lots: P2A (across from P2, fills quickly), P1 and P1A (South Base, summer shuttle stop), P3 (Inn Base, 20 paid EV chargers), P4, P5, P6.",
+    "Two Freed Developments convenience lots (next to the Westin and across from P2) are paid by app.",
+    "On peak days P2 and P2A are full by early morning; use P1 and the shuttle."
+   ],
+   "reservation": {
+    "required": false,
+    "text": "",
+    "url": "",
+    "lead_days": 0
+   },
+   "lots": [
+    {
+     "name": "P2 Village Base (paid)",
+     "lat": 44.504582,
+     "lon": -80.311467,
+     "kind": "resort",
+     "rule": {
+      "tiers": [
+       {
+        "up_to_min": 60,
+        "cost": 0.0
+       },
+       {
+        "up_to_min": 720,
+        "cost": 15.0
+       },
+       {
+        "cost": 30.0
+       }
+      ],
+      "max_stay_min": 1440
+     },
+     "capacity": null,
+     "notes": "closest to the Village; no overnight; full by early morning on high-demand days",
+     "source": "https://www.bluemountain.ca/discover-blue/getting-here/parking",
+     "osm": "way/178914228",
+     "often_full": true
+    },
+    {
+     "name": "P2A Village Base overflow",
+     "lat": 44.506125,
+     "lon": -80.311448,
+     "kind": "resort",
+     "rule": {
+      "free": true
+     },
+     "capacity": null,
+     "notes": "across from P2; not resort-owned; fills quickly",
+     "source": "https://www.bluemountainvillage.ca/parking",
+     "osm": "way/197567757",
+     "often_full": true
+    },
+    {
+     "name": "P3 Inn Base",
+     "lat": 44.50757,
+     "lon": -80.317593,
+     "kind": "resort",
+     "rule": {
+      "free": true
+     },
+     "capacity": null,
+     "notes": "beside the Blue Mountain Inn; 20 EV chargers",
+     "source": "https://www.bluemountain.ca/discover-blue/getting-here/parking",
+     "osm": "way/196817766"
+    },
+    {
+     "name": "P1 South Base",
+     "lat": 44.497438,
+     "lon": -80.303925,
+     "kind": "resort",
+     "rule": {
+      "free": true
+     },
+     "capacity": null,
+     "notes": "summer shuttle stop to the Village",
+     "source": "https://www.bluemountainvillage.ca/parking",
+     "osm": "way/234950784"
+    },
+    {
+     "name": "P1A Orchard Base",
+     "lat": 44.495801,
+     "lon": -80.30265,
+     "kind": "resort",
+     "rule": {
+      "free": true
+     },
+     "capacity": null,
+     "notes": "start of The Grind trail",
+     "source": "https://www.bluemountain.ca/discover-blue/getting-here/parking",
+     "osm": "way/445375616"
+    },
+    {
+     "name": "P4 North Base",
+     "lat": 44.510946,
+     "lon": -80.323946,
+     "kind": "resort",
+     "rule": {
+      "free": true
+     },
+     "capacity": null,
+     "notes": "Toronto Ski Club area",
+     "source": "https://www.bluemountain.ca/discover-blue/getting-here/parking",
+     "osm": "way/234950788"
+    },
+    {
+     "name": "P5 South Summit",
+     "lat": 44.492878,
+     "lon": -80.318346,
+     "kind": "resort",
+     "rule": {
+      "free": true
+     },
+     "capacity": null,
+     "notes": "top of the escarpment",
+     "source": "https://www.bluemountain.ca/discover-blue/getting-here/parking",
+     "osm": "way/285823635"
+    },
+    {
+     "name": "P6 Village Summit",
+     "lat": 44.4953,
+     "lon": -80.321478,
+     "kind": "resort",
+     "rule": {
+      "free": true
+     },
+     "capacity": null,
+     "notes": "top of the gondola",
+     "source": "https://www.bluemountain.ca/discover-blue/getting-here/parking",
+     "osm": "way/285823633"
+    }
+   ]
+  },
+  {
+   "id": "collingwood",
+   "name": "Collingwood (downtown and waterfront)",
+   "match": {
+    "lat": 44.503,
+    "lon": -80.215,
+    "radius_km": 3.5
+   },
+   "season": null,
+   "source": "https://www.collingwood.ca/parking/downtown-parking",
+   "source_date": "2026",
+   "confidence": "curated",
+   "price_confidence": "high",
+   "rules": [
+    "Downtown: Hurontario St $1.50/h (3 h max); other meters and municipal lots $1.00/h, Mon to Fri 08:00 to 18:00; free weekends and the town's listed holidays (including the Civic Holiday, Easter Monday, Sep 30 and Nov 11). Pay with HotSpot.",
+    "Waterfront (Sunset Point, Princeton Shores, Harbourlands, Millennium Park): $10.00/h, $50.00/day, 09:00 to 21:00 (harbour 07:00 to 21:00), from the Friday before Victoria Day to Thanksgiving Monday (May 15 to Oct 12 in 2026); non-resident season permit $125.",
+    "Resident-only areas: 30 angled spaces by the Sunset Point playground and the Princeton Shores tennis court lot.",
+    "Harbour House underground parking (31 Huron St, P1) is public; $10/month permit until Sep 30, 2026.",
+    "No street parking 01:00 to 07:00 from Nov 1 to Mar 31."
+   ],
+   "reservation": {
+    "required": false,
+    "text": "",
+    "url": "",
+    "lead_days": 0
+   },
+   "lots": [
+    {
+     "name": "Hurontario St meters",
+     "lat": 44.500549,
+     "lon": -80.216878,
+     "kind": "street",
+     "rule": {
+      "hourly": 1.5,
+      "paid_days": [
+       0,
+       1,
+       2,
+       3,
+       4
+      ],
+      "paid_hours": [
+       "08:00",
+       "18:00"
+      ],
+      "holidays_free": true,
+      "max_stay_min": 180,
+      "no_parking": [
+       {
+        "days": [
+         0,
+         1,
+         2,
+         3,
+         4,
+         5,
+         6
+        ],
+        "hours": [
+         "01:00",
+         "07:00"
+        ],
+        "all_days": true,
+        "season": [
+         "11-01",
+         "03-31"
+        ]
+       }
+      ],
+      "hours_note": "Nov 1 to Mar 31: no street parking 01:00 to 07:00"
+     },
+     "capacity": null,
+     "notes": "$1.50/h, 3 h max",
+     "source": "https://www.collingwood.ca/parking/downtown-parking",
+     "osm": "way/1040907897"
+    },
+    {
+     "name": "Ste. Marie St municipal lot",
+     "lat": 44.501628,
+     "lon": -80.215985,
+     "kind": "lot",
+     "rule": {
+      "hourly": 1.0,
+      "paid_days": [
+       0,
+       1,
+       2,
+       3,
+       4
+      ],
+      "paid_hours": [
+       "08:00",
+       "18:00"
+      ],
+      "holidays_free": true
+     },
+     "capacity": null,
+     "notes": "downtown lot behind Hurontario St; matched by location",
+     "source": "https://www.collingwood.ca/parking/downtown-parking",
+     "osm": "way/234948712"
+    },
+    {
+     "name": "Sunset Point Park lot",
+     "lat": 44.507725,
+     "lon": -80.203425,
+     "kind": "lot",
+     "rule": {
+      "hourly": 10.0,
+      "daily_max": 50.0,
+      "paid_hours": [
+       "09:00",
+       "21:00"
+      ],
+      "season": [
+       "fri_before_victoria_day",
+       "thanksgiving"
+      ],
+      "off_season": "free"
+     },
+     "capacity": null,
+     "notes": "visitor parking; resident-only rows signed",
+     "source": "https://www.collingwood.ca/parking/waterfront-parking",
+     "osm": "way/179731474"
+    },
+    {
+     "name": "Sunset Point lot (St. Lawrence St)",
+     "lat": 44.508143,
+     "lon": -80.205336,
+     "kind": "lot",
+     "rule": {
+      "hourly": 10.0,
+      "daily_max": 50.0,
+      "paid_hours": [
+       "09:00",
+       "21:00"
+      ],
+      "season": [
+       "fri_before_victoria_day",
+       "thanksgiving"
+      ],
+      "off_season": "free"
+     },
+     "capacity": null,
+     "notes": "",
+     "source": "https://www.collingwood.ca/parking/waterfront-parking",
+     "osm": "way/179731488"
+    },
+    {
+     "name": "Millennium Park (Heritage Dr)",
+     "lat": 44.50799,
+     "lon": -80.218518,
+     "kind": "lot",
+     "rule": {
+      "hourly": 10.0,
+      "daily_max": 50.0,
+      "paid_hours": [
+       "09:00",
+       "21:00"
+      ],
+      "season": [
+       "fri_before_victoria_day",
+       "thanksgiving"
+      ],
+      "off_season": "free"
+     },
+     "capacity": null,
+     "notes": "gravel lot by the grain elevators",
+     "source": "https://www.collingwood.ca/parking/waterfront-parking",
+     "osm": "way/1337849905"
+    }
+   ],
+   "free_days": [
+    "civic_holiday",
+    "easter_monday",
+    "09-30",
+    "11-11"
+   ]
+  },
+  {
+   "id": "stratford",
+   "name": "Stratford (downtown and festival theatres)",
+   "match": {
+    "lat": 43.3705,
+    "lon": -80.98,
+    "radius_km": 2.5
+   },
+   "season": null,
+   "source": "https://www.stratford.ca/live-here/parking/",
+   "source_date": "2026",
+   "confidence": "curated",
+   "price_confidence": "high",
+   "rules": [
+    "Meters and lots are paid Mon to Sat, 09:00 to 20:00 from Apr 1 to Oct 31 and 09:00 to 18:00 from Nov 1 to Mar 31; free Sundays and holidays. Lots $1.25/h, street $1.50/h; HotSpot app or pay-by-plate.",
+    "Free: Cooper Lot and Downie Lot (24 h, overnight allowed); 15 and 30 min spaces.",
+    "Dec 1 to Apr 30: 4 h free on Saturdays (the City does not say which 4 hours; priced as the first 4 h of the stay).",
+    "No parking 02:00 to 06:00 on streets and pay lots all year.",
+    "Festival Theatre: neighbourhood streets, Upper Queen's Park and Lakeside Dr are free; the Queen St lot becomes paid for patrons once previews start (price not published). Tom Patterson: the Water St lot becomes paid during performances; nearby streets free.",
+    "Market Place and Upper Erie lots (4 h, $1.25/h) are paid city lots too; not located in OSM, so not listed."
+   ],
+   "reservation": {
+    "required": false,
+    "text": "",
+    "url": "",
+    "lead_days": 0
+   },
+   "lots": [
+    {
+     "name": "Cooper Lot",
+     "lat": 43.367192,
+     "lon": -80.981995,
+     "kind": "lot",
+     "rule": {
+      "free": true,
+      "max_stay_min": 1440
+     },
+     "capacity": null,
+     "notes": "St. Patrick St, 5 min walk to the Avon Theatre",
+     "source": "https://www.stratford.ca/live-here/parking/",
+     "osm": "way/203163637"
+    },
+    {
+     "name": "Downie Street Lot",
+     "lat": 43.365442,
+     "lon": -80.980289,
+     "kind": "lot",
+     "rule": {
+      "free": true,
+      "max_stay_min": 1440
+     },
+     "capacity": null,
+     "notes": "also bus parking",
+     "source": "https://www.stratford.ca/live-here/parking/",
+     "osm": "way/253122492"
+    },
+    {
+     "name": "Albert Street Lot",
+     "lat": 43.370798,
+     "lon": -80.981629,
+     "kind": "lot",
+     "rule": {
+      "hourly": 1.25,
+      "holidays_free": true,
+      "max_stay_min": 240,
+      "periods": [
+       {
+        "days": [
+         0,
+         1,
+         2,
+         3,
+         4
+        ],
+        "hours": [
+         "09:00",
+         "20:00"
+        ],
+        "months": [
+         4,
+         5,
+         6,
+         7,
+         8,
+         9,
+         10
+        ]
+       },
+       {
+        "days": [
+         5
+        ],
+        "hours": [
+         "09:00",
+         "20:00"
+        ],
+        "months": [
+         5,
+         6,
+         7,
+         8,
+         9,
+         10
+        ]
+       },
+       {
+        "days": [
+         0,
+         1,
+         2,
+         3,
+         4
+        ],
+        "hours": [
+         "09:00",
+         "18:00"
+        ],
+        "months": [
+         11,
+         12,
+         1,
+         2,
+         3
+        ]
+       },
+       {
+        "days": [
+         5
+        ],
+        "hours": [
+         "09:00",
+         "18:00"
+        ],
+        "months": [
+         11
+        ]
+       },
+       {
+        "days": [
+         5
+        ],
+        "hours": [
+         "09:00",
+         "18:00"
+        ],
+        "months": [
+         12,
+         1,
+         2,
+         3
+        ],
+        "free_first_min": 240
+       },
+       {
+        "days": [
+         5
+        ],
+        "hours": [
+         "09:00",
+         "20:00"
+        ],
+        "months": [
+         4
+        ],
+        "free_first_min": 240
+       }
+      ],
+      "no_parking": [
+       {
+        "days": [
+         0,
+         1,
+         2,
+         3,
+         4,
+         5,
+         6
+        ],
+        "hours": [
+         "02:00",
+         "06:00"
+        ],
+        "all_days": true
+       }
+      ],
+      "hours_note": "no parking 02:00 to 06:00 in pay lots"
+     },
+     "capacity": null,
+     "notes": "4 h max; pay by plate",
+     "source": "https://www.stratford.ca/live-here/parking/",
+     "osm": "way/203161893"
+    },
+    {
+     "name": "Lower Erie Lot",
+     "lat": 43.370233,
+     "lon": -80.98336,
+     "kind": "lot",
+     "rule": {
+      "hourly": 1.25,
+      "holidays_free": true,
+      "max_stay_min": 240,
+      "periods": [
+       {
+        "days": [
+         0,
+         1,
+         2,
+         3,
+         4
+        ],
+        "hours": [
+         "09:00",
+         "20:00"
+        ],
+        "months": [
+         4,
+         5,
+         6,
+         7,
+         8,
+         9,
+         10
+        ]
+       },
+       {
+        "days": [
+         5
+        ],
+        "hours": [
+         "09:00",
+         "20:00"
+        ],
+        "months": [
+         5,
+         6,
+         7,
+         8,
+         9,
+         10
+        ]
+       },
+       {
+        "days": [
+         0,
+         1,
+         2,
+         3,
+         4
+        ],
+        "hours": [
+         "09:00",
+         "18:00"
+        ],
+        "months": [
+         11,
+         12,
+         1,
+         2,
+         3
+        ]
+       },
+       {
+        "days": [
+         5
+        ],
+        "hours": [
+         "09:00",
+         "18:00"
+        ],
+        "months": [
+         11
+        ]
+       },
+       {
+        "days": [
+         5
+        ],
+        "hours": [
+         "09:00",
+         "18:00"
+        ],
+        "months": [
+         12,
+         1,
+         2,
+         3
+        ],
+        "free_first_min": 240
+       },
+       {
+        "days": [
+         5
+        ],
+        "hours": [
+         "09:00",
+         "20:00"
+        ],
+        "months": [
+         4
+        ],
+        "free_first_min": 240
+       }
+      ],
+      "no_parking": [
+       {
+        "days": [
+         0,
+         1,
+         2,
+         3,
+         4,
+         5,
+         6
+        ],
+        "hours": [
+         "02:00",
+         "06:00"
+        ],
+        "all_days": true
+       }
+      ],
+      "hours_note": "no parking 02:00 to 06:00 in pay lots"
+     },
+     "capacity": null,
+     "notes": "4 h max",
+     "source": "https://www.stratford.ca/live-here/parking/",
+     "osm": "way/166668588"
+    },
+    {
+     "name": "York Street Lot",
+     "lat": 43.372067,
+     "lon": -80.983436,
+     "kind": "lot",
+     "rule": {
+      "hourly": 1.25,
+      "holidays_free": true,
+      "max_stay_min": 240,
+      "periods": [
+       {
+        "days": [
+         0,
+         1,
+         2,
+         3,
+         4
+        ],
+        "hours": [
+         "09:00",
+         "20:00"
+        ],
+        "months": [
+         4,
+         5,
+         6,
+         7,
+         8,
+         9,
+         10
+        ]
+       },
+       {
+        "days": [
+         5
+        ],
+        "hours": [
+         "09:00",
+         "20:00"
+        ],
+        "months": [
+         5,
+         6,
+         7,
+         8,
+         9,
+         10
+        ]
+       },
+       {
+        "days": [
+         0,
+         1,
+         2,
+         3,
+         4
+        ],
+        "hours": [
+         "09:00",
+         "18:00"
+        ],
+        "months": [
+         11,
+         12,
+         1,
+         2,
+         3
+        ]
+       },
+       {
+        "days": [
+         5
+        ],
+        "hours": [
+         "09:00",
+         "18:00"
+        ],
+        "months": [
+         11
+        ]
+       },
+       {
+        "days": [
+         5
+        ],
+        "hours": [
+         "09:00",
+         "18:00"
+        ],
+        "months": [
+         12,
+         1,
+         2,
+         3
+        ],
+        "free_first_min": 240
+       },
+       {
+        "days": [
+         5
+        ],
+        "hours": [
+         "09:00",
+         "20:00"
+        ],
+        "months": [
+         4
+        ],
+        "free_first_min": 240
+       }
+      ],
+      "no_parking": [
+       {
+        "days": [
+         0,
+         1,
+         2,
+         3,
+         4,
+         5,
+         6
+        ],
+        "hours": [
+         "02:00",
+         "06:00"
+        ],
+        "all_days": true
+       }
+      ],
+      "hours_note": "no parking 02:00 to 06:00 in pay lots"
+     },
+     "capacity": null,
+     "notes": "4 h max",
+     "source": "https://www.stratford.ca/live-here/parking/",
+     "osm": "way/337017548"
+    },
+    {
+     "name": "St. Patrick Street Lot",
+     "lat": 43.368348,
+     "lon": -80.981989,
+     "kind": "lot",
+     "rule": {
+      "hourly": 1.25,
+      "holidays_free": true,
+      "max_stay_min": 720,
+      "periods": [
+       {
+        "days": [
+         0,
+         1,
+         2,
+         3,
+         4
+        ],
+        "hours": [
+         "09:00",
+         "20:00"
+        ],
+        "months": [
+         4,
+         5,
+         6,
+         7,
+         8,
+         9,
+         10
+        ]
+       },
+       {
+        "days": [
+         5
+        ],
+        "hours": [
+         "09:00",
+         "20:00"
+        ],
+        "months": [
+         5,
+         6,
+         7,
+         8,
+         9,
+         10
+        ]
+       },
+       {
+        "days": [
+         0,
+         1,
+         2,
+         3,
+         4
+        ],
+        "hours": [
+         "09:00",
+         "18:00"
+        ],
+        "months": [
+         11,
+         12,
+         1,
+         2,
+         3
+        ]
+       },
+       {
+        "days": [
+         5
+        ],
+        "hours": [
+         "09:00",
+         "18:00"
+        ],
+        "months": [
+         11
+        ]
+       },
+       {
+        "days": [
+         5
+        ],
+        "hours": [
+         "09:00",
+         "18:00"
+        ],
+        "months": [
+         12,
+         1,
+         2,
+         3
+        ],
+        "free_first_min": 240
+       },
+       {
+        "days": [
+         5
+        ],
+        "hours": [
+         "09:00",
+         "20:00"
+        ],
+        "months": [
+         4
+        ],
+        "free_first_min": 240
+       }
+      ],
+      "no_parking": [
+       {
+        "days": [
+         0,
+         1,
+         2,
+         3,
+         4,
+         5,
+         6
+        ],
+        "hours": [
+         "02:00",
+         "06:00"
+        ],
+        "all_days": true
+       }
+      ],
+      "hours_note": "no parking 02:00 to 06:00 in pay lots"
+     },
+     "capacity": null,
+     "notes": "12 h max",
+     "source": "https://www.stratford.ca/live-here/parking/",
+     "osm": "way/203162254"
+    },
+    {
+     "name": "George St lot",
+     "lat": 43.369034,
+     "lon": -80.982596,
+     "kind": "lot",
+     "rule": {
+      "hourly": 1.25,
+      "holidays_free": true,
+      "max_stay_min": 720,
+      "periods": [
+       {
+        "days": [
+         0,
+         1,
+         2,
+         3,
+         4
+        ],
+        "hours": [
+         "09:00",
+         "20:00"
+        ],
+        "months": [
+         4,
+         5,
+         6,
+         7,
+         8,
+         9,
+         10
+        ]
+       },
+       {
+        "days": [
+         5
+        ],
+        "hours": [
+         "09:00",
+         "20:00"
+        ],
+        "months": [
+         5,
+         6,
+         7,
+         8,
+         9,
+         10
+        ]
+       },
+       {
+        "days": [
+         0,
+         1,
+         2,
+         3,
+         4
+        ],
+        "hours": [
+         "09:00",
+         "18:00"
+        ],
+        "months": [
+         11,
+         12,
+         1,
+         2,
+         3
+        ]
+       },
+       {
+        "days": [
+         5
+        ],
+        "hours": [
+         "09:00",
+         "18:00"
+        ],
+        "months": [
+         11
+        ]
+       },
+       {
+        "days": [
+         5
+        ],
+        "hours": [
+         "09:00",
+         "18:00"
+        ],
+        "months": [
+         12,
+         1,
+         2,
+         3
+        ],
+        "free_first_min": 240
+       },
+       {
+        "days": [
+         5
+        ],
+        "hours": [
+         "09:00",
+         "20:00"
+        ],
+        "months": [
+         4
+        ],
+        "free_first_min": 240
+       }
+      ],
+      "no_parking": [
+       {
+        "days": [
+         0,
+         1,
+         2,
+         3,
+         4,
+         5,
+         6
+        ],
+        "hours": [
+         "02:00",
+         "06:00"
+        ],
+        "all_days": true
+       }
+      ],
+      "hours_note": "no parking 02:00 to 06:00 in pay lots"
+     },
+     "capacity": null,
+     "notes": "George St W; 12 h max (OSM maxstay 12 hours)",
+     "source": "https://www.stratford.ca/live-here/parking/",
+     "osm": "way/203161912"
+    },
+    {
+     "name": "Kalbfleisch Lot",
+     "lat": 43.369258,
+     "lon": -80.985129,
+     "kind": "lot",
+     "rule": {
+      "hourly": 1.25,
+      "holidays_free": true,
+      "max_stay_min": 720,
+      "periods": [
+       {
+        "days": [
+         0,
+         1,
+         2,
+         3,
+         4
+        ],
+        "hours": [
+         "09:00",
+         "20:00"
+        ],
+        "months": [
+         4,
+         5,
+         6,
+         7,
+         8,
+         9,
+         10
+        ]
+       },
+       {
+        "days": [
+         5
+        ],
+        "hours": [
+         "09:00",
+         "20:00"
+        ],
+        "months": [
+         5,
+         6,
+         7,
+         8,
+         9,
+         10
+        ]
+       },
+       {
+        "days": [
+         0,
+         1,
+         2,
+         3,
+         4
+        ],
+        "hours": [
+         "09:00",
+         "18:00"
+        ],
+        "months": [
+         11,
+         12,
+         1,
+         2,
+         3
+        ]
+       },
+       {
+        "days": [
+         5
+        ],
+        "hours": [
+         "09:00",
+         "18:00"
+        ],
+        "months": [
+         11
+        ]
+       },
+       {
+        "days": [
+         5
+        ],
+        "hours": [
+         "09:00",
+         "18:00"
+        ],
+        "months": [
+         12,
+         1,
+         2,
+         3
+        ],
+        "free_first_min": 240
+       },
+       {
+        "days": [
+         5
+        ],
+        "hours": [
+         "09:00",
+         "20:00"
+        ],
+        "months": [
+         4
+        ],
+        "free_first_min": 240
+       }
+      ],
+      "no_parking": [
+       {
+        "days": [
+         0,
+         1,
+         2,
+         3,
+         4,
+         5,
+         6
+        ],
+        "hours": [
+         "02:00",
+         "06:00"
+        ],
+        "all_days": true
+       }
+      ],
+      "hours_note": "no parking 02:00 to 06:00 in pay lots"
+     },
+     "capacity": 35,
+     "notes": "128 Erie St; 12 h max",
+     "source": "https://www.stratford.ca/live-here/parking/",
+     "osm": "way/203162268"
+    },
+    {
+     "name": "Festival Theatre Queen St lot",
+     "lat": 43.375014,
+     "lon": -80.970622,
+     "kind": "lot",
+     "rule": null,
+     "capacity": null,
+     "notes": "free until the first preview, then paid patron parking (rate not published)",
+     "source": "https://www.stratfordfestival.ca/handbook/essentials/parking",
+     "osm": "way/261107703"
+    }
+   ]
+  },
+  {
+   "id": "st-jacobs",
+   "name": "St. Jacobs village (Woolwich)",
+   "match": {
+    "lat": 43.537,
+    "lon": -80.554,
+    "radius_km": 1.2
+   },
+   "season": null,
+   "source": "https://www.woolwich.ca/pay-buy/parking/",
+   "source_date": "2026",
+   "confidence": "curated",
+   "price_confidence": "high",
+   "rules": [
+    "King St and the village core: free on-street parking up to 3 h unless signed.",
+    "Free all-day lots: Albert/Water St lot (cars, campers, buses) and Front St lot (buses).",
+    "Municipal lots closed 02:30 to 06:00."
+   ],
+   "reservation": {
+    "required": false,
+    "text": "",
+    "url": "",
+    "lead_days": 0
+   },
+   "lots": [
+    {
+     "name": "Albert/Water St lot",
+     "lat": 43.53945,
+     "lon": -80.550875,
+     "kind": "lot",
+     "rule": {
+      "free": true,
+      "no_parking": [
+       {
+        "days": [
+         0,
+         1,
+         2,
+         3,
+         4,
+         5,
+         6
+        ],
+        "hours": [
+         "02:30",
+         "06:00"
+        ],
+        "all_days": true
+       }
+      ],
+      "hours_note": "municipal lots closed 02:30 to 06:00"
+     },
+     "capacity": null,
+     "notes": "township all-day lot; matched to the OSM lot at Albert St E",
+     "source": "https://www.woolwich.ca/pay-buy/parking/",
+     "osm": "way/131465685"
+    }
+   ]
+  },
+  {
+   "id": "st-jacobs-market",
+   "name": "St. Jacobs Farmers' Market",
+   "match": {
+    "lat": 43.5116,
+    "lon": -80.554,
+    "radius_km": 1.0
+   },
+   "season": null,
+   "source": "https://www.stjacobsmarket.com/plan-your-visit",
+   "source_date": "2026",
+   "confidence": "curated",
+   "price_confidence": "high",
+   "rules": [
+    "Parking is free. Main lots P1, P2, P3 are typically full by 10:00 on Saturdays.",
+    "Overflow: Market Road Antiques lot (seldom full), the central gravel lot (Saturdays), the east end of the St. Jacobs Outlet Mall lot, and the dirt lot behind the Ontario Livestock Exchange (via Farmers Market Rd).",
+    "Market open Thursday and Saturday all year, Tuesdays mid-June to end of August."
+   ],
+   "reservation": {
+    "required": false,
+    "text": "",
+    "url": "",
+    "lead_days": 0
+   },
+   "lots": [
+    {
+     "name": "Market main lot",
+     "lat": 43.511528,
+     "lon": -80.554702,
+     "kind": "lot",
+     "rule": {
+      "free": true
+     },
+     "capacity": null,
+     "notes": "beside the market buildings, 878 Weber St N; full by about 10:00 on Saturdays",
+     "source": "https://www.stjacobsmarket.com/plan-your-visit",
+     "osm": "way/147478101",
+     "often_full": true
+    },
+    {
+     "name": "Market lot (south)",
+     "lat": 43.510497,
+     "lon": -80.553485,
+     "kind": "lot",
+     "rule": {
+      "free": true
+     },
+     "capacity": null,
+     "notes": "full by about 10:00 on Saturdays",
+     "source": "https://www.stjacobsmarket.com/plan-your-visit",
+     "osm": "way/406009152",
+     "often_full": true
+    },
+    {
+     "name": "Farmers Market Rd lot",
+     "lat": 43.510132,
+     "lon": -80.551853,
+     "kind": "lot",
+     "rule": {
+      "free": true
+     },
+     "capacity": null,
+     "notes": "overflow; matched by location",
+     "source": "https://www.stjacobsmarket.com/faqs",
+     "osm": "way/1366618318"
+    }
+   ]
+  },
+  {
+   "id": "elora",
+   "name": "Elora (downtown, Gorge and Quarry)",
+   "match": {
+    "lat": 43.681,
+    "lon": -80.432,
+    "radius_km": 2.5
+   },
+   "season": null,
+   "source": "https://www.centrewellington.ca/news/posts/centre-wellington-preparing-to-resume-consistent-parking-enforcement/",
+   "source_date": "2026-10-09",
+   "confidence": "curated",
+   "price_confidence": "high",
+   "rules": [
+    "Downtown Elora paid parking (started May 8, 2026: $3/h) was suspended on Jun 10, 2026 and remains paused as of Oct 9, 2026; parking is free. Any restart goes to Council first.",
+    "Posted limits still apply: 3 h on signed downtown streets, 24 h in municipal lots.",
+    "Municipal lots: 10 Geddes St, 1 MacDonald Square, Margaret St at Hoffer Park, 23 and 25 Metcalfe St, 36 Water St.",
+    "Nov 1 to Mar 31: no overnight parking 02:00 to 06:00 except at 25 Metcalfe St.",
+    "Elora Gorge Conservation Area: admission per person (adult $9.50, child $4.00); Elora Quarry: online tickets plus an $18 parking pass, Jun 12 to Labour Day, two 4 h slots."
+   ],
+   "reservation": {
+    "required": false,
+    "text": "Elora Quarry only: tickets and the $18 parking pass must be bought online in advance (released each Friday for the following week).",
+    "url": "https://www.grandriver.ca/eloraquarry",
+    "lead_days": 7,
+    "window": [
+     "06-12",
+     "labour_day"
+    ],
+    "year": 2026
+   },
+   "lots": [
+    {
+     "name": "MacDonald Square lot",
+     "lat": 43.683393,
+     "lon": -80.430943,
+     "kind": "lot",
+     "rule": {
+      "free": true,
+      "max_stay_min": 1440,
+      "no_parking": [
+       {
+        "days": [
+         0,
+         1,
+         2,
+         3,
+         4,
+         5,
+         6
+        ],
+        "hours": [
+         "02:00",
+         "06:00"
+        ],
+        "all_days": true,
+        "season": [
+         "11-01",
+         "03-31"
+        ]
+       }
+      ],
+      "hours_note": "Nov 1 to Mar 31: no parking 02:00 to 06:00"
+     },
+     "capacity": null,
+     "notes": "1 MacDonald Square; 24 h max",
+     "source": "https://www.centrewellington.ca/township-services/parking/downtown-parking/",
+     "osm": "way/1104550231"
+    },
+    {
+     "name": "Clyde St municipal lot",
+     "lat": 43.679844,
+     "lon": -80.428493,
+     "kind": "lot",
+     "rule": {
+      "free": true,
+      "max_stay_min": 1440,
+      "no_parking": [
+       {
+        "days": [
+         0,
+         1,
+         2,
+         3,
+         4,
+         5,
+         6
+        ],
+        "hours": [
+         "02:00",
+         "06:00"
+        ],
+        "all_days": true,
+        "season": [
+         "11-01",
+         "03-31"
+        ]
+       }
+      ],
+      "hours_note": "Nov 1 to Mar 31: no parking 02:00 to 06:00"
+     },
+     "capacity": null,
+     "notes": "OSM fee=no, 24 h max; near the Elora Mill",
+     "source": "https://www.centrewellington.ca/township-services/parking/downtown-parking/",
+     "osm": "way/1104550227"
+    },
+    {
+     "name": "Elora Gorge Conservation Area (day use)",
+     "lat": 43.672024,
+     "lon": -80.446684,
+     "kind": "park",
+     "rule": {
+      "flat": 9.5,
+      "per_person": {
+       "adult": 9.5,
+       "child": 4.0,
+       "senior": 7.5
+      },
+      "season": [
+       "05-01",
+       "10-15"
+      ],
+      "off_season": "closed"
+     },
+     "capacity": null,
+     "notes": "admission per person: adult $9.50, child $4.00, senior $7.50; season May 1 to Oct 15",
+     "source": "https://www.grandriver.ca/outdoor-recreation/conservation-areas/elora-gorge/",
+     "osm": "way/208385202"
+    },
+    {
+     "name": "Elora Quarry (parking pass)",
+     "lat": 43.688705,
+     "lon": -80.4176,
+     "kind": "park",
+     "rule": {
+      "flat": 18.0,
+      "max_stay_min": 240,
+      "season": [
+       "06-12",
+       "labour_day"
+      ],
+      "off_season": "closed",
+      "season_year": 2026
+     },
+     "capacity": null,
+     "notes": "$18 parking pass plus admission (adult $12.50), online only, 4 h slots",
+     "source": "https://www.grandriver.ca/outdoor-recreation/conservation-areas/conservation-area-services-info-fees-and-more/conservation-area-fees/elora-quarry-fees/",
+     "osm": "way/558272911",
+     "reservation": "Online tickets and parking pass, released Fridays"
+    }
+   ]
+  },
+  {
+   "id": "port-dover",
+   "name": "Port Dover (Norfolk County)",
+   "match": {
+    "lat": 42.786,
+    "lon": -80.201,
+    "radius_km": 2.0
+   },
+   "season": {
+    "from": "06-15",
+    "to": "labour_day",
+    "off_season": "free",
+    "note": "paid June 15 to Labour Day, 10:00 to 18:00 daily"
+   },
+   "source": "https://www.norfolkcounty.ca/home-property-and-neighbourhood/roads-parking-and-traffic/parking/paid-parking/",
+   "source_date": "2026",
+   "confidence": "curated",
+   "price_confidence": "high",
+   "rules": [
+    "Only three paid areas, $4.00/h, 10:00 to 18:00 daily, Jun 15 to Labour Day: Clinton St lot (Clinton at Main, 62 spaces), Lift Bridge lot (Harbour St, 30 spaces) and Harbour St near the museum (9 spaces). Pay with HotSpot, QR code or terminals; no cash.",
+    "The Clinton St and Lift Bridge lots could not be matched to OSM polygons with confidence; see the county map.",
+    "All other parking is free: streets 2 h (48 h where unsigned).",
+    "Accessible permit holders park free in marked accessible spaces."
+   ],
+   "reservation": {
+    "required": false,
+    "text": "",
+    "url": "",
+    "lead_days": 0
+   },
+   "lots": [
+    {
+     "name": "Harbour St paid spaces (near the museum)",
+     "lat": 42.784853,
+     "lon": -80.199073,
+     "kind": "street",
+     "rule": {
+      "hourly": 4.0,
+      "paid_hours": [
+       "10:00",
+       "18:00"
+      ],
+      "season": [
+       "06-15",
+       "labour_day"
+      ],
+      "off_season": "free"
+     },
+     "capacity": null,
+     "notes": "9 spaces, zone 1003",
+     "source": "https://media-001-ca.cdn.govstack.com/norfolkcounty-007-ca/media/1akdmlcm/paid-parking-map-port-dover.pdf",
+     "osm": "way/1330333377"
+    },
+    {
+     "name": "St. George St lot",
+     "lat": 42.786388,
+     "lon": -80.204341,
+     "kind": "lot",
+     "rule": {
+      "free": true
+     },
+     "capacity": null,
+     "notes": "OSM fee=no; the county says all parking outside the paid areas is free",
+     "source": "https://www.norfolkcounty.ca/home-property-and-neighbourhood/roads-parking-and-traffic/parking/paid-parking/",
+     "osm": "way/234895981"
+    }
+   ]
+  },
+  {
+   "id": "port-stanley",
+   "name": "Port Stanley (Central Elgin)",
+   "match": {
+    "lat": 42.663,
+    "lon": -81.214,
+    "radius_km": 2.0
+   },
+   "season": {
+    "from": "05-01",
+    "to": "09-30",
+    "off_season": "free",
+    "note": "municipal lots paid May 1 to Sep 30, 10:00 to 17:00 (boat launch 24/7)"
+   },
+   "source": "https://www.centralelgin.org/sandbox-1/parking/",
+   "source_date": "2026",
+   "confidence": "curated",
+   "price_confidence": "high",
+   "rules": [
+    "New for 2026: $6.00/h; daily rates by distance to the beach: Main Beach and Lotus Lane $30.00, Old Ball Park, Little Beach and West Pier $25.00, East Pier and West Pier Expansion $20.00. Boat launch $30.00 flat per 24 h.",
+    "A payment covers only the lot where you bought it. Pay at machines, HONK or Parkedin.",
+    "Street parking is free, with 2, 3 or 5 h limits Fri to Mon 10:00 to 17:00 in the commercial area.",
+    "Accessible permits do not exempt you from paying. Lotus Lane and Old Ball Park lots are not located in OSM.",
+    "Large vehicles: East Pier lot only (pay per space used)."
+   ],
+   "reservation": {
+    "required": false,
+    "text": "",
+    "url": "",
+    "lead_days": 0
+   },
+   "lots": [
+    {
+     "name": "Main Beach Lot",
+     "lat": 42.660463,
+     "lon": -81.217738,
+     "kind": "lot",
+     "rule": {
+      "hourly": 6.0,
+      "daily_max": 30.0,
+      "paid_hours": [
+       "10:00",
+       "17:00"
+      ],
+      "season": [
+       "05-01",
+       "09-30"
+      ],
+      "off_season": "free"
+     },
+     "capacity": null,
+     "notes": "south side of Edith Cavell Blvd",
+     "source": "https://www.centralelgin.org/sandbox-1/parking/",
+     "osm": "way/895585576"
+    },
+    {
+     "name": "East Pier Lot",
+     "lat": 42.66187,
+     "lon": -81.212339,
+     "kind": "lot",
+     "rule": {
+      "hourly": 6.0,
+      "daily_max": 20.0,
+      "paid_hours": [
+       "10:00",
+       "17:00"
+      ],
+      "season": [
+       "05-01",
+       "09-30"
+      ],
+      "off_season": "free"
+     },
+     "capacity": null,
+     "notes": "south end of Main St; RVs and buses",
+     "source": "https://www.centralelgin.org/sandbox-1/parking/",
+     "osm": "way/972418332"
+    },
+    {
+     "name": "West Pier Lot",
+     "lat": 42.660969,
+     "lon": -81.214066,
+     "kind": "lot",
+     "rule": {
+      "hourly": 6.0,
+      "daily_max": 25.0,
+      "paid_hours": [
+       "10:00",
+       "17:00"
+      ],
+      "season": [
+       "05-01",
+       "09-30"
+      ],
+      "off_season": "free"
+     },
+     "capacity": null,
+     "notes": "south end of Carlow Rd; matched by location",
+     "source": "https://www.centralelgin.org/sandbox-1/parking/",
+     "osm": "way/895585575"
+    }
+   ]
+  },
+  {
+   "id": "pinery",
+   "name": "Pinery Provincial Park",
+   "match": {
+    "lat": 43.265,
+    "lon": -81.835,
+    "radius_km": 4.5
+   },
+   "season": null,
+   "source": "https://blog.ontarioparks.ca/visit-pinery/",
+   "source_date": "2026",
+   "confidence": "curated",
+   "price_confidence": "high",
+   "rules": [
+    "Daily vehicle permit $21.00 (Ontario seniors $16.75), valid in all day-use lots; open all year.",
+    "Book the permit up to 5 days ahead to guarantee entry even when the park hits capacity; the gate is busiest 11:00 to 15:00.",
+    "Day-use beach lots P1 to P9 run along the shore; the Visitor Centre and park store lots are inland."
+   ],
+   "reservation": {
+    "required": false,
+    "text": "Advance daily vehicle permit up to 5 days ahead guarantees entry on busy days.",
+    "url": "https://www.ontarioparks.ca/dayuse",
+    "lead_days": 5
+   },
+   "lots": [
+    {
+     "name": "Day use P1",
+     "lat": 43.285542,
+     "lon": -81.802509,
+     "kind": "park",
+     "rule": {
+      "flat": 21.0
+     },
+     "capacity": null,
+     "notes": "beach day-use lot; $21 daily vehicle permit",
+     "source": "https://blog.ontarioparks.ca/visit-pinery/",
+     "osm": "way/683383682"
+    },
+    {
+     "name": "Day use P5",
+     "lat": 43.277221,
+     "lon": -81.815211,
+     "kind": "park",
+     "rule": {
+      "flat": 21.0
+     },
+     "capacity": null,
+     "notes": "beach day-use lot",
+     "source": "https://blog.ontarioparks.ca/visit-pinery/",
+     "osm": "way/857004465"
+    },
+    {
+     "name": "Day use P9",
+     "lat": 43.268861,
+     "lon": -81.828465,
+     "kind": "park",
+     "rule": {
+      "flat": 21.0
+     },
+     "capacity": null,
+     "notes": "beach day-use lot",
+     "source": "https://blog.ontarioparks.ca/visit-pinery/",
+     "osm": "way/857004461"
+    },
+    {
+     "name": "Visitor Centre lot",
+     "lat": 43.249411,
+     "lon": -81.848102,
+     "kind": "park",
+     "rule": {
+      "flat": 21.0
+     },
+     "capacity": null,
+     "notes": "",
+     "source": "https://blog.ontarioparks.ca/visit-pinery/",
+     "osm": "way/633987388"
+    }
+   ]
+  },
+  {
+   "id": "huntsville",
+   "name": "Huntsville (downtown)",
+   "match": {
+    "lat": 45.3265,
+    "lon": -79.217,
+    "radius_km": 1.5
+   },
+   "season": null,
+   "source": "https://www.huntsville.ca/roads-sidewalks-transit/parking/",
+   "source_date": "2026",
+   "confidence": "curated",
+   "price_confidence": "high",
+   "rules": [
+    "All public parking is free. Main St: 3 h limit in summer; side streets for longer stays.",
+    "Winter: lots free all day, side streets 3 h; no overnight street parking Nov 1 to Apr 15."
+   ],
+   "reservation": {
+    "required": false,
+    "text": "",
+    "url": "",
+    "lead_days": 0
+   },
+   "lots": [
+    {
+     "name": "High St lot (behind Town Hall)",
+     "lat": 45.326443,
+     "lon": -79.216556,
+     "kind": "lot",
+     "rule": {
+      "free": true
+     },
+     "capacity": 35,
+     "notes": "about 35 spaces",
+     "source": "https://www.huntsville.ca/roads-sidewalks-transit/parking/",
+     "osm": "way/438897951"
+    },
+    {
+     "name": "River Mill Park lot",
+     "lat": 45.327534,
+     "lon": -79.218266,
+     "kind": "lot",
+     "rule": {
+      "free": true
+     },
+     "capacity": 38,
+     "notes": "Dara Howell Way; about 38 spaces",
+     "source": "https://www.huntsville.ca/roads-sidewalks-transit/parking/",
+     "osm": "way/438897175"
+    },
+    {
+     "name": "West St N lot (behind RBC)",
+     "lat": 45.32685,
+     "lon": -79.218969,
+     "kind": "lot",
+     "rule": {
+      "free": true
+     },
+     "capacity": 50,
+     "notes": "50 spaces",
+     "source": "https://www.huntsville.ca/roads-sidewalks-transit/parking/",
+     "osm": "way/438897215"
+    },
+    {
+     "name": "Minerva St lot",
+     "lat": 45.325957,
+     "lon": -79.218639,
+     "kind": "lot",
+     "rule": {
+      "free": true
+     },
+     "capacity": 27,
+     "notes": "27 spaces incl. 1 bus space",
+     "source": "https://www.huntsville.ca/roads-sidewalks-transit/parking/",
+     "osm": "way/438897952"
+    }
+   ]
+  },
+  {
+   "id": "algonquin-hwy60-west",
+   "name": "Algonquin Park Highway 60 (west half)",
+   "match": {
+    "lat": 45.52,
+    "lon": -78.68,
+    "radius_km": 12.5
+   },
+   "season": null,
+   "source": "https://www.algonquinpark.on.ca/visit/general_park_info/fees-day-use.php",
+   "source_date": "2026",
+   "confidence": "curated",
+   "price_confidence": "high",
+   "rules": [
+    "Daily vehicle permit $21.00 for any stop on Hwy 60 (trails, beaches, Visitor Centre, picnic areas); driving straight through needs no permit.",
+    "Buy online up to 5 days ahead (sales open 07:00) or by phone 1-888-668-7275; not sold in person. Choose the Highway 60 Corridor entry point; capacity is limited.",
+    "Permits are valid 07:00 to 22:00 on the day; enter the licence plate when buying.",
+    "Booth's Rock Trail needs the special 'DVP Booth's Rock Trail + Hwy 60' permit Sep 12 to Oct 18, 2026 (same price)."
+   ],
+   "reservation": {
+    "required": true,
+    "text": "Daily vehicle permit must be bought online or by phone (up to 5 days ahead); no in-person sales.",
+    "url": "https://www.algonquinpark.on.ca/visit/general_park_info/fees-day-use.php",
+    "lead_days": 5
+   },
+   "lots": [
+    {
+     "name": "Whiskey Rapids Trail",
+     "lat": 45.485304,
+     "lon": -78.756387,
+     "kind": "park",
+     "rule": {
+      "flat": 21.0,
+      "no_parking": [
+       {
+        "days": [
+         0,
+         1,
+         2,
+         3,
+         4,
+         5,
+         6
+        ],
+        "hours": [
+         "22:00",
+         "07:00"
+        ],
+        "all_days": true
+       }
+      ],
+      "hours_note": "day-use permit valid 07:00 to 22:00"
+     },
+     "capacity": null,
+     "notes": "",
+     "source": "https://www.algonquinpark.on.ca/visit/general_park_info/fees-day-use.php",
+     "osm": "way/338159306"
+    },
+    {
+     "name": "Hardwood Lookout Trail",
+     "lat": 45.528816,
+     "lon": -78.705853,
+     "kind": "park",
+     "rule": {
+      "flat": 21.0,
+      "no_parking": [
+       {
+        "days": [
+         0,
+         1,
+         2,
+         3,
+         4,
+         5,
+         6
+        ],
+        "hours": [
+         "22:00",
+         "07:00"
+        ],
+        "all_days": true
+       }
+      ],
+      "hours_note": "day-use permit valid 07:00 to 22:00"
+     },
+     "capacity": null,
+     "notes": "",
+     "source": "https://www.algonquinpark.on.ca/visit/general_park_info/fees-day-use.php",
+     "osm": "way/338158867"
+    },
+    {
+     "name": "Track and Tower Trail",
+     "lat": 45.559954,
+     "lon": -78.577755,
+     "kind": "park",
+     "rule": {
+      "flat": 21.0,
+      "no_parking": [
+       {
+        "days": [
+         0,
+         1,
+         2,
+         3,
+         4,
+         5,
+         6
+        ],
+        "hours": [
+         "22:00",
+         "07:00"
+        ],
+        "all_days": true
+       }
+      ],
+      "hours_note": "day-use permit valid 07:00 to 22:00"
+     },
+     "capacity": null,
+     "notes": "",
+     "source": "https://www.algonquinpark.on.ca/visit/general_park_info/fees-day-use.php",
+     "osm": "way/338153829"
+    }
+   ]
+  },
+  {
+   "id": "algonquin-hwy60-east",
+   "name": "Algonquin Park Highway 60 (east half)",
+   "match": {
+    "lat": 45.565,
+    "lon": -78.36,
+    "radius_km": 12.0
+   },
+   "season": null,
+   "source": "https://www.algonquinpark.on.ca/visit/general_park_info/fees-day-use.php",
+   "source_date": "2026",
+   "confidence": "curated",
+   "price_confidence": "high",
+   "rules": [
+    "Daily vehicle permit $21.00 for any stop on Hwy 60 (trails, beaches, Visitor Centre, picnic areas); driving straight through needs no permit.",
+    "Buy online up to 5 days ahead (sales open 07:00) or by phone 1-888-668-7275; not sold in person. Choose the Highway 60 Corridor entry point; capacity is limited.",
+    "Permits are valid 07:00 to 22:00 on the day; enter the licence plate when buying.",
+    "Booth's Rock Trail needs the special 'DVP Booth's Rock Trail + Hwy 60' permit Sep 12 to Oct 18, 2026 (same price)."
+   ],
+   "reservation": {
+    "required": true,
+    "text": "Daily vehicle permit must be bought online or by phone (up to 5 days ahead); no in-person sales.",
+    "url": "https://www.algonquinpark.on.ca/visit/general_park_info/fees-day-use.php",
+    "lead_days": 5
+   },
+   "lots": [
+    {
+     "name": "Algonquin Visitor Centre",
+     "lat": 45.584476,
+     "lon": -78.358794,
+     "kind": "park",
+     "rule": {
+      "flat": 21.0,
+      "no_parking": [
+       {
+        "days": [
+         0,
+         1,
+         2,
+         3,
+         4,
+         5,
+         6
+        ],
+        "hours": [
+         "22:00",
+         "07:00"
+        ],
+        "all_days": true
+       }
+      ],
+      "hours_note": "day-use permit valid 07:00 to 22:00"
+     },
+     "capacity": null,
+     "notes": "",
+     "source": "https://www.algonquinpark.on.ca/visit/general_park_info/fees-day-use.php",
+     "osm": "way/298171130"
+    },
+    {
+     "name": "Spruce Bog Boardwalk",
+     "lat": 45.587193,
+     "lon": -78.373482,
+     "kind": "park",
+     "rule": {
+      "flat": 21.0,
+      "no_parking": [
+       {
+        "days": [
+         0,
+         1,
+         2,
+         3,
+         4,
+         5,
+         6
+        ],
+        "hours": [
+         "22:00",
+         "07:00"
+        ],
+        "all_days": true
+       }
+      ],
+      "hours_note": "day-use permit valid 07:00 to 22:00"
+     },
+     "capacity": null,
+     "notes": "",
+     "source": "https://www.algonquinpark.on.ca/visit/general_park_info/fees-day-use.php",
+     "osm": "way/298171144"
+    },
+    {
+     "name": "Lookout Trail",
+     "lat": 45.579108,
+     "lon": -78.406142,
+     "kind": "park",
+     "rule": {
+      "flat": 21.0,
+      "no_parking": [
+       {
+        "days": [
+         0,
+         1,
+         2,
+         3,
+         4,
+         5,
+         6
+        ],
+        "hours": [
+         "22:00",
+         "07:00"
+        ],
+        "all_days": true
+       }
+      ],
+      "hours_note": "day-use permit valid 07:00 to 22:00"
+     },
+     "capacity": null,
+     "notes": "",
+     "source": "https://www.algonquinpark.on.ca/visit/general_park_info/fees-day-use.php",
+     "osm": "way/41285694"
+    },
+    {
+     "name": "Centennial Ridges Trail",
+     "lat": 45.556405,
+     "lon": -78.420202,
+     "kind": "park",
+     "rule": {
+      "flat": 21.0,
+      "no_parking": [
+       {
+        "days": [
+         0,
+         1,
+         2,
+         3,
+         4,
+         5,
+         6
+        ],
+        "hours": [
+         "22:00",
+         "07:00"
+        ],
+        "all_days": true
+       }
+      ],
+      "hours_note": "day-use permit valid 07:00 to 22:00"
+     },
+     "capacity": null,
+     "notes": "",
+     "source": "https://www.algonquinpark.on.ca/visit/general_park_info/fees-day-use.php",
+     "osm": "way/298155743"
+    },
+    {
+     "name": "Algonquin Logging Museum",
+     "lat": 45.544566,
+     "lon": -78.262984,
+     "kind": "park",
+     "rule": {
+      "flat": 21.0,
+      "no_parking": [
+       {
+        "days": [
+         0,
+         1,
+         2,
+         3,
+         4,
+         5,
+         6
+        ],
+        "hours": [
+         "22:00",
+         "07:00"
+        ],
+        "all_days": true
+       }
+      ],
+      "hours_note": "day-use permit valid 07:00 to 22:00"
+     },
+     "capacity": null,
+     "notes": "near the East Gate",
+     "source": "https://www.algonquinpark.on.ca/visit/general_park_info/fees-day-use.php",
+     "osm": "way/237602397"
+    }
+   ]
+  },
+  {
+   "id": "bracebridge",
+   "name": "Bracebridge (downtown and wharf)",
+   "match": {
+    "lat": 45.04,
+    "lon": -79.31,
+    "radius_km": 1.5
+   },
+   "season": null,
+   "source": "https://www.bracebridge.ca/gettingaround",
+   "source_date": "2026 (town page; brochure undated)",
+   "confidence": "curated",
+   "price_confidence": "high",
+   "rules": [
+    "All public parking is free: 3 h on most downtown streets, about 500 free spaces in 10 municipal lots (free all day or 3 h, as signed).",
+    "Oct 16 to Apr 15: no parking 02:00 to 06:00 on streets and in lots, except 16 spaces in the Hiram St lot (24 h max)."
+   ],
+   "reservation": {
+    "required": false,
+    "text": "",
+    "url": "",
+    "lead_days": 0
+   },
+   "lots": [
+    {
+     "name": "Wharf Rd lot (Bracebridge Bay)",
+     "lat": 45.038247,
+     "lon": -79.309441,
+     "kind": "lot",
+     "rule": {
+      "free": true,
+      "no_parking": [
+       {
+        "days": [
+         0,
+         1,
+         2,
+         3,
+         4,
+         5,
+         6
+        ],
+        "hours": [
+         "02:00",
+         "06:00"
+        ],
+        "all_days": true,
+        "season": [
+         "10-16",
+         "04-15"
+        ]
+       }
+      ],
+      "hours_note": "Oct 16 to Apr 15: no parking 02:00 to 06:00"
+     },
+     "capacity": null,
+     "notes": "by the wharf and falls; OSM fee=no",
+     "source": "https://www.bracebridge.ca/gettingaround",
+     "osm": "way/683790320"
+    },
+    {
+     "name": "Muskoka Rd lot",
+     "lat": 45.040001,
+     "lon": -79.307787,
+     "kind": "lot",
+     "rule": {
+      "free": true,
+      "no_parking": [
+       {
+        "days": [
+         0,
+         1,
+         2,
+         3,
+         4,
+         5,
+         6
+        ],
+        "hours": [
+         "02:00",
+         "06:00"
+        ],
+        "all_days": true,
+        "season": [
+         "10-16",
+         "04-15"
+        ]
+       }
+      ],
+      "hours_note": "Oct 16 to Apr 15: no parking 02:00 to 06:00"
+     },
+     "capacity": null,
+     "notes": "OSM fee=no",
+     "source": "https://www.bracebridge.ca/gettingaround",
+     "osm": "way/363213241"
+    },
+    {
+     "name": "Manitoba St lot (3 h)",
+     "lat": 45.041481,
+     "lon": -79.312629,
+     "kind": "lot",
+     "rule": {
+      "free": true,
+      "max_stay_min": 180,
+      "no_parking": [
+       {
+        "days": [
+         0,
+         1,
+         2,
+         3,
+         4,
+         5,
+         6
+        ],
+        "hours": [
+         "02:00",
+         "06:00"
+        ],
+        "all_days": true,
+        "season": [
+         "10-16",
+         "04-15"
+        ]
+       }
+      ],
+      "hours_note": "Oct 16 to Apr 15: no parking 02:00 to 06:00"
+     },
+     "capacity": null,
+     "notes": "OSM maxstay 3 h",
+     "source": "https://www.bracebridge.ca/gettingaround",
+     "osm": "way/683790307"
+    },
+    {
+     "name": "Shier St lot",
+     "lat": 45.035734,
+     "lon": -79.307659,
+     "kind": "lot",
+     "rule": {
+      "free": true,
+      "no_parking": [
+       {
+        "days": [
+         0,
+         1,
+         2,
+         3,
+         4,
+         5,
+         6
+        ],
+        "hours": [
+         "02:00",
+         "06:00"
+        ],
+        "all_days": true,
+        "season": [
+         "10-16",
+         "04-15"
+        ]
+       }
+      ],
+      "hours_note": "Oct 16 to Apr 15: no parking 02:00 to 06:00"
+     },
+     "capacity": null,
+     "notes": "Town of Bracebridge lot",
+     "source": "https://www.bracebridge.ca/gettingaround",
+     "osm": "way/1224888631"
+    },
+    {
+     "name": "Hiram St lot (overnight spaces)",
+     "lat": 45.043609,
+     "lon": -79.310482,
+     "kind": "lot",
+     "rule": {
+      "free": true
+     },
+     "capacity": null,
+     "notes": "16 spaces allow 24 h parking all year",
+     "source": "https://bracebridge.civicweb.net/document/17654",
+     "osm": "way/423496948"
+    }
+   ]
+  },
+  {
+   "id": "gravenhurst-wharf",
+   "name": "Gravenhurst Muskoka Wharf",
+   "match": {
+    "lat": 44.92,
+    "lon": -79.387,
+    "radius_km": 1.5
+   },
+   "season": null,
+   "source": "https://gravenhurst-005-ca.govstack.com/media/o3shexy3/muskoka-wharf-map-rev-2024-with-access-points.pdf",
+   "source_date": "2024 map (no 2026 parking fees published)",
+   "confidence": "curated",
+   "price_confidence": "low",
+   "rules": [
+    "The Town's wharf map shows public lots (11 to 22) around the boardwalk; no parking fee is published on the Town's 2026 marina page. Check signs; some rows are permit or bus/trailer only.",
+    "Lot 17 was closed in summer 2024; Steamship parking is for Muskoka Steamships passengers."
+   ],
+   "reservation": {
+    "required": false,
+    "text": "",
+    "url": "",
+    "lead_days": 0
+   },
+   "lots": [
+    {
+     "name": "Wharf public lot (Wharf Rd)",
+     "lat": 44.920683,
+     "lon": -79.390068,
+     "kind": "lot",
+     "rule": {
+      "free": true
+     },
+     "capacity": null,
+     "notes": "OSM fee=no; public parking on the Town map",
+     "source": "https://gravenhurst-005-ca.govstack.com/media/o3shexy3/muskoka-wharf-map-rev-2024-with-access-points.pdf",
+     "osm": "way/206170988"
+    },
+    {
+     "name": "Steamship Bay Rd public lot",
+     "lat": 44.91989,
+     "lon": -79.390146,
+     "kind": "lot",
+     "rule": {
+      "free": true
+     },
+     "capacity": null,
+     "notes": "OSM fee=no",
+     "source": "https://gravenhurst-005-ca.govstack.com/media/o3shexy3/muskoka-wharf-map-rev-2024-with-access-points.pdf",
+     "osm": "way/206170987"
+    },
+    {
+     "name": "Town of Gravenhurst Lot 18",
+     "lat": 44.919783,
+     "lon": -79.383315,
+     "kind": "lot",
+     "rule": null,
+     "capacity": null,
+     "notes": "public lot at the Bay St wharf access; fee not published",
+     "source": "https://gravenhurst-005-ca.govstack.com/media/o3shexy3/muskoka-wharf-map-rev-2024-with-access-points.pdf",
+     "osm": "way/244901684"
+    }
+   ]
+  },
+  {
+   "id": "barrie-waterfront",
+   "name": "Barrie waterfront and downtown",
+   "match": {
+    "lat": 44.388,
+    "lon": -79.676,
+    "radius_km": 3.0
+   },
+   "season": null,
+   "source": "https://www.barrie.ca/services-payments/transportation-parking/parking",
+   "source_date": "2026",
+   "confidence": "curated",
+   "price_confidence": "high",
+   "rules": [
+    "Waterfront lots (Centennial Beach, Johnson's Beach, Minet's Point, Centennial boat launch, Tyndale, Will Dwyer, Southshore): $15.00/h, $60.00/day without a permit, enforced 24/7 all year.",
+    "Marina and hybrid lots (Spirit Catcher, Simcoe St, North Marina) charge the same $15/h, $60/day.",
+    "Jun 15 to Sep 15, 09:00 to 21:00: streets within about 500 m of Centennial and Johnson's beaches are permit only.",
+    "Downtown: Mon to Fri 09:00 to 17:00 only; lots $1.25/h ($7/day max), Collier St parkade $1.50/h, street $1.50/h (2 h); free evenings, weekends and holidays.",
+    "Free all day: Allandale Waterfront GO station lot (Gowan St).",
+    "Dec 1 to Mar 31: no overnight parking 00:01 to 05:00 at the waterfront."
+   ],
+   "reservation": {
+    "required": false,
+    "text": "",
+    "url": "",
+    "lead_days": 0
+   },
+   "lots": [
+    {
+     "name": "Centennial Beach lot",
+     "lat": 44.380908,
+     "lon": -79.690318,
+     "kind": "lot",
+     "rule": {
+      "hourly": 15.0,
+      "daily_max": 60.0,
+      "no_parking": [
+       {
+        "days": [
+         0,
+         1,
+         2,
+         3,
+         4,
+         5,
+         6
+        ],
+        "hours": [
+         "00:01",
+         "05:00"
+        ],
+        "all_days": true,
+        "season": [
+         "12-01",
+         "03-31"
+        ]
+       }
+      ],
+      "hours_note": "Dec 1 to Mar 31: no parking 00:01 to 05:00"
+     },
+     "capacity": null,
+     "notes": "Lakeshore Dr",
+     "source": "https://www.barrie.ca/services-payments/transportation-parking/parking",
+     "osm": "way/371626326"
+    },
+    {
+     "name": "Centennial Park lot (Lakeshore Dr)",
+     "lat": 44.382119,
+     "lon": -79.690429,
+     "kind": "lot",
+     "rule": {
+      "hourly": 15.0,
+      "daily_max": 60.0,
+      "no_parking": [
+       {
+        "days": [
+         0,
+         1,
+         2,
+         3,
+         4,
+         5,
+         6
+        ],
+        "hours": [
+         "00:01",
+         "05:00"
+        ],
+        "all_days": true,
+        "season": [
+         "12-01",
+         "03-31"
+        ]
+       }
+      ],
+      "hours_note": "Dec 1 to Mar 31: no parking 00:01 to 05:00"
+     },
+     "capacity": null,
+     "notes": "",
+     "source": "https://www.barrie.ca/services-payments/transportation-parking/parking",
+     "osm": "way/371626327"
+    },
+    {
+     "name": "Johnson's Beach lot",
+     "lat": 44.393943,
+     "lon": -79.657551,
+     "kind": "lot",
+     "rule": {
+      "hourly": 15.0,
+      "daily_max": 60.0,
+      "no_parking": [
+       {
+        "days": [
+         0,
+         1,
+         2,
+         3,
+         4,
+         5,
+         6
+        ],
+        "hours": [
+         "00:01",
+         "05:00"
+        ],
+        "all_days": true,
+        "season": [
+         "12-01",
+         "03-31"
+        ]
+       }
+      ],
+      "hours_note": "Dec 1 to Mar 31: no parking 00:01 to 05:00"
+     },
+     "capacity": null,
+     "notes": "",
+     "source": "https://www.barrie.ca/services-payments/transportation-parking/parking",
+     "osm": "way/112243520"
+    },
+    {
+     "name": "Spirit Catcher lot (hybrid)",
+     "lat": 44.386853,
+     "lon": -79.689672,
+     "kind": "lot",
+     "rule": {
+      "hourly": 15.0,
+      "daily_max": 60.0,
+      "no_parking": [
+       {
+        "days": [
+         0,
+         1,
+         2,
+         3,
+         4,
+         5,
+         6
+        ],
+        "hours": [
+         "00:01",
+         "05:00"
+        ],
+        "all_days": true,
+        "season": [
+         "12-01",
+         "03-31"
+        ]
+       }
+      ],
+      "hours_note": "Dec 1 to Mar 31: no parking 00:01 to 05:00"
+     },
+     "capacity": null,
+     "notes": "matched by location next to the sculpture",
+     "source": "https://www.barrie.ca/services-payments/transportation-parking/parking",
+     "osm": "way/109900844"
+    },
+    {
+     "name": "Collier St parkade",
+     "lat": 44.390054,
+     "lon": -79.68882,
+     "kind": "garage",
+     "rule": {
+      "hourly": 1.5,
+      "paid_days": [
+       0,
+       1,
+       2,
+       3,
+       4
+      ],
+      "paid_hours": [
+       "09:00",
+       "17:00"
+      ],
+      "holidays_free": true
+     },
+     "capacity": null,
+     "notes": "the downtown multi-storey; no daily maximum",
+     "source": "https://www.barrie.ca/services-payments/transportation-parking/parking",
+     "osm": "way/804466127"
+    }
+   ]
+  },
+  {
+   "id": "orillia-waterfront",
+   "name": "Orillia waterfront and downtown",
+   "match": {
+    "lat": 44.612,
+    "lon": -79.415,
+    "radius_km": 2.0
+   },
+   "season": null,
+   "source": "https://www.orillia.ca/roads-and-environment/parking/",
+   "source_date": "2026",
+   "confidence": "curated",
+   "price_confidence": "high",
+   "rules": [
+    "Car parking at Couchiching Beach Park, Centennial Park and Veterans' Memorial Park is free for everyone; boat trailers pay (non-residents).",
+    "Downtown: Mon to Sat 09:00 to 17:30; street $3.00/h on Mississaga St E and West St N/S, $1.75/h on side streets (2 h max); lots $1.00/h (Lots 1, 4, 6, 7, 9) or $1.25/h (Lots 2, 5, 11). Passport Parking.",
+    "Lot 10 closed Jan 19, 2026.",
+    "No street parking 00:00 to 07:00 from Nov 15 to Apr 15."
+   ],
+   "reservation": {
+    "required": false,
+    "text": "",
+    "url": "",
+    "lead_days": 0
+   },
+   "lots": [
+    {
+     "name": "Couchiching Beach Park lot",
+     "lat": 44.616888,
+     "lon": -79.415265,
+     "kind": "lot",
+     "rule": {
+      "free": true
+     },
+     "capacity": null,
+     "notes": "free for cars",
+     "source": "https://www.orillia.ca/roads-and-environment/parking/",
+     "osm": "way/194854685"
+    },
+    {
+     "name": "Centennial Park lot (Millennium Trail)",
+     "lat": 44.614472,
+     "lon": -79.414246,
+     "kind": "lot",
+     "rule": {
+      "free": true
+     },
+     "capacity": null,
+     "notes": "free for cars",
+     "source": "https://www.orillia.ca/roads-and-environment/parking/",
+     "osm": "way/194854628"
+    },
+    {
+     "name": "Waterfront lot (Millennium Trail)",
+     "lat": 44.612336,
+     "lon": -79.413568,
+     "kind": "lot",
+     "rule": {
+      "free": true
+     },
+     "capacity": null,
+     "notes": "OSM fee=no",
+     "source": "https://www.orillia.ca/roads-and-environment/parking/",
+     "osm": "way/482666209"
+    },
+    {
+     "name": "Municipal pay lot, Colborne St E",
+     "lat": 44.608662,
+     "lon": -79.416334,
+     "kind": "lot",
+     "rule": {
+      "hourly": 1.0,
+      "paid_days": [
+       0,
+       1,
+       2,
+       3,
+       4,
+       5
+      ],
+      "paid_hours": [
+       "09:00",
+       "17:30"
+      ],
+      "max_stay_min": 300
+     },
+     "capacity": null,
+     "notes": "OSM: $1/h, 5 h max; lot number not confirmed",
+     "source": "https://www.orillia.ca/roads-and-environment/parking/",
+     "osm": "way/432378800"
+    }
+   ]
+  }
+ ]
+}

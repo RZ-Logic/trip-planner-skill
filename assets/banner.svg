@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 360" width="100%" role="img" aria-labelledby="banner-title banner-desc" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif">
+  <title id="banner-title">trip-planner</title>
+  <desc id="banner-desc">trip-planner: an Agent Skill that compares transit hubs within the search area, toll routes and available parking data before recommending one trip. A deterministic script computes every number and labels every estimate; the agent verifies and explains.</desc>
+
+  <rect width="1280" height="360" fill="#0B1220"/>
+
+  <g opacity="0.06" stroke="#94A3B8" stroke-width="0.5">
+    <line x1="0" y1="80"  x2="1280" y2="80"/>
+    <line x1="0" y1="280" x2="1280" y2="280"/>
+  </g>
+
+  <text x="80" y="116" font-size="56" font-weight="500" fill="#F8FAFC" letter-spacing="-0.5">trip-planner</text>
+
+  <text x="80" y="160" font-size="20" font-weight="400" fill="#CBD5E1" letter-spacing="0.1">Compare ride + transit, park and ride, and driving before you choose.</text>
+
+  <text x="80" y="186" font-size="13" font-weight="400" fill="#64748B" letter-spacing="0.2">Prices fares, tolls and available parking, with every estimate labelled. An Agent Skill for Claude and Codex.</text>
+
+  <line x1="170" y1="236" x2="1110" y2="236" stroke="#334155" stroke-width="0.5" stroke-dasharray="2 4"/>
+
+  <g font-size="11" font-weight="500" letter-spacing="0.2">
+    <g>
+      <rect x="170" y="210" width="88" height="52" rx="6" fill="none" stroke="#475569" stroke-width="0.75"/>
+      <text x="214" y="241" fill="#CBD5E1" text-anchor="middle">geocode</text>
+    </g>
+    <g>
+      <rect x="272" y="210" width="88" height="52" rx="6" fill="none" stroke="#475569" stroke-width="0.75"/>
+      <text x="316" y="241" fill="#CBD5E1" text-anchor="middle">timetables</text>
+    </g>
+    <g>
+      <rect x="374" y="210" width="132" height="52" rx="6" fill="none" stroke="#D97706" stroke-width="1"/>
+      <text x="440" y="235" fill="#FBBF24" text-anchor="middle">every hub in range</text>
+      <text x="440" y="251" font-size="9" font-weight="400" fill="#A16207" text-anchor="middle">one backward profile scan</text>
+    </g>
+    <g>
+      <rect x="520" y="210" width="88" height="52" rx="6" fill="none" stroke="#475569" stroke-width="0.75"/>
+      <text x="564" y="241" fill="#CBD5E1" text-anchor="middle">drive times</text>
+    </g>
+    <g>
+      <rect x="622" y="210" width="88" height="52" rx="6" fill="none" stroke="#475569" stroke-width="0.75"/>
+      <text x="666" y="241" fill="#CBD5E1" text-anchor="middle">price</text>
+    </g>
+    <g>
+      <rect x="724" y="210" width="88" height="52" rx="6" fill="none" stroke="#475569" stroke-width="0.75"/>
+      <text x="768" y="241" fill="#CBD5E1" text-anchor="middle">rank</text>
+    </g>
+    <g>
+      <rect x="826" y="210" width="284" height="52" rx="6" fill="none" stroke="#475569" stroke-width="0.75"/>
+      <text x="968" y="235" fill="#CBD5E1" text-anchor="middle">agent verifies  ·  one recommendation</text>
+      <text x="968" y="251" font-size="9" font-weight="400" fill="#64748B" text-anchor="middle">live departures, stale prices, every warning disclosed</text>
+    </g>
+  </g>
+
+  <g font-size="11" font-weight="400" fill="#475569" letter-spacing="0.3">
+    <text x="170" y="300">A deterministic stdlib script computes every time and price. The model asks, verifies and explains.</text>
+  </g>
+
+  <g font-size="10" font-weight="400" fill="#334155" letter-spacing="0.4">
+    <text x="1110" y="322" text-anchor="end">GTHA and Ontario getaways built in  ·  any city with public GTFS via MobilityDatabase</text>
+  </g>
+</svg>

@@ -1,0 +1,12 @@
+{
+  "name": "rz-logic-skills",
+  "owner": { "name": "Rizwan Ahmed" },
+  "description": "Agent skills by Rizwan Ahmed (RZ-Logic)",
+  "plugins": [
+    {
+      "name": "trip-planner",
+      "source": "./plugins/trip-planner",
+      "description": "Plan Uber/Lyft + transit trips by checking every transit hub in ride range, and drives: tolls vs time, leave-by, parking priced for the stay, EV charging"
+    }
+  ]
+}

@@ -1,0 +1,682 @@
+{
+  "id": "gtha",
+  "name": "Greater Toronto and Hamilton Area and neighbours, Ontario, Canada",
+  "timezone": "America/Toronto",
+  "bbox": {
+    "min_lat": 42.85,
+    "max_lat": 44.45,
+    "min_lon": -80.6,
+    "max_lon": -78.55
+  },
+  "pickup_wait_min": 6,
+  "notes_file": "gtha.md",
+  "verified": "2026-10-10",
+  "feeds": [
+    {
+      "id": "go",
+      "name": "GO Transit",
+      "urls": ["https://assets.metrolinx.com/raw/upload/Documents/Metrolinx/Open%20Data/GO-GTFS.zip", "https://files.mobilitydatabase.org/mdb-1993/latest.zip"],
+      "bbox": {
+        "min_lat": 42.97671,
+        "max_lat": 44.37441,
+        "min_lon": -80.97574,
+        "max_lon": -78.28703
+      },
+      "notes": "Rail and GO bus. Service ids are dates (no calendar.txt). About 8 weeks ahead.",
+      "coverage": {
+        "cell_deg": 0.02,
+        "built": "2026-10-10",
+        "cells": "2148,-4002;2151,-4008;2151,-4007;2151,-4000;2152,-4010;2153,-4006;2154,-3955;2155,-3963;2155,-3954;2156,-4013;2157,-4014;2157,-4013;2157,-4012;2157,-3963;2157,-3959;2158,-3963;2159,-3974;2160,-3980;2162,-3996;2162,-3995;2162,-3994;2162,-3989;2162,-3988;2163,-3997;2163,-3995;2163,-3994;2165,-3993;2166,-3992;2166,-3991;2167,-3991;2168,-4049;2168,-3989;2169,-3992;2170,-4020;2170,-4017;2170,-3987;2171,-4024;2171,-4023;2172,-4025;2172,-3990;2172,-3985;2173,-4028;2173,-4027;2173,-4023;2173,-4008;2173,-4007;2173,-3986;2173,-3985;2174,-3986;2175,-4011;2175,-4010;2175,-3993;2175,-3988;2175,-3987;2175,-3982;2176,-4012;2176,-4011;2176,-3996;2176,-3994;2176,-3993;2176,-3992;2177,-4015;2177,-4013;2177,-4012;2177,-4011;2177,-3986;2177,-3980;2178,-3992;2178,-3990;2178,-3987;2178,-3986;2178,-3985;2178,-3984;2179,-3990;2179,-3989;2179,-3988;2179,-3987;2179,-3983;2179,-3982;2179,-3978;2180,-4008;2180,-4007;2180,-3988;2180,-3987;2180,-3979;2180,-3975;2181,-4003;2181,-4002;2181,-3989;2181,-3981;2181,-3977;2181,-3971;2182,-4002;2182,-3998;2182,-3997;2182,-3996;2182,-3995;2182,-3994;2182,-3993;2182,-3991;2182,-3987;2182,-3986;2182,-3973;2182,-3970;2182,-3969;2183,-3992;2183,-3988;2183,-3987;2183,-3980;2184,-3991;2184,-3990;2184,-3989;2184,-3988;2184,-3986;2184,-3981;2184,-3975;2184,-3966;2185,-3991;2185,-3990;2185,-3988;2185,-3987;2185,-3986;2185,-3985;2185,-3982;2185,-3979;2185,-3976;2185,-3963;2186,-3992;2186,-3991;2186,-3989;2186,-3983;2186,-3982;2186,-3981;2186,-3975;2186,-3973;2186,-3964;2186,-3962;2187,-3993;2187,-3983;2187,-3982;2187,-3974;2187,-3971;2187,-3960;2188,-3994;2188,-3983;2188,-3971;2188,-3969;2188,-3967;2188,-3964;2189,-3996;2189,-3984;2189,-3983;2189,-3977;2189,-3972;2189,-3971;2189,-3969;2189,-3965;2189,-3962;2189,-3960;2189,-3958;2189,-3957;2190,-3996;2190,-3984;2190,-3972;2190,-3957;2190,-3956;2191,-3998;2191,-3985;2191,-3975;2191,-3972;2191,-3971;2191,-3966;2191,-3956;2191,-3955;2192,-4000;2192,-3986;2192,-3985;2192,-3976;2192,-3972;2192,-3971;2192,-3966;2192,-3954;2192,-3953;2193,-4001;2193,-4000;2193,-3987;2193,-3986;2193,-3976;2193,-3972;2193,-3965;2193,-3964;2193,-3962;2193,-3952;2193,-3951;2193,-3950;2193,-3949;2193,-3948;2193,-3947;2193,-3946;2193,-3945;2194,-4002;2194,-3988;2194,-3977;2194,-3976;2194,-3970;2194,-3964;2194,-3948;2194,-3947;2194,-3946;2194,-3945;2194,-3944;2194,-3943;2194,-3939;2194,-3935;2195,-4006;2195,-4005;2195,-4004;2195,-3964;2195,-3955;2195,-3944;2195,-3936;2195,-3935;2195,-3934;2195,-3933;2195,-3932;2195,-3931;2196,-4006;2196,-4005;2196,-3977;2196,-3964;2197,-3970;2197,-3964;2197,-3948;2197,-3945;2198,-3970;2198,-3964;2198,-3963;2198,-3962;2198,-3946;2199,-3973;2199,-3962;2200,-3973;2200,-3972;2200,-3971;2200,-3962;2201,-3973;2201,-3961;2201,-3960;2202,-3973;2203,-3975;2203,-3973;2203,-3972;2203,-3932;2204,-3975;2204,-3957;2205,-3979;2205,-3978;2205,-3976;2205,-3975;2205,-3957;2206,-3979;2207,-3973;2209,-3972;2209,-3924;2210,-3980;2210,-3974;2212,-3981;2213,-3918;2214,-3981;2215,-3917;2216,-3982;2216,-3981;2217,-3983;2217,-3982;2217,-3915;2218,-3985;2218,-3984"
+      }
+    },
+    {
+      "id": "upx",
+      "name": "UP Express",
+      "urls": ["https://assets.metrolinx.com/raw/upload/Documents/Metrolinx/Open%20Data/UP-GTFS.zip", "https://files.mobilitydatabase.org/mdb-1995/latest.zip"],
+      "bbox": {
+        "min_lat": 43.64424,
+        "max_lat": 43.70029,
+        "min_lon": -79.61297,
+        "max_lon": -79.38356
+      },
+      "coverage": {
+        "cell_deg": 0.02,
+        "built": "2026-10-10",
+        "cells": "2182,-3973;2182,-3970;2184,-3981;2184,-3975;2185,-3976"
+      }
+    },
+    {
+      "id": "miway",
+      "name": "MiWay",
+      "urls": ["https://www.miapp.ca/GTFS/google_transit.zip", "https://files.mobilitydatabase.org/mdb-730/latest.zip"],
+      "bbox": {
+        "min_lat": 43.4693,
+        "max_lat": 43.83808,
+        "min_lon": -79.7978,
+        "max_lon": -79.51288
+      },
+      "coverage": {
+        "cell_deg": 0.02,
+        "built": "2026-10-10",
+        "cells": "2173,-3986;2173,-3985;2174,-3986;2174,-3985;2174,-3984;2174,-3983;2174,-3982;2174,-3981;2175,-3985;2175,-3984;2175,-3983;2175,-3982;2175,-3981;2176,-3988;2176,-3987;2176,-3986;2176,-3985;2176,-3984;2176,-3983;2176,-3982;2176,-3981;2176,-3980;2177,-3989;2177,-3988;2177,-3987;2177,-3986;2177,-3985;2177,-3984;2177,-3983;2177,-3982;2177,-3981;2177,-3980;2177,-3979;2178,-3990;2178,-3989;2178,-3988;2178,-3987;2178,-3986;2178,-3985;2178,-3984;2178,-3983;2178,-3982;2178,-3981;2178,-3980;2178,-3979;2178,-3978;2179,-3990;2179,-3989;2179,-3988;2179,-3987;2179,-3986;2179,-3985;2179,-3984;2179,-3983;2179,-3982;2179,-3981;2179,-3980;2179,-3979;2179,-3978;2180,-3990;2180,-3989;2180,-3988;2180,-3987;2180,-3986;2180,-3985;2180,-3984;2180,-3983;2180,-3982;2180,-3981;2180,-3980;2180,-3979;2180,-3978;2181,-3989;2181,-3988;2181,-3987;2181,-3986;2181,-3985;2181,-3984;2181,-3983;2181,-3982;2181,-3981;2181,-3980;2181,-3979;2181,-3978;2181,-3977;2181,-3976;2182,-3988;2182,-3987;2182,-3986;2182,-3985;2182,-3984;2182,-3983;2182,-3982;2182,-3981;2182,-3980;2182,-3979;2182,-3978;2182,-3977;2183,-3987;2183,-3985;2183,-3984;2183,-3983;2183,-3982;2183,-3981;2183,-3980;2183,-3979;2184,-3986;2184,-3985;2184,-3984;2184,-3983;2184,-3982;2184,-3981;2184,-3980;2185,-3987;2185,-3985;2185,-3984;2185,-3983;2185,-3982;2185,-3981;2185,-3980;2185,-3979;2185,-3978;2186,-3983;2186,-3982;2186,-3981;2186,-3980;2191,-3977"
+      }
+    },
+    {
+      "id": "milton",
+      "name": "Milton Transit",
+      "urls": ["https://metrolinx.tmix.se/gtfs/gtfs-milton.zip", "https://files.mobilitydatabase.org/mdb-759/latest.zip"],
+      "bbox": {
+        "min_lat": 43.47024,
+        "max_lat": 43.60684,
+        "min_lon": -79.91023,
+        "max_lon": -79.78551
+      },
+      "notes": "Hosted on the Metrolinx/Consat tmix platform, regenerated nightly. Fixed routes only: OnDemand zones are not in the feed.",
+      "coverage": {
+        "cell_deg": 0.02,
+        "built": "2026-10-10",
+        "cells": "2173,-3994;2173,-3993;2174,-3995;2174,-3994;2174,-3993;2174,-3992;2175,-3996;2175,-3995;2175,-3994;2175,-3993;2175,-3992;2176,-3996;2176,-3995;2176,-3994;2176,-3993;2176,-3992;2176,-3991;2177,-3994;2177,-3993;2177,-3992;2178,-3993;2178,-3992;2179,-3992;2179,-3991;2179,-3990;2180,-3990"
+      }
+    },
+    {
+      "id": "oakville",
+      "name": "Oakville Transit",
+      "urls": ["https://files.mobilitydatabase.org/mdb-725/latest.zip", "https://www.arcgis.com/sharing/rest/content/items/d78a1c1ad6a940009de8b68839a8f606/data"],
+      "bbox": {
+        "min_lat": 43.37236,
+        "max_lat": 43.52521,
+        "min_lon": -79.82973,
+        "max_lon": -79.63212
+      },
+      "notes": "Fixed routes only: Ride On-Demand zones are not in the feed.",
+      "coverage": {
+        "cell_deg": 0.02,
+        "built": "2026-10-10",
+        "cells": "2168,-3989;2168,-3988;2168,-3987;2168,-3986;2169,-3992;2169,-3991;2169,-3989;2169,-3988;2169,-3987;2169,-3986;2170,-3991;2170,-3988;2170,-3987;2170,-3986;2170,-3985;2171,-3990;2171,-3989;2171,-3988;2171,-3987;2171,-3986;2171,-3985;2171,-3984;2172,-3989;2172,-3988;2172,-3987;2172,-3986;2172,-3985;2172,-3984;2173,-3989;2173,-3988;2173,-3987;2173,-3986;2173,-3985;2173,-3984;2173,-3983;2173,-3982;2174,-3988;2174,-3987;2174,-3986;2174,-3985;2174,-3984;2174,-3983;2174,-3982;2175,-3988;2175,-3987;2175,-3986;2175,-3985;2175,-3984;2175,-3983;2175,-3982;2176,-3985"
+      }
+    },
+    {
+      "id": "brampton",
+      "name": "Brampton Transit",
+      "urls": ["https://files.mobilitydatabase.org/mdb-1994/latest.zip", "https://www.arcgis.com/sharing/rest/content/items/a355aabd5a8c490186bdce559c9c75fb/data"],
+      "bbox": {
+        "min_lat": 43.54785,
+        "max_lat": 43.89284,
+        "min_lon": -79.86455,
+        "max_lon": -79.52787
+      },
+      "notes": "agency_timezone is America/New_York (same clock as Toronto).",
+      "coverage": {
+        "cell_deg": 0.02,
+        "built": "2026-10-10",
+        "cells": "2177,-3984;2179,-3990;2179,-3983;2180,-3991;2180,-3990;2180,-3989;2180,-3988;2180,-3987;2180,-3984;2180,-3983;2181,-3991;2181,-3990;2181,-3989;2181,-3988;2181,-3987;2181,-3986;2181,-3985;2181,-3984;2182,-3991;2182,-3990;2182,-3989;2182,-3988;2182,-3987;2182,-3986;2182,-3985;2182,-3984;2182,-3983;2183,-3992;2183,-3991;2183,-3990;2183,-3989;2183,-3988;2183,-3987;2183,-3986;2183,-3985;2183,-3984;2183,-3983;2184,-3994;2184,-3993;2184,-3992;2184,-3991;2184,-3990;2184,-3989;2184,-3988;2184,-3987;2184,-3986;2184,-3985;2184,-3984;2184,-3983;2184,-3982;2184,-3981;2185,-3993;2185,-3992;2185,-3991;2185,-3990;2185,-3989;2185,-3988;2185,-3987;2185,-3986;2185,-3985;2185,-3984;2185,-3983;2185,-3982;2186,-3993;2186,-3992;2186,-3991;2186,-3990;2186,-3989;2186,-3988;2186,-3987;2186,-3986;2186,-3985;2186,-3984;2186,-3983;2186,-3982;2186,-3981;2186,-3980;2187,-3992;2187,-3991;2187,-3990;2187,-3989;2187,-3988;2187,-3987;2187,-3986;2187,-3985;2187,-3984;2187,-3983;2187,-3982;2187,-3981;2188,-3991;2188,-3990;2188,-3989;2188,-3988;2188,-3987;2188,-3986;2188,-3985;2188,-3984;2188,-3983;2188,-3982;2188,-3981;2188,-3980;2189,-3989;2189,-3988;2189,-3987;2189,-3986;2189,-3985;2189,-3984;2189,-3983;2189,-3980;2189,-3979;2189,-3978;2189,-3977;2190,-3989;2190,-3988;2190,-3987;2190,-3986;2190,-3984;2191,-3985;2192,-3987;2192,-3986;2192,-3985;2193,-3988;2193,-3987;2193,-3986;2194,-3988"
+      }
+    },
+    {
+      "id": "burlington",
+      "name": "Burlington Transit",
+      "urls": [
+        "https://opendata.burlington.ca/gtfs-rt/GTFS_Data.zip",
+        "https://files.mobilitydatabase.org/mdb-724/latest.zip",
+        "https://files.mobilitydatabase.org/mdb-724/mdb-724-202608190054/mdb-724-202608190054.zip"
+      ],
+      "bbox": {
+        "min_lat": 43.25668,
+        "max_lat": 43.41172,
+        "min_lon": -79.8926,
+        "max_lon": -79.72518
+      },
+      "notes": "The official file is replaced about a month before each service period starts, so it can miss today. The script falls back to older copies when a file has no service on the trip date. Older versions: https://mobilitydatabase.org/feeds/gtfs/mdb-724",
+      "coverage": {
+        "cell_deg": 0.02,
+        "built": "2026-10-10",
+        "cells": "2162,-3994;2163,-3995;2163,-3994;2164,-3995;2164,-3994;2165,-3993;2165,-3992;2165,-3991;2166,-3993;2166,-3992;2166,-3991;2166,-3990;2166,-3989;2167,-3993;2167,-3992;2167,-3991;2167,-3990;2167,-3989;2168,-3993;2168,-3992;2168,-3991;2168,-3990;2168,-3989;2168,-3988;2168,-3987;2169,-3992;2169,-3991;2169,-3990;2169,-3989;2169,-3988;2169,-3987;2170,-3992;2170,-3991;2170,-3990"
+      }
+    },
+    {
+      "id": "hsr",
+      "name": "Hamilton Street Railway",
+      "urls": ["https://opendata.hamilton.ca/GTFS-Static/google_transit.zip", "https://files.mobilitydatabase.org/mdb-2618/latest.zip"],
+      "bbox": {
+        "min_lat": 43.15634,
+        "max_lat": 43.33713,
+        "min_lon": -80.1281,
+        "max_lon": -79.63931
+      },
+      "coverage": {
+        "cell_deg": 0.02,
+        "built": "2026-10-10",
+        "cells": "2157,-3997;2157,-3996;2158,-3997;2158,-3996;2158,-3993;2158,-3992;2158,-3991;2158,-3990;2158,-3989;2159,-4003;2159,-4002;2159,-4001;2159,-4000;2159,-3996;2159,-3995;2159,-3994;2159,-3993;2159,-3992;2159,-3991;2159,-3990;2159,-3989;2160,-4001;2160,-4000;2160,-3999;2160,-3998;2160,-3997;2160,-3996;2160,-3995;2160,-3994;2160,-3993;2160,-3992;2160,-3991;2160,-3990;2160,-3989;2160,-3988;2160,-3987;2160,-3986;2160,-3985;2160,-3984;2160,-3983;2160,-3982;2161,-4000;2161,-3999;2161,-3998;2161,-3997;2161,-3996;2161,-3995;2161,-3994;2161,-3993;2161,-3992;2161,-3991;2161,-3990;2161,-3989;2161,-3988;2161,-3987;2161,-3986;2161,-3985;2161,-3984;2161,-3983;2162,-4000;2162,-3999;2162,-3998;2162,-3997;2162,-3996;2162,-3995;2162,-3994;2162,-3993;2162,-3992;2162,-3991;2162,-3990;2162,-3989;2162,-3988;2163,-3999;2163,-3998;2163,-3997;2163,-3996;2163,-3995;2163,-3994;2163,-3993;2163,-3992;2163,-3991;2163,-3990;2163,-3989;2164,-3995;2164,-3994;2164,-3991;2164,-3990;2165,-4007;2165,-3996;2165,-3994;2165,-3993;2165,-3991;2165,-3990;2166,-3997;2166,-3996;2166,-3995;2166,-3994;2166,-3991;2166,-3990"
+      }
+    },
+    {
+      "id": "ttc",
+      "name": "TTC",
+      "urls": [
+        "https://ckan0.cf.opendata.inter.prod-toronto.ca/dataset/b811ead4-6eaf-4adb-8408-d389fb5a069c/resource/c920e221-7a1c-488b-8c5b-6d8cd4e85eaf/download/completegtfs.zip",
+        "https://files.mobilitydatabase.org/mdb-732/latest.zip"
+      ],
+      "bbox": {
+        "min_lat": 43.59211,
+        "max_lat": 43.90975,
+        "min_lon": -79.64991,
+        "max_lon": -79.12311
+      },
+      "notes": "84 MB, about 4.3 million stop_times rows. Loads in roughly 10 to 20 seconds.",
+      "coverage": {
+        "cell_deg": 0.02,
+        "built": "2026-10-10",
+        "cells": "2179,-3978;2179,-3977;2179,-3976;2180,-3979;2180,-3978;2180,-3977;2180,-3976;2180,-3975;2181,-3980;2181,-3979;2181,-3978;2181,-3977;2181,-3976;2181,-3975;2181,-3974;2181,-3973;2181,-3972;2181,-3971;2181,-3970;2181,-3968;2182,-3980;2182,-3979;2182,-3978;2182,-3977;2182,-3976;2182,-3975;2182,-3974;2182,-3973;2182,-3972;2182,-3971;2182,-3970;2182,-3969;2182,-3968;2182,-3967;2183,-3980;2183,-3979;2183,-3978;2183,-3977;2183,-3976;2183,-3975;2183,-3974;2183,-3973;2183,-3972;2183,-3971;2183,-3970;2183,-3969;2183,-3968;2183,-3967;2183,-3966;2183,-3965;2184,-3982;2184,-3981;2184,-3980;2184,-3979;2184,-3978;2184,-3977;2184,-3976;2184,-3975;2184,-3974;2184,-3973;2184,-3972;2184,-3971;2184,-3970;2184,-3969;2184,-3968;2184,-3967;2184,-3966;2184,-3965;2184,-3964;2184,-3963;2185,-3983;2185,-3982;2185,-3981;2185,-3980;2185,-3979;2185,-3978;2185,-3977;2185,-3976;2185,-3975;2185,-3974;2185,-3973;2185,-3972;2185,-3971;2185,-3970;2185,-3969;2185,-3968;2185,-3967;2185,-3966;2185,-3965;2185,-3964;2185,-3963;2185,-3962;2186,-3983;2186,-3982;2186,-3981;2186,-3980;2186,-3979;2186,-3978;2186,-3977;2186,-3976;2186,-3975;2186,-3974;2186,-3973;2186,-3972;2186,-3971;2186,-3970;2186,-3969;2186,-3968;2186,-3967;2186,-3966;2186,-3965;2186,-3964;2186,-3963;2186,-3962;2186,-3961;2187,-3982;2187,-3981;2187,-3980;2187,-3979;2187,-3978;2187,-3977;2187,-3976;2187,-3975;2187,-3974;2187,-3973;2187,-3972;2187,-3971;2187,-3970;2187,-3969;2187,-3968;2187,-3967;2187,-3966;2187,-3965;2187,-3964;2187,-3963;2187,-3962;2187,-3961;2187,-3960;2187,-3959;2188,-3979;2188,-3978;2188,-3977;2188,-3976;2188,-3975;2188,-3974;2188,-3973;2188,-3972;2188,-3971;2188,-3970;2188,-3969;2188,-3968;2188,-3967;2188,-3966;2188,-3965;2188,-3964;2188,-3963;2188,-3962;2188,-3961;2188,-3960;2188,-3959;2188,-3958;2188,-3957;2189,-3977;2189,-3975;2189,-3974;2189,-3973;2189,-3972;2189,-3971;2189,-3970;2189,-3969;2189,-3968;2189,-3967;2189,-3966;2189,-3965;2189,-3964;2189,-3963;2189,-3962;2189,-3961;2189,-3960;2189,-3959;2189,-3958;2189,-3957;2190,-3973;2190,-3971;2190,-3970;2190,-3969;2190,-3968;2190,-3967;2190,-3966;2190,-3965;2190,-3964;2190,-3963;2190,-3962;2190,-3961;2190,-3960;2190,-3959;2190,-3958;2191,-3967;2191,-3966;2191,-3965;2191,-3964;2191,-3963;2191,-3962;2191,-3961;2192,-3967;2192,-3964;2192,-3963;2192,-3962;2193,-3967;2193,-3965;2193,-3964;2193,-3963;2194,-3968;2194,-3967;2194,-3966;2194,-3965;2194,-3964;2195,-3966;2195,-3965;2195,-3964"
+      }
+    },
+    {
+      "id": "yrt",
+      "name": "York Region Transit",
+      "urls": ["https://www.yrt.ca/google/google_transit.zip", "https://files.mobilitydatabase.org/mdb-728/latest.zip"],
+      "bbox": {
+        "min_lat": 43.72912,
+        "max_lat": 44.32131,
+        "min_lon": -79.6594,
+        "max_lon": -79.21218
+      },
+      "coverage": {
+        "cell_deg": 0.02,
+        "built": "2026-10-10",
+        "cells": "2186,-3981;2186,-3980;2187,-3981;2187,-3980;2187,-3979;2187,-3974;2188,-3983;2188,-3982;2188,-3981;2188,-3980;2188,-3979;2188,-3978;2188,-3977;2188,-3976;2188,-3974;2188,-3968;2188,-3967;2189,-3983;2189,-3982;2189,-3981;2189,-3980;2189,-3979;2189,-3978;2189,-3977;2189,-3976;2189,-3975;2189,-3974;2189,-3973;2189,-3972;2189,-3971;2189,-3968;2189,-3967;2190,-3982;2190,-3981;2190,-3980;2190,-3979;2190,-3978;2190,-3977;2190,-3976;2190,-3975;2190,-3974;2190,-3973;2190,-3972;2190,-3971;2190,-3970;2190,-3969;2190,-3968;2190,-3967;2191,-3983;2191,-3982;2191,-3981;2191,-3980;2191,-3979;2191,-3978;2191,-3977;2191,-3976;2191,-3975;2191,-3974;2191,-3973;2191,-3972;2191,-3971;2191,-3970;2191,-3969;2191,-3968;2191,-3967;2191,-3966;2191,-3965;2191,-3964;2191,-3963;2192,-3982;2192,-3980;2192,-3979;2192,-3978;2192,-3977;2192,-3976;2192,-3975;2192,-3974;2192,-3973;2192,-3972;2192,-3971;2192,-3970;2192,-3969;2192,-3968;2192,-3967;2192,-3966;2192,-3965;2192,-3964;2192,-3963;2192,-3962;2192,-3961;2193,-3978;2193,-3977;2193,-3976;2193,-3975;2193,-3974;2193,-3973;2193,-3972;2193,-3971;2193,-3970;2193,-3969;2193,-3968;2193,-3967;2193,-3966;2193,-3965;2193,-3964;2193,-3963;2193,-3962;2193,-3961;2194,-3977;2194,-3976;2194,-3975;2194,-3974;2194,-3973;2194,-3972;2194,-3971;2194,-3970;2194,-3969;2194,-3968;2194,-3967;2194,-3966;2194,-3965;2194,-3964;2194,-3963;2194,-3962;2194,-3961;2195,-3977;2195,-3974;2195,-3973;2195,-3972;2195,-3970;2195,-3969;2195,-3966;2195,-3965;2195,-3964;2195,-3963;2195,-3962;2195,-3961;2196,-3977;2196,-3976;2196,-3975;2196,-3974;2196,-3973;2196,-3972;2196,-3963;2197,-3976;2197,-3975;2197,-3974;2197,-3973;2197,-3972;2197,-3964;2197,-3963;2198,-3975;2198,-3974;2198,-3973;2198,-3972;2198,-3965;2198,-3964;2198,-3963;2198,-3962;2199,-3975;2199,-3974;2199,-3973;2199,-3963;2199,-3962;2200,-3975;2200,-3974;2200,-3973;2200,-3972;2200,-3971;2201,-3976;2201,-3975;2201,-3974;2201,-3973;2201,-3972;2201,-3971;2202,-3976;2202,-3975;2202,-3974;2202,-3973;2202,-3972;2203,-3975;2203,-3974;2203,-3973;2203,-3972;2204,-3975;2204,-3974;2204,-3973;2204,-3972;2205,-3976;2205,-3975;2205,-3974;2205,-3973;2206,-3976;2206,-3975;2206,-3973;2207,-3973;2208,-3973;2209,-3975;2209,-3974;2209,-3973;2210,-3974;2210,-3973;2211,-3974;2211,-3973;2212,-3975;2212,-3974;2212,-3973;2213,-3975;2214,-3975;2214,-3974;2214,-3968;2215,-3974;2215,-3973;2215,-3972;2215,-3971;2215,-3970;2215,-3969;2215,-3968;2216,-3969"
+      }
+    },
+    {
+      "id": "drt",
+      "name": "Durham Region Transit",
+      "urls": ["https://maps.durham.ca/OpenDataGTFS/GTFS_Durham_TXT.zip", "https://files.mobilitydatabase.org/mdb-726/latest.zip"],
+      "bbox": {
+        "min_lat": 43.7742,
+        "max_lat": 44.43565,
+        "min_lon": -79.25875,
+        "max_lon": -78.58049
+      },
+      "coverage": {
+        "cell_deg": 0.02,
+        "built": "2026-10-10",
+        "cells": "2188,-3963;2189,-3963;2189,-3962;2189,-3961;2189,-3960;2189,-3959;2189,-3958;2190,-3960;2190,-3959;2190,-3957;2190,-3956;2190,-3954;2190,-3953;2190,-3951;2191,-3958;2191,-3957;2191,-3956;2191,-3955;2191,-3954;2191,-3953;2191,-3952;2191,-3951;2191,-3950;2192,-3957;2192,-3956;2192,-3955;2192,-3954;2192,-3953;2192,-3952;2192,-3951;2192,-3950;2192,-3949;2192,-3948;2192,-3947;2192,-3946;2192,-3945;2192,-3944;2192,-3943;2193,-3957;2193,-3956;2193,-3955;2193,-3954;2193,-3953;2193,-3952;2193,-3951;2193,-3950;2193,-3949;2193,-3948;2193,-3947;2193,-3946;2193,-3945;2193,-3944;2193,-3943;2193,-3942;2193,-3941;2194,-3956;2194,-3955;2194,-3953;2194,-3952;2194,-3951;2194,-3950;2194,-3949;2194,-3948;2194,-3947;2194,-3946;2194,-3945;2194,-3944;2194,-3943;2194,-3942;2194,-3941;2194,-3940;2194,-3936;2194,-3935;2194,-3934;2194,-3933;2195,-3957;2195,-3956;2195,-3955;2195,-3951;2195,-3950;2195,-3949;2195,-3948;2195,-3947;2195,-3946;2195,-3945;2195,-3944;2195,-3943;2195,-3942;2195,-3941;2195,-3940;2195,-3939;2195,-3938;2195,-3937;2195,-3936;2195,-3935;2195,-3934;2195,-3933;2195,-3931;2195,-3930;2196,-3949;2196,-3947;2196,-3946;2196,-3945;2196,-3944;2196,-3943;2196,-3942;2196,-3940;2196,-3936;2196,-3935;2196,-3934;2196,-3930;2197,-3949;2197,-3948;2197,-3947;2197,-3946;2197,-3945;2197,-3944;2197,-3943;2197,-3942;2198,-3949;2198,-3948;2198,-3946;2198,-3945;2198,-3944;2198,-3931;2199,-3946;2199,-3932;2200,-3947;2201,-3947;2204,-3957;2204,-3952;2204,-3950;2204,-3949;2204,-3948;2205,-3957;2205,-3956;2205,-3950;2205,-3949;2205,-3948;2205,-3947;2212,-3954;2213,-3954;2215,-3950;2217,-3954;2217,-3953;2217,-3952;2221,-3959;2221,-3958;2221,-3957"
+      }
+    },
+    {
+      "id": "guelph",
+      "name": "Guelph Transit",
+      "urls": [
+        "https://drive.usercontent.google.com/download?id=1SsCgQ0agO_EONavJoOuBPMlbcu2VcUs4&export=download",
+        "https://drive.google.com/uc?export=download&id=1SsCgQ0agO_EONavJoOuBPMlbcu2VcUs4"
+      ],
+      "bbox": {
+        "min_lat": 43.48266,
+        "max_lat": 43.58084,
+        "min_lon": -80.32178,
+        "max_lon": -80.17524
+      },
+      "notes": "Do not use the MobilityDatabase copy (mdb-3140): it mirrors a stale file.",
+      "coverage": {
+        "cell_deg": 0.02,
+        "built": "2026-10-10",
+        "cells": "2174,-4013;2174,-4012;2174,-4011;2174,-4010;2175,-4015;2175,-4014;2175,-4013;2175,-4012;2175,-4011;2175,-4010;2175,-4009;2176,-4017;2176,-4016;2176,-4015;2176,-4014;2176,-4013;2176,-4012;2176,-4011;2176,-4010;2177,-4016;2177,-4015;2177,-4014;2177,-4013;2177,-4012;2177,-4011;2177,-4010;2178,-4015;2178,-4014;2178,-4013;2178,-4012;2178,-4011;2178,-4010;2179,-4014"
+      }
+    },
+    {
+      "id": "orangeville",
+      "name": "Orangeville Transit",
+      "urls": ["https://metrolinx.tmix.se/gtfs/gtfs-orangeville.zip", "https://files.mobilitydatabase.org/tld-4682/latest.zip"],
+      "bbox": {
+        "min_lat": 43.89758,
+        "max_lat": 43.93065,
+        "min_lon": -80.13955,
+        "max_lon": -80.07147
+      },
+      "coverage": {
+        "cell_deg": 0.02,
+        "built": "2026-10-10",
+        "cells": "2194,-4007;2194,-4006;2195,-4007;2195,-4006;2195,-4005;2195,-4004;2196,-4007;2196,-4006;2196,-4005;2196,-4004"
+      }
+    },
+    {
+      "id": "grt",
+      "name": "Grand River Transit",
+      "skip": true,
+      "urls": ["https://webapps.regionofwaterloo.ca/api/grt-routes/api/staticfeeds/1"],
+      "notes": "Official host unreachable on 2026-10-09 and the only mirror expired in April 2026. Use the GRT planner for Waterloo Region.",
+      "bbox": {
+        "min_lat": 43.32,
+        "max_lat": 43.56,
+        "min_lon": -80.66,
+        "max_lon": -80.22
+      }
+    }
+  ],
+  "park_and_ride": {
+    "verified": "2026-10-10",
+    "notes": "Used by trip_hubs.py --access car (drive your own car to a hub, then transit). Station names match GTFS stop names with 'GO', 'Station' and any ' - platform' suffix removed.",
+    "agencies": [
+      {
+        "agency": "GO Transit",
+        "label": "GO rule",
+        "route_types": [2],
+        "price": {"free": true},
+        "text": "free GO parking, first come, first served; busy lots can fill on weekday mornings",
+        "details": "free overnight up to 48 h; reserved spots $98/month incl. HST, 6-month minimum",
+        "no_free_parking": ["Bloor", "Danforth", "Downsview Park", "Exhibition", "Mount Dennis", "Oriole", "Union Station", "Union Station Bus Terminal"],
+        "paid_only": [
+          {"name": "Kennedy", "text": "paid parking only (TTC/Green P lot), price unknown, check signs"},
+          {"name": "Kipling", "text": "paid parking only (TTC/Green P lot), price unknown, check signs"},
+          {"name": "Kitchener", "text": "paid parking only (VIA and Region of Waterloo lot), price unknown, check signs"},
+          {"name": "Pearson", "text": "airport parking only (Toronto Pearson garages and lots, paid), price unknown, check torontopearson.com"}
+        ],
+        "source": "https://www.gotransit.com/en/free-parking-at-go-stations",
+        "source_reserved": "https://www.gotransit.com/en/free-parking-at-go-stations/reserved-parking-at-go-stations"
+      },
+      {
+        "agency": "TTC",
+        "label": "TTC rule",
+        "route_types": [1],
+        "stations": ["Don Mills", "Ellesmere", "Finch", "Finch West", "Highway 407", "Islington", "Keele", "Kipling", "Leslie", "Pioneer Village", "Sheppard West", "Warden", "Wilson", "Yorkdale"],
+        "price": {"weekday_daily": 7.0, "weekend_holiday_free": true},
+        "text": "TTC commuter lot, $5 to $7 a day on weekdays (priced at $7.00; paid Mon-Fri 05:00 to 02:00, no parking 02:00 to 05:00, posted rate is final)",
+        "text_free_day": "TTC commuter lot, free on weekends and holidays at most lots (no parking 02:00 to 05:00, check signs)",
+        "source": "https://www.ttc.ca/riding-the-ttc/parking",
+        "source_rates": "https://www.cp24.com/news/2025/05/12/ttc-board-wont-move-forward-with-proposed-parking-lot-price-increases-mayors-office/"
+      }
+    ],
+    "stop_name_words": ["park & ride", "park and ride", "carpool"],
+    "stop_name_text": "free MTO carpool / park and ride lot (stop name; MTO lots are free, up to 120 h)",
+    "stop_name_source": "https://www.durham.ca/discovering-durham/carpooling/"
+  },
+  "ride_pricing": {
+    "label": "UberX / Lyft standard, GTA (Toronto, Halton, Peel)",
+    "currency": "CAD",
+    "base": 3.17,
+    "per_km": 0.81,
+    "per_min": 0.18,
+    "min_fare": 5.25,
+    "booking_fee_tiers": [
+      [4, 1.6],
+      [10, 1.92],
+      [21, 2.06],
+      [9999, 2.77]
+    ],
+    "tax": 0.13,
+    "uplift": 1.0,
+    "source": "Uber Ontario P2P rate addendum 2024-02-22 (Toronto region = Toronto, Halton, Peel) + 13% HST, no uplift. Uber's own UberX one-month route averages were 1.02x these estimates on average across 12 GTA routes (each route 0.90x to 1.19x), checked 2026-10-10. Off-peak usually at or below; Wait & Save 10-25% less; surge above. Rides that leave Uber's Toronto rate region (GTA, Simcoe, Grey, Dufferin, Kawartha Lakes; e.g. to Hamilton, Guelph, Niagara) add $0.35/km for the whole trip",
+    "service_areas": [
+      {
+        "min_lat": 43.42,
+        "max_lat": 44.79,
+        "min_lon": -80.06,
+        "max_lon": -78.54
+      },
+      {
+        "min_lat": 43.88,
+        "max_lat": 44.53,
+        "min_lon": -80.42,
+        "max_lon": -78.49
+      },
+      {
+        "min_lat": 44.0,
+        "max_lat": 44.88,
+        "min_lon": -81.08,
+        "max_lon": -79.89
+      },
+      {
+        "min_lat": 43.82,
+        "max_lat": 44.93,
+        "min_lon": -80.38,
+        "max_lon": -79.95
+      },
+      {
+        "min_lat": 43.42,
+        "max_lat": 44.86,
+        "min_lon": -79.7,
+        "max_lon": -79.39
+      },
+      {
+        "min_lat": 43.42,
+        "max_lat": 44.96,
+        "min_lon": -79.1,
+        "max_lon": -78.88
+      },
+      {
+        "min_lat": 43.29,
+        "max_lat": 43.42,
+        "min_lon": -79.89,
+        "max_lon": -79.69
+      },
+      {
+        "min_lat": 44.45,
+        "max_lat": 44.77,
+        "min_lon": -81.13,
+        "max_lon": -81.08
+      },
+      {
+        "min_lat": 43.51,
+        "max_lat": 43.62,
+        "min_lon": -80.12,
+        "max_lon": -80.06
+      },
+      {
+        "min_lat": 43.78,
+        "max_lat": 43.82,
+        "min_lon": -80.3,
+        "max_lon": -80.2
+      }
+    ],
+    "out_of_area_per_km": 0.35
+  },
+  "dst_rule": "north_america",
+  "utc_std_offset_hours": -5,
+  "flat_fares": {
+    "MiWay": {
+      "card": 3.5,
+      "cash": 4.5,
+      "currency": "CAD",
+      "note": "2026 adult; PRESTO 3.50, credit/debit tap or cash 4.50",
+      "contactless": 4.5
+    },
+    "Milton Transit": {
+      "card": 4.25,
+      "cash": 4.25,
+      "currency": "CAD",
+      "note": "2026 adult cash 4.25; Token Transit app 3.85; no PRESTO or card readers on board; free when connecting to or from GO at Milton GO, Drew Centre or the 401 park and ride",
+      "contactless": 4.25
+    },
+    "Oakville Transit": {
+      "card": 3.5,
+      "cash": 4.0,
+      "currency": "CAD",
+      "note": "PRESTO adult 3.50 from 2026-07-01; credit/debit tap or cash 4.00",
+      "contactless": 4.0
+    },
+    "Brampton Transit": {
+      "card": 3.55,
+      "cash": 4.75,
+      "currency": "CAD",
+      "note": "PRESTO adult 3.55 from 2026-02-09; credit/debit tap or cash 4.75",
+      "contactless": 4.75
+    },
+    "TTC": {
+      "card": 3.3,
+      "cash": 3.35,
+      "currency": "CAD",
+      "note": "2026 adult; PRESTO or credit/debit tap 3.30, cash 3.35 (cash gets no 2-hour transfer)"
+    },
+    "Burlington Transit": {
+      "card": 2.85,
+      "cash": 3.75,
+      "currency": "CAD",
+      "note": "2026 adult; PRESTO 2.85, credit/debit tap or cash 3.75",
+      "contactless": 3.75
+    },
+    "York Region Transit": {
+      "card": 4.24,
+      "contactless": 4.65,
+      "cash": 4.65,
+      "currency": "CAD",
+      "note": "Adult from 2026-07-01; PRESTO 4.24, cash or credit/debit tap 4.65"
+    },
+    "Durham Region Transit": {
+      "card": 3.84,
+      "contactless": 4.85,
+      "cash": 4.85,
+      "currency": "CAD",
+      "note": "Adult from 2026-07-01; PRESTO 3.84, cash or credit/debit tap 4.85"
+    },
+    "Hamilton Street Railway": {
+      "card": 2.85,
+      "contactless": 3.75,
+      "cash": 3.75,
+      "currency": "CAD",
+      "note": "Adult; PRESTO 2.85, cash 3.75; a credit/debit tap is charged the cash fare"
+    },
+    "UP Express": {
+      "pairs": {
+        "Weston|Pearson": {"card": 4.71, "cash": 5.30, "contactless": 5.30},
+        "Mount Dennis|Weston": {"card": 4.71, "cash": 5.30, "contactless": 5.30},
+        "Bloor|Mount Dennis": {"card": 4.71, "cash": 5.30, "contactless": 5.30},
+        "Bloor|Weston": {"card": 4.71, "cash": 5.30, "contactless": 5.30},
+        "Union|Bloor": {"card": 4.71, "cash": 5.30, "contactless": 5.30},
+        "Mount Dennis|Pearson": {"card": 4.89, "cash": 5.50, "contactless": 5.50},
+        "Union|Mount Dennis": {"card": 4.89, "cash": 5.50, "contactless": 5.50},
+        "Bloor|Pearson": {"card": 5.02, "cash": 5.65, "contactless": 5.65},
+        "Union|Weston": {"card": 5.02, "cash": 5.65, "contactless": 5.65},
+        "Union|Pearson": {"card": 9.25, "cash": 12.35, "contactless": 12.35}
+      },
+      "currency": "CAD",
+      "note": "adult one-way by station pair, either direction; card = PRESTO adult (20-64), cash and contactless = standard single ticket (the credit/debit tap price is not published on these pages, so the ticket price is used); checked 2026-10-10",
+      "source": "https://www.upexpress.com/en/ways-to-pay/up-express-fares",
+      "source_presto": "https://www.upexpress.com/en/ways-to-pay/presto-fares",
+      "verified": "2026-10-10"
+    }
+  },
+  "card_discount": {
+    "GO Transit": 0.157
+  },
+  "transfer_rules": {
+    "verified": "2026-10-10",
+    "notes": "Windows run from the boarding of the fare that was paid; a free leg never restarts them. 'card' means the same PRESTO card, PRESTO in a phone wallet, or bank credit/debit card tapped on every leg (the script's 'contactless' payment gets the same transfers); cash, PRESTO tickets and GO e-tickets never get One Fare. Paying cash, a paper transfer comes only from the previous agency. Sources: ttc.ca One Fare and Fares-and-passes, gotransit.com three-hour travel window, mississauga.ca/miway-transit/fares/transfers, brampton.ca transit fares and transfers, oakvilletransit.ca connecting-services and fare-policy, burlington.ca/en/transit/fares.aspx, hamilton.ca HSR transfers, milton.ca go-transit-fare-integration and transfers, yrt.ca One Fare, durhamregiontransit.com transfers. Reviewed against the official pages 2026-10-10.",
+    "paper_only": ["Milton Transit"],
+    "paper_only_notes": "Agencies with no PRESTO or card readers on board (milton.ca: pay cash or Token Transit, ask for a paper transfer). Paying by card, the rider still pays these in cash, and a leg boarded on their paper transfer is a paper leg: the next agency sees that paper transfer, not a card tap.",
+    "same_agency": {
+      "TTC": {
+        "window_min": 120,
+        "payment": ["card"]
+      },
+      "MiWay": {
+        "window_min": 120,
+        "payment": ["card", "cash"]
+      },
+      "Brampton Transit": {
+        "window_min": 120,
+        "payment": ["card", "cash"]
+      },
+      "Milton Transit": {
+        "window_min": 120,
+        "payment": ["card", "cash"]
+      },
+      "Oakville Transit": {
+        "window_min": 120,
+        "payment": ["card", "cash"]
+      },
+      "Burlington Transit": {
+        "window_min": 120,
+        "payment": ["card", "cash"]
+      },
+      "Hamilton Street Railway": {
+        "window_min": 120,
+        "payment": ["card", "cash"]
+      },
+      "York Region Transit": {
+        "window_min": 120,
+        "payment": ["card", "cash"]
+      },
+      "Durham Region Transit": {
+        "window_min": 120,
+        "payment": ["card", "cash"]
+      }
+    },
+    "pairs": [
+      {
+        "from": ["GO Transit"],
+        "to": ["TTC", "MiWay"],
+        "window_min": 180,
+        "payment": ["card"],
+        "label": "One Fare, within 3 h of the GO tap"
+      },
+      {
+        "from": ["GO Transit"],
+        "to": ["York Region Transit", "Durham Region Transit", "Oakville Transit", "Burlington Transit"],
+        "window_min": 180,
+        "payment": ["card", "cash"],
+        "label": "free with GO within 3 h of the GO tap (card, or show a GO paper ticket)"
+      },
+      {
+        "from": ["GO Transit"],
+        "to": ["Brampton Transit"],
+        "window_min": 180,
+        "payment": ["card"],
+        "label": "free with GO within 3 h of the GO tap"
+      },
+      {
+        "from": ["GO Transit"],
+        "to": ["Brampton Transit"],
+        "window_min": 180,
+        "payment": ["cash"],
+        "at_stops": ["Mount Pleasant GO", "Brampton Innovation District GO", "Downtown Terminal", "Bramalea GO", "Malton GO", "Lisgar GO"],
+        "label": "free with a same-day GO paper ticket from a GO train station (Mount Pleasant, Downtown Brampton, Bramalea, Malton, Lisgar); show it to the driver"
+      },
+      {
+        "from": ["GO Transit"],
+        "to": ["Hamilton Street Railway"],
+        "window_min": 180,
+        "payment": ["card"],
+        "label": "free with GO within 3 h of the GO tap"
+      },
+      {
+        "at_stops": ["Milton GO", "Drew Centre", "401 ParkAndRide"],
+        "payment": ["card", "cash"],
+        "from": ["GO Transit"],
+        "to": ["Milton Transit"],
+        "label": "GO connection at Milton GO, Drew Centre or the 401 lot; show your card or GO ticket (e-tickets too) to the driver",
+        "window_min": 180
+      },
+      {
+        "at_stops": ["Milton GO", "Drew Centre", "401 ParkAndRide"],
+        "payment": ["card", "cash"],
+        "from": ["Milton Transit"],
+        "to": ["GO Transit"],
+        "action": "refund_from",
+        "label": "GO connection at Milton GO, Drew Centre or the 401 lot; show your card or GO ticket (e-tickets too) to the driver",
+        "window_min": 180
+      },
+      {
+        "from": ["TTC", "MiWay", "Brampton Transit", "York Region Transit", "Durham Region Transit", "Oakville Transit", "Burlington Transit", "Hamilton Street Railway"],
+        "to": ["GO Transit"],
+        "window_min": 120,
+        "payment": ["card"],
+        "action": "refund_from",
+        "label": "fare credited back when you tap GO within 2 h"
+      },
+      {
+        "from": ["TTC"],
+        "to": ["MiWay", "Brampton Transit", "York Region Transit", "Durham Region Transit"],
+        "window_min": 120,
+        "payment": ["card"],
+        "label": "One Fare, within 2 h"
+      },
+      {
+        "from": ["MiWay", "Brampton Transit", "York Region Transit", "Durham Region Transit"],
+        "to": ["TTC"],
+        "window_min": 120,
+        "payment": ["card"],
+        "label": "One Fare, within 2 h"
+      },
+      {
+        "from": ["MiWay"],
+        "to": ["Brampton Transit"],
+        "window_min": 120,
+        "payment": ["card", "cash"],
+        "label": "MiWay-Brampton transfer, 2 h"
+      },
+      {
+        "from": ["Brampton Transit"],
+        "to": ["MiWay"],
+        "window_min": 120,
+        "payment": ["card", "cash"],
+        "label": "MiWay-Brampton transfer, 2 h"
+      },
+      {
+        "from": ["MiWay"],
+        "to": ["Oakville Transit"],
+        "window_min": 120,
+        "payment": ["card", "cash"],
+        "label": "MiWay-Oakville transfer, 2 h"
+      },
+      {
+        "from": ["Oakville Transit"],
+        "to": ["MiWay"],
+        "window_min": 120,
+        "payment": ["card", "cash"],
+        "label": "MiWay-Oakville transfer, 2 h"
+      },
+      {
+        "from": ["Oakville Transit", "Burlington Transit"],
+        "to": ["Oakville Transit", "Burlington Transit"],
+        "window_min": 120,
+        "payment": ["card", "cash"],
+        "label": "Oakville-Burlington transfer, 2 h"
+      },
+      {
+        "from": ["Burlington Transit", "Hamilton Street Railway"],
+        "to": ["Burlington Transit", "Hamilton Street Railway"],
+        "window_min": 120,
+        "payment": ["card", "cash"],
+        "label": "Burlington-HSR transfer, 2 h"
+      },
+      {
+        "from": ["Hamilton Street Railway"],
+        "to": ["Oakville Transit"],
+        "window_min": 120,
+        "payment": ["card"],
+        "label": "HSR-Oakville transfer by PRESTO or card only, 2 h"
+      },
+      {
+        "from": ["Oakville Transit"],
+        "to": ["Hamilton Street Railway"],
+        "window_min": 120,
+        "payment": ["card"],
+        "label": "HSR-Oakville transfer by PRESTO or card only, 2 h"
+      },
+      {
+        "window_min": 120,
+        "payment": ["card", "cash"],
+        "routes": ["21"],
+        "at_stops": ["Argentia", "Lisgar", "Zum Steeles"],
+        "from": ["MiWay", "Brampton Transit"],
+        "to": ["Milton Transit"],
+        "label": "Milton route 21 only: show your card or transfer and ask for a Milton transfer"
+      },
+      {
+        "window_min": 120,
+        "payment": ["card", "cash"],
+        "routes": ["21"],
+        "at_stops": ["Argentia", "Lisgar", "Zum Steeles"],
+        "from": ["Milton Transit"],
+        "to": ["MiWay", "Brampton Transit"],
+        "label": "Milton route 21 paper transfer"
+      },
+      {
+        "window_min": 120,
+        "payment": ["card", "cash"],
+        "label": "YRT-Brampton transfer, 2 h",
+        "from": ["York Region Transit"],
+        "to": ["Brampton Transit"]
+      },
+      {
+        "window_min": 120,
+        "payment": ["card", "cash"],
+        "label": "YRT-Brampton transfer, 2 h",
+        "from": ["Brampton Transit"],
+        "to": ["York Region Transit"]
+      },
+      {
+        "from": ["Durham Region Transit"],
+        "to": ["York Region Transit"],
+        "window_min": 120,
+        "payment": ["card", "cash"],
+        "label": "DRT-YRT transfer, one way (pay again on the return)"
+      },
+      {
+        "from": ["York Region Transit"],
+        "to": ["Durham Region Transit"],
+        "window_min": 120,
+        "payment": ["card", "cash"],
+        "label": "DRT-YRT transfer, one way (pay again on the return)"
+      }
+    ]
+  }
+}

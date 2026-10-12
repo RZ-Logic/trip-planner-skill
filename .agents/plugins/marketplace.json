@@ -1,0 +1,12 @@
+{
+  "name": "rz-logic-skills",
+  "interface": { "displayName": "RZ-Logic Skills" },
+  "plugins": [
+    {
+      "name": "trip-planner",
+      "source": { "source": "local", "path": "./plugins/trip-planner" },
+      "policy": { "installation": "AVAILABLE", "authentication": "ON_INSTALL" },
+      "category": "Productivity"
+    }
+  ]
+}

@@ -231,5 +231,76 @@ class ParkRideVerifiedParking(unittest.TestCase):
         self.assertEqual(dp.pr_parking_cost([], None), (None, None))
 
 
+# ---------------------------------------------------------------------- tests-ci-eng-3
+
+class Toll407Money(unittest.TestCase):
+    """tests-ci-eng-3: the plan tests asserted money against the plan's own a['tolls'], so a route_tolls that billed
+    the transponder price without a transponder (or the reverse), a hub lot counted twice in car_rt, or a band that
+    started a minute late all passed. These pin absolute values from the fixtures: fake_retime prices the 407 at
+    07:30 as 40 km x $1.00 + $1.00 = $41.00 with a transponder and $5.30 more ($46.30) without."""
+
+    ARGV = tdp.BASE + ["--dest", "%f,%f" % tdp.MARKHAM, "--depart", "2026-10-14 07:30", "--park-and-ride", "off"]
+    SEG = {"entry_km": 34.8, "exit_km": 84.4, "direction": "E"}   # test_drive_route.Price407.SEG, Milton to Markham
+
+    def test_camera_toll_without_transponder(self):
+        res, _ = tdp.run(*self.ARGV)
+        a = res["routes"][0]
+        self.assertEqual(a["tolls"], 46.30)
+        self.assertEqual(a["tolls"], a["toll_407_camera"])
+        self.assertEqual(a["account_fee"], 5.0)
+        self.assertAlmostEqual(a["money"], round(a["energy"]["cost"] + 46.30 + 5.0, 2), places=2)
+
+    def test_transponder_toll_with_transponder(self):
+        res, _ = tdp.run(*(self.ARGV + ["--transponder"]))
+        a = res["routes"][0]
+        self.assertEqual(a["tolls"], 41.00)
+        self.assertEqual(a["tolls"], a["toll_407_transponder"])
+        self.assertEqual(a["account_fee"], 0.0)
+        self.assertAlmostEqual(a["money"], round(a["energy"]["cost"] + 41.00, 2), places=2)
+
+    def test_route_tolls_adds_other_tolls(self):
+        r = {"toll_407_camera": 46.30, "toll_407_transponder": 41.00, "toll_other_cad": 3.75}
+        self.assertAlmostEqual(dp.route_tolls(r, False), 50.05, places=2)
+        self.assertAlmostEqual(dp.route_tolls(r, True), 44.75, places=2)
+        self.assertEqual(dp.route_tolls({}, False), 0.0)
+
+    def test_round_trip_return_toll_is_the_camera_toll(self):
+        res, _ = tdp.run(*tdp.BASE, "--dest", "%f,%f" % tdp.GRAND_BEND, "--depart", "2026-10-12 09:00",
+                         "--stay-hours", "5", "--round-trip")
+        back = res["routes"][0]["return"]
+        self.assertGreater(back["tolls"], 0)
+        self.assertEqual(back["tolls"], back["toll_407_camera"])
+        self.assertNotEqual(back["toll_407_camera"], back["toll_407_transponder"])
+
+    def test_hub_car_rt_counts_hub_parking_once(self):
+        op = {"hub": "Test GO", "ride_km": 4.9, "ride_min": 5, "book_by": 7 * 3600 + 26 * 60,
+              "board": 7 * 3600 + 56 * 60, "arrive": 8 * 3600 + 45 * 60, "transit_fare": 3.30, "fare_complete": True,
+              "fare_parts": [], "car_cost": 7.79, "backup": None,
+              "parking": {"text": "paid station lot, $7.00 for the stay", "cost": 7.0},
+              "legs": [{"type": "ride", "agency": "GO Transit", "route": "LW", "headsign": "Union Station",
+                        "depart": 7 * 3600 + 56 * 60, "arrive": 8 * 3600 + 45 * 60}]}
+        warnings = []
+        with mock.patch.object(th, "plan", return_value={"access": "car", "pareto": [op], "others": []}):
+            pr = dp.park_and_ride(tdp.MILTON, tdp.UNION, dt.datetime(2026, 10, 14, 9, 0), True, 0.16, 9.0, 20.0,
+                                  18.0, warnings, 30, ctx={"drive_rt": 40.0, "day": dt.date(2026, 10, 14),
+                                                           "drive_leave": dt.datetime(2026, 10, 14, 7, 9)})
+        self.assertTrue(pr["ran"], warnings)
+        got = pr["options"][0]
+        self.assertEqual(got["hub"], "Test GO")
+        self.assertEqual(got["car_rt"], 8.58)     # 2 x $0.79 driving + the $7.00 lot once
+        self.assertEqual(got["rt_total"], 15.18)  # + 2 x $3.30 fares
+
+    def test_407_band_starts_at_its_start_time(self):
+        import tolls
+        day = dt.date(2026, 10, 14)
+
+        def toll(h, m):
+            return tolls.price_407(self.SEG, dt.datetime.combine(day, dt.time(h, m)), True)["toll"]
+        self.assertEqual(toll(7, 0), 50.62)    # 07:00 band from its first minute
+        self.assertEqual(toll(6, 59), 39.70)   # still the 05:00 band
+        self.assertEqual(toll(9, 30), 39.79)   # 09:30 band
+        self.assertEqual(tolls.band_index(dt.datetime(2026, 10, 14, 7, 0), ["05:00", "07:00", "09:30"]), 1)
+
+
 if __name__ == "__main__":
     unittest.main()

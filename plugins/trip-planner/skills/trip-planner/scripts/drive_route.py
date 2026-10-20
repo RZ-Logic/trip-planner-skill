@@ -409,6 +409,7 @@ def _valhalla_407_variant(o, d, fast, depart, opts):
     if not r["etr"] or r["km"] > 1.25 * fast["km"]:
         return None
     r["notes"].append("407 option added because this trip crosses the GTHA at a busy time")
+    r["_forced_407"] = True   # not the router's own pick: the navigation links need a via point to follow it
     return r
 
 

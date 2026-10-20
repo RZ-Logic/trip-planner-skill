@@ -232,8 +232,9 @@ python3 ${CLAUDE_SKILL_DIR}/scripts/drive_plan.py --origin "ORIGIN" --dest "DEST
   access hours; give a return backup.
 - **`CHARGING`** (EV): each stop's charger, power, minutes and cost estimate, any top-up for the drive
   home, chargers near the destination. Prices are network estimates unless the station lists one.
-- **`LINKS`** navigate to the chosen lot (avoid-tolls version for the toll-free route); give the one
-  for the route you recommend.
+- **`LINKS`** navigate to the chosen lot (avoid-tolls version for the toll-free route, a via point for a
+  route Google would not pick by itself; Waze and Apple Maps may not follow it); give the one for the
+  route you recommend.
 - **Disclose every `WARNING`**: failed sources, cached replies used because a service did not answer,
   unverified prices, data from other years.
 - **`NETWORK BLOCKED`**: ask the user to allow the listed domains (`--check-network`). With addresses

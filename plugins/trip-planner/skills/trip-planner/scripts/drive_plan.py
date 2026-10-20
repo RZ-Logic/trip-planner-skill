@@ -2652,21 +2652,26 @@ def _plan(args):
     # ---- links (navigation goes to the parking, not the door, and follows the recommended route)
     any_tolls = any(r.get("has_tolls") for r in routes)
     toll_free = not rec_r.get("has_tolls") and any_tolls
-    via = alt_waypoint(rec_r, routes) if rec_r.get("label") == "alternative" else None
-    links = {"google": google_link(o, target, toll_free, via),
-             "google_alt": google_link(o, target, not toll_free) if any_tolls else None,
-             "google_alt_text": ("with tolls" if toll_free else "avoid tolls") if any_tolls else None,
+    avoid = toll_free and not rec_r.get("bridges")   # avoid=tolls would also avoid the border crossing
+    # a via point for a route Google would not pick by itself: an alternative, the 'without 407' route on a border
+    # trip, the forced 407 option, or a toll-free route that keeps a toll bridge
+    not_default = (rec_r.get("label") in ("alternative", "without 407") or rec_r.get("_forced_407")
+                   or (toll_free and not avoid))
+    via = alt_waypoint(rec_r, routes) if not_default else None
+    links = {"google": google_link(o, target, avoid, via),
+             "google_alt": google_link(o, target, not avoid) if any_tolls else None,
+             "google_alt_text": ("with tolls" if avoid else "avoid tolls") if any_tolls else None,
              "google_avoid_tolls": google_link(o, target, True) if any_tolls else None,
-             "via": via, "waze": waze_link(target, toll_free), "apple": apple_link(o, target, toll_free),
+             "via": via, "waze": waze_link(target, avoid), "apple": apple_link(o, target, avoid),
              "walk": walk_link(target, d) if best else None, "target": target,
              "target_name": best["name"] if best else "the destination", "follows": rec["letter"]}
     if arrive_by:
         lot_by = deadline - dt.timedelta(minutes=search_min + walk_min)
-        links["google_timed"] = google_time_link(o, target, lot_by, True, toll_free)
+        links["google_timed"] = google_time_link(o, target, lot_by, True, avoid)
         links["timed_text"] = "Google Maps arrive by %s (desktop%s)" % (
             dc.fmt_clock(lot_by), "; Google picks its own route" if via else "")
     else:
-        links["google_timed"] = google_time_link(o, target, rdep, False, toll_free)
+        links["google_timed"] = google_time_link(o, target, rdep, False, avoid)
         links["timed_text"] = "Google Maps with this departure time (desktop%s)" % (
             "; Google picks its own route" if via else "")
     res["links"] = links

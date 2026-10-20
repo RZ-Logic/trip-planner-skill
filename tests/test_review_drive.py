@@ -367,5 +367,85 @@ class StopsInTimeline(unittest.TestCase):
         self.assertEqual(row["arrive"], row["depart"] + dt.timedelta(seconds=row["typical_s"] + wait))   # added once
 
 
+
+WINDSOR = "42.3149,-83.0364"
+
+
+def _bent(o, d, dlat):
+    mid = ((o[0] + d[0]) / 2.0 + dlat, (o[1] + d[1]) / 2.0)
+    return tdp.line(o, mid, 30) + tdp.line(mid, d, 30)[1:]
+
+
+def _router(m, edit):
+    """the fake drive_route m with edit(a, b) applied to its two routes"""
+    base = m.get_routes
+
+    def get_routes(o, d, depart, opts, warnings, arrive_at=None):
+        a, b = base(o, d, depart, opts, warnings, arrive_at)
+        edit(a, b, o, d)
+        return [a, b]
+    m.get_routes = get_routes
+    return m
+
+
+def _run_links(m, *extra):
+    with tdp.Env(), tdp.at_now(tdp.NOW), mock.patch.dict(sys.modules, {"drive_route": m}):
+        res = dp.plan(tdp.args_for(*tdp.BASE, "--park-and-ride", "off", *extra))
+        text = dp.render(res)
+    return res, text
+
+
+class LinksFollowRecommendedRoute(unittest.TestCase):
+    """drive-core-5: the navigation links follow a recommended route the router would not pick by itself."""
+
+    def test_without_407_border_route_gets_via(self):
+        def edit(a, b, o, d):
+            b["poly"] = _bent(o, d, -0.08)
+        res, text = _run_links(_router(tfi.border_drive_route(), edit), "--dest", WINDSOR,
+                               "--depart", "2026-10-17 10:00", "--value-of-time", "0")
+        self.assertEqual(res["recommended"], "B")
+        ln = res["links"]
+        self.assertIsNotNone(ln["via"])
+        self.assertIn("waypoints=", ln["google"])
+        self.assertNotIn("avoid=tolls", ln["google"])   # avoiding tolls would also avoid the bridge
+        self.assertIn("Google picks its own route", ln["timed_text"])
+        self.assertIn("goes via a point on route B", text)
+
+    def test_forced_407_fastest_gets_via(self):
+        def edit(a, b, o, d):
+            a["_forced_407"] = True
+            a["poly"] = _bent(o, d, 0.08)
+        res, _text = _run_links(_router(tdp.fake_drive_route(), edit), "--dest", "%f,%f" % tdp.MARKHAM,
+                                "--depart", "2026-10-14 07:30", "--value-of-time", "300")
+        self.assertEqual(res["recommended"], "A")
+        self.assertIn("waypoints=", res["links"]["google"])
+        self.assertNotIn("avoid=tolls", res["links"]["google"])
+
+    def test_variant_route_is_marked(self):
+        fake = tdr.FakeFetch([(("valhalla", "through"), tdr._kingston_407()), (("valhalla",), tdr._kingston_401())])
+        with mock.patch.object(dc, "fetch", side_effect=fake):
+            routes = drt.get_routes(tdr.MILTON, tdr.KINGSTON, dt.datetime(2026, 10, 16, 15, 0), dict(tdr.OPTS), [])
+        var = [r for r in routes if any("407 option added" in n for n in r["notes"])]
+        self.assertEqual(len(var), 1)
+        self.assertIs(var[0].get("_forced_407"), True)
+        self.assertFalse(any(r.get("_forced_407") for r in routes if r is not var[0]))
+
+    def test_toll_free_route_that_keeps_a_bridge_uses_via_not_avoid(self):
+        def edit(a, b, o, d):
+            for r in (a, b):
+                r["bridges"] = [{"name": "Ambassador Bridge", "cad": 0.0, "text": "free this way"}]
+            a["toll_unpriced"] = True
+            b["poly"] = _bent(o, d, -0.08)
+        res, _text = _run_links(_router(tdp.fake_drive_route(), edit), "--dest", WINDSOR,
+                                "--depart", "2026-10-17 10:00", "--value-of-time", "0")
+        self.assertEqual(res["recommended"], "B")
+        ln = res["links"]
+        self.assertNotIn("avoid=tolls", ln["google"])
+        self.assertIn("waypoints=", ln["google"])
+        self.assertNotIn("avoid_tolls=t", ln["waze"])
+        self.assertNotIn("avoid=tolls", ln["apple"])
+        self.assertIn("avoid=tolls", ln["google_alt"])   # the second link still offers the toll-free way
+
+
 if __name__ == "__main__":
     unittest.main()

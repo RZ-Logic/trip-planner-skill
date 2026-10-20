@@ -747,8 +747,10 @@ def _router_urls(name, defaults, many=True):
     for part in [x.strip() for x in raw.split(",") if x.strip()]:
         try:
             p = urllib.parse.urlsplit(part)
+            p.port   # a port that is not a number raises ValueError here, not later in a quoted urllib error
             ok = (p.scheme in ("http", "https") and bool(p.hostname) and "@" not in p.netloc
-                  and not p.query and not p.fragment and "?" not in part and "#" not in part)
+                  and not p.query and not p.fragment and "?" not in part and "#" not in part
+                  and not re.search(r"[\s\x00-\x1f\x7f]", part))
         except ValueError:
             ok = False
         if not ok:

@@ -30,7 +30,9 @@ the free public services below are best-effort and rate-limited.
 | Australia (Victoria) | https://data.ptv.vic.gov.au/downloads/gtfs.zip | No | NSW needs a free key. |
 | Statistics Canada transit network database | statcan.gc.ca catalogue 23260003 | No | Static GTFS (stops, routes, trips, stop times) for about 150 Canadian agencies in one product (edition 2025001, released 2025-01-31). Too old for current times; useful to find agencies and stop locations. |
 
-**Hand-entered Ontario timetables** (`manual` feeds in `regions/ontario.json`, for operators with no public GTFS) were typed in from the operators' public pages, each listed in the feed's `source`, except the three coach timetables below. Those were built on 2026-10-10 by automated searches of the operator's booking system. The operators' terms were not confirmed to allow this; the owner keeps these timetables by decision (2026-10-12). The skill never calls these systems at run time.
+**Hand-entered Ontario timetables** (`manual` feeds in `regions/ontario.json`, for operators with no public GTFS) were typed in from the operators' public pages or published files, each listed in the feed's `source`
+(`ride-norfolk-brantford` also takes its holiday rules from its expired 2025-26 GTFS), except the three coach
+timetables below. Those were built on 2026-10-10 by automated searches of the operator's booking system. The operators' terms were not confirmed to allow this; the owner keeps these timetables by decision (2026-10-12). The skill never calls these systems at run time.
 
 | Feed | Operator | Booking system queried | Notes |
 |---|---|---|---|

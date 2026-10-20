@@ -429,9 +429,10 @@ OpenStreetMap names and operators (lots, park and ride lots, chargers) are cut t
 
 ### Your own routing servers
 
-The keyless defaults are donated demo servers. The OSRM demo server policy restricts them to reasonable,
-non-commercial use at 1 request per second, and the free Open-Meteo API is non-commercial only (terms
-quoted in `sources.md`, section 3). Personal use at the scripts' pace fits. For commercial or hosted use,
+The keyless defaults are donated demo servers. The OSRM demo server policy restricts the two OSRM servers to
+reasonable, non-commercial use at 1 request per second; the FOSSGIS Valhalla server states no terms on its page
+(FOSSGIS's full usage policy could not be read); the free Open-Meteo API is non-commercial only (terms quoted
+in `sources.md`, section 3). Personal use at the scripts' pace fits. For commercial or hosted use,
 set the two variables above to servers you run or pay for:
 
 - `TRIP_PLANNER_VALHALLA_URL`: one http(s) base URL, for example `http://localhost:8002`. Valhalla's

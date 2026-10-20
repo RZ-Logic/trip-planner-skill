@@ -1056,7 +1056,10 @@ class ConfigurableRouters(unittest.TestCase):
                             ("TRIP_PLANNER_OSRM_URL", "https://user:secretbox@osrm.example"),
                             ("TRIP_PLANNER_OSRM_URL", "https://osrm.example/?key=secretbox"),
                             ("TRIP_PLANNER_VALHALLA_URL", "file:///etc/passwd"),
-                            ("TRIP_PLANNER_VALHALLA_URL", "https://a.example,https://b.example")):
+                            ("TRIP_PLANNER_VALHALLA_URL", "https://a.example,https://b.example"),
+                            ("TRIP_PLANNER_OSRM_URL", "https://o.example/secretbox path"),
+                            ("TRIP_PLANNER_OSRM_URL", "https://o.example/secretbox"),
+                            ("TRIP_PLANNER_VALHALLA_URL", "https://v.example:secretbox")):
             with mock.patch.dict(os.environ, {name: value}):
                 with self.assertRaises(SystemExit) as cm:
                     th.routing_hosts()

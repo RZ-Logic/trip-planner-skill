@@ -1,5 +1,5 @@
 """Offline regression tests for the parking ranking, check-line and curated parking data findings of the 2026-10
-review (ext-11, -14, -15, -16, data-integrity-1, -4, -7, parking-3, -4, -8).
+review (ext-11, -14, -15, -16, data-integrity-1, -4, -7, parking-3, -4, -8, docs-contract-5, security-tos-9).
 
 Every HTTP call is mocked or blocked; nothing here touches the network.
 
@@ -17,9 +17,11 @@ _os.environ["TRIP_PLANNER_CONFIG"] = _os.path.join(_TMP, "config", "car.json")
 _os.environ["TRIP_PLANNER_CACHE"] = _os.path.join(_TMP, "cache")
 _os.environ.setdefault("TRIP_PLANNER_QUIET", "1")   # no progress lines on stderr (TRIP_PLANNER_QUIET=0 shows them)
 import datetime as dt
+import json
 import os
 import sys
 import unittest
+import urllib.error
 from unittest import mock
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -29,6 +31,16 @@ import drive_plan as dp  # noqa: E402
 import parking as pk  # noqa: E402
 
 DEST = (43.6453, -79.3806)   # Union Station, Toronto
+
+
+def fake_fetch(routes):
+    """A dc.fetch stand-in: the first (substring, reply) whose substring is in the URL answers; others fail."""
+    def fetch(url, data=None, **kw):
+        for key, reply in routes:
+            if key in url:
+                return json.dumps(reply).encode("utf-8")
+        raise urllib.error.URLError("offline test: %s" % url)
+    return fetch
 
 
 def place(pid):
@@ -186,6 +198,28 @@ class Verification(unittest.TestCase):
         old["_old_rate"] = "2025 price"
         self.assertEqual([x["name"] for x in pk.rank([old, cur])], ["Curated garage", "Old rate lot"])
 
+    def osm_lot_with_site(self, name, site):
+        reply = {"elements": [{"type": "way", "id": 99, "center": {"lat": 43.2551, "lon": -79.8711},
+                               "tags": {"amenity": "parking", "name": name, "fee": "yes", "website": site}}]}
+        with mock.patch.object(dc, "fetch", fake_fetch([("overpass", reply)])), mock.patch.object(pk.time, "sleep"):
+            lots, _s = pk.osm_lots(43.2550, -79.8710, dt.datetime(2026, 10, 14, 9), 120, set(), 800, None, [])
+        self.assertEqual(len(lots), 1)
+        hint = pk.check_hint(lots[0])
+        self.assertIsNotNone(hint)
+        return hint
+
+    def test_commercial_operator_page_not_offered(self):   # docs-contract-5
+        # Impark and SpotHero forbid automated access: their pages are never handed to the agent to open
+        hint = self.osm_lot_with_site("Impark", "https://lots.impark.com/imp/en?latlng=1")
+        self.assertNotIn("impark.com", hint["url"] or "")
+        self.assertEqual(hint["url"], "https://www.openstreetmap.org/way/99")   # the map entry, as for any brand-only lot
+        hint = self.osm_lot_with_site("King Street Garage", "https://SpotHero.com/destination/hamilton")
+        self.assertNotIn("spothero", (hint["url"] or "").lower())
+        self.assertIn("King Street Garage", hint["search"])
+        # any other operator page is still given
+        hint = self.osm_lot_with_site("King Street Garage", "https://parking.hamilton.ca/king")
+        self.assertEqual(hint["url"], "https://parking.hamilton.ca/king")
+
 
 class Offline(unittest.TestCase):
     def test_offline_toronto_bundled_carparks(self):   # parking-3
@@ -209,6 +243,16 @@ class Offline(unittest.TestCase):
         self.assertNotIn("no public parking found", text)
         res["parking"]["offline"] = False
         self.assertIn("no public parking found in the data", "\n".join(dp.parking_lines(res, dt.date(2026, 10, 14))))
+
+
+class Docs(unittest.TestCase):
+    def test_no_scrapling_recommendation(self):   # docs-contract-5, security-tos-9
+        # Scrapling ships stealth and anti-bot fetch tools; the docs name plain fetch or browser tools instead
+        sk = os.path.join(ROOT, "plugins", "trip-planner", "skills", "trip-planner")
+        for p in (os.path.join(ROOT, "README.md"), os.path.join(sk, "SKILL.md"),
+                  os.path.join(sk, "references", "driving.md"), os.path.join(sk, "references", "manual-method.md")):
+            with open(p, encoding="utf-8") as f:
+                self.assertFalse("scrapling" in f.read().lower(), p)   # assertFalse: never print the whole file
 
 
 if __name__ == "__main__":

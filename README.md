@@ -46,7 +46,7 @@ trip-planner is an [Agent Skill](https://agentskills.io): a folder of instructio
 - **Python 3.8 or later.** The scripts use the standard library only, so there is nothing to `pip install`.
 - **Network access** for live data: timetables, routing, geocoding, parking, fuel, weather and chargers (the hosts are listed in [`references/driving.md`](plugins/trip-planner/skills/trip-planner/references/driving.md); `--check-network` tests them). Without it, the agent uses the bundled data and the manual method.
 - **Optional: API keys** for live traffic, highway incidents, more charger lookups and review rates (see [Optional API Keys](#-optional-api-keys)).
-- **Optional: a tool that can open any URL** (an HTTP or fetch connector such as Scrapling's MCP server, or a browser tool), so the agent can check parking prices and run the manual method. The scripts never use it.
+- **Optional: a tool that can open any URL** (a plain HTTP or fetch connector, or a browser tool; not stealth or anti-bot tools), so the agent can check parking prices and run the manual method. The scripts never use it.
 
 ### Install
 

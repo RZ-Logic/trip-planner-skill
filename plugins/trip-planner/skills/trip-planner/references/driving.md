@@ -312,6 +312,7 @@ priced.
     browser tool);
   - a ready web search string (lot name, street, city).
 
+  Commercial operators' sites (Impark, SpotHero) are never given as the page; use the search string.
   Verify the lot you recommend before recommending it (Verifying a lot, below).
 - **Google reviews (optional key):** with `GOOGLE_PLACES_API_KEY`, one official Places API Nearby
   Search per run reads up to 5 reviews per nearby lot (Google picks them by relevance, not date) and
@@ -327,11 +328,11 @@ line. A lot flagged "may have closed" can rank high (a priced one outranks an op
 price) and can even be the ARRIVAL and navigation target; never recommend it, or hand off its link,
 until its operator page or a search shows it is open.
 
-1. Open the operator's own page with a tool that can fetch any URL (Scrapling, an HTTP connector, a
-   browser tool). The check line gives the URL when known. Green P's pages are rendered with
-   JavaScript, so they need a browser tool; a plain fetch returns an empty page. If a page answers with
-   a bot check, do not try to get past it: use step 2. For an unnamed OpenStreetMap lot the link is its
-   map entry, not an operator page.
+1. Open the operator's own page with a tool that can fetch any URL (a plain HTTP or fetch connector, or
+   a browser tool; never a stealth or anti-bot mode). The check line gives the URL when known. Green P's
+   pages are rendered with JavaScript, so they need a browser tool; a plain fetch returns an empty page.
+   If a page answers with a bot check, do not try to get past it: use step 2. For an unnamed
+   OpenStreetMap lot the link is its map entry, not an operator page.
 2. Otherwise, run a web search with the check line's search string. Green P's carpark pages show up in
    search results. For an unnamed OpenStreetMap lot with no search string, search
    `parking near <nearest street> <city> rates`, or report the lot as not checked. With

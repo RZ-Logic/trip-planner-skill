@@ -2662,7 +2662,7 @@ def osm_lots(lat, lon, arrive, stay_min, holidays, radius_m, height_m, warnings,
             lot["_addr"] = " ".join(x.strip() for x in (tags.get("addr:housenumber"), tags.get("addr:street")) if x and x.strip())
             lot["_city"] = (tags.get("addr:city") or "").strip() or city_of(lat, lon)
             site = tags.get("website") or tags.get("contact:website") or tags.get("url")
-            if site and re.match(r"https?://", site):
+            if site and re.match(r"https?://", site) and not _no_fetch(site):
                 lot["_website"] = site
             # opening hours: a lot closed during the stay does not fit; the raw value is shown only in a safe
             # character set, and a value this reader cannot read is noted (and flagged on the check line)
@@ -2819,6 +2819,18 @@ def _search_text(s):
 BRAND_RE = re.compile(r"\b(?:impark|indigo|precise(?:\s+parklink)?|target\s+park|easypark|honk|parkade|"
                       r"municipal|public|private|parking|park|lot|garage|car\s*park|underground|surface|visitor|"
                       r"customer|the|and|access|not|tagged|of|destination|[nsew]{1,2})\b", re.I)
+
+
+# operators whose terms forbid automated access (sources.md, architecture.md): their pages are never offered to open
+NO_FETCH_RE = re.compile(r"(?:^|\.)(?:impark\.com|spothero\.com)$", re.I)
+
+
+def _no_fetch(url):
+    """True for a page the agent must not be sent to (NO_FETCH_RE, or a URL whose host cannot be read)."""
+    try:
+        return bool(NO_FETCH_RE.search((urllib.parse.urlsplit(url).hostname or "").rstrip(".")))
+    except ValueError:
+        return True
 
 
 def _brand_only(name):

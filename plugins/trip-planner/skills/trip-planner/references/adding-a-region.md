@@ -83,10 +83,10 @@ Rules:
   `window_min` of the first boarding is free. `pairs`: a fare on a `to` agency is free (`action`
   `free`, the default) or the earlier `from` fare is credited back (`refund_from`, for "your local
   fare is refunded when you tap the train"), within `window_min` of the earlier boarding. A credited
-  fare covers nothing later: later transfers count from the fare that was paid. Optional
-  limits: `payment` (`card`, `cash`), `days` (0 = Monday), `hours` (`[["05:30", "10:00"], ...]`,
-  local time of the transfer), `at_stops` (stop-name substrings at the transfer point) and `routes`
-  (route short names). `paper_only` (agency names) lists agencies with no card readers on board
+  fare, and any leg that rode free on it, covers nothing later: later transfers count from the fare
+  that was paid. Optional limits: `payment` (`card`, `cash`), `days` (0 = Monday), `hours`
+  (`[["05:30", "10:00"], ...]`, local time of the transfer), `at_stops` (stop-name substrings at the
+  transfer point) and `routes` (route short names). `paper_only` (agency names) lists agencies with no card readers on board
   (Milton Transit): a card rider pays them in cash, and a leg boarded on their paper transfer follows
   the cash rules at the next change. Without this block, multi-agency fares print
   `(before transfer discounts)`.

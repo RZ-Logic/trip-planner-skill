@@ -227,6 +227,16 @@ class RefundedFareGivesNoWindow(unittest.TestCase):
         self.assertEqual([x["charged"] for x in g], [0.0, 6.0, 0.0, 0.0])                   # Milton was 4.25
         self.assertIn("free from GO Transit", g[2]["note"])                                # was "free from MiWay"
 
+    def test_free_change_on_the_refunded_fare_gives_no_window_either(self):
+        # review follow-up: Brampton 08:15 rode free on the MiWay fare that the GO tap then credited back
+        g = [self.group("MiWay", "08:00", 3.5), self.group("Brampton Transit", "08:15", 3.55),
+             self.group("GO Transit", "08:30", 6.0),
+             self.group("Brampton Transit", "09:30", 3.55, last="Argentia Rd"),
+             self.group("Milton Transit", "10:15", 4.25, first="Argentia Rd at Second Line", routes=("21",))]
+        th.apply_transfers(g, GTHA["transfer_rules"], "card", dt.date(2026, 10, 13))
+        self.assertEqual([x["charged"] for x in g], [0.0, 0.0, 6.0, 0.0, 0.0])              # Milton was 4.25
+        self.assertIn("free from GO Transit", g[3]["note"])                     # was "Brampton Transit transfer"
+
     def test_one_go_tap_still_credits_every_local_fare_before_it(self):
         # unchanged (how many fares one GO tap credits is an open owner decision): MiWay and YRT both credited back
         g = [self.group("MiWay", "08:00", 3.5), self.group("York Region Transit", "08:30", 4.25),

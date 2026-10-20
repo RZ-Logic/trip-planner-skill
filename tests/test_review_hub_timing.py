@@ -28,6 +28,7 @@ from unittest import mock
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from test_engine import hms, make_feed, pin_clock, th  # noqa: E402  (test_engine adds the scripts folder)
+from test_regressions import add_files  # noqa: E402
 
 BASE = ["--region", "none", "--no-discover", "--routing", "estimate"]
 ALL_YEARS = [("WK", 1, 1, 1, 1, 1, 1, 1, "20260101", "20291231")]
@@ -48,9 +49,12 @@ def ok_network(hosts, timeout=6):
     return {h: "ok" for h in hosts}
 
 
-def feed(stops, trips, stop_times, calendar=None):
+def feed(stops, trips, stop_times, calendar=None, routes=None):
     p = os.path.join(tempfile.mkdtemp(dir=_TMP), "f.zip")
     make_feed(p, stops, trips, stop_times, calendar=calendar)
+    if routes:   # {route_id: route_type}
+        add_files(p, {"routes.txt": "route_id,agency_id,route_short_name,route_long_name,route_type\n" + "".join(
+            "%s,T,%s,Route %s,%d\n" % (r, r, r, t) for r, t in sorted(routes.items()))})
     return p
 
 
@@ -231,6 +235,63 @@ class RideTrafficByArea(unittest.TestCase):
         o = option(res, "Hub H")
         self.assertAlmostEqual(o["ride_min"], round(FREE_S * row("congested", "daytime")["typical"] / 60.0, 1),
                                places=1)                                         # was x1.45 on Canada Day
+
+
+
+# --------------------------------------------------------------------------- architecture-product-8 (batch 5)
+class FinishDropPoints(unittest.TestCase):
+    """Finish with a ride: a train line with few trips is still tried, and untried coach stops are named."""
+
+    def plan(self, coaches=3, region=None, place_info=None):
+        stops = [("O", "Origin stop", 43.3010, -79.8000), ("K1", "Coach K1", 43.9500, -79.8000),
+                 ("K2", "Coach K2", 44.0000, -79.8700), ("K3", "Coach K3", 44.0500, -79.8000),
+                 ("K4", "Coach K4", 44.0000, -79.7300), ("R", "Rail R", 43.9600, -79.7500),
+                 ("L1", "Local L1", 43.9850, -79.8000), ("L2", "Local L2", 44.0150, -79.8000)]
+        trips, st, routes = [], [], {"T": 2, "L": 3}
+        for k in range(1, coaches + 1):
+            routes["C%d" % k] = 3
+            for j in range(3 if k <= 3 else 1):   # three trips on each of the first three coach lines
+                tid = "c%d%d" % (k, j)
+                trips.append(("C%d" % k, "WK", tid, "K%d" % k))
+                st += [(tid, "%02d:00:00" % (12 + j), "%02d:00:00" % (12 + j), "O", 1, 0, 0),
+                       (tid, "%02d:%d0:00" % (13 + j, k + 1), "%02d:%d0:00" % (13 + j, k + 1), "K%d" % k, 2, 0, 0)]
+        trips += [("T", "WK", "t1", "R"), ("L", "WK", "l1", "L2")]
+        st += [("t1", "09:30:00", "09:30:00", "O", 1, 0, 0), ("t1", "11:00:00", "11:00:00", "R", 2, 0, 0),
+               ("l1", "13:40:00", "13:40:00", "K1", 1, 0, 0), ("l1", "13:45:00", "13:45:00", "L1", 2, 0, 0),
+               ("l1", "13:50:00", "13:50:00", "L2", 3, 0, 0)]
+        p = feed(stops, trips, st, routes=routes)
+        args = ["--origin", "43.3000,-79.8000", "--dest", "44.0000,-79.8000", "--depart", "2026-10-15 09:00",
+                "--max-hours", "7"]
+        if region is None:
+            return run(args + ["--feed", "t=" + p] + BASE)
+        region = dict(region, feeds=[{"id": "t", "name": "Test Transit", "urls": [p], "bbox": region["bbox"]}])
+        with mock.patch.object(th, "reverse_place_info", side_effect=place_info):
+            return run(args + ["--no-discover", "--routing", "estimate", "--final-ride", "on"], regions=[region])
+
+    def test_a_train_with_few_trips_is_still_tried(self):
+        res = self.plan()
+        self.assertIn("Rail R", [d["name"] for d in res["finish_info"]["drop_points"]])
+        rail = [o for o in res["finish_with_ride"] if o["final_ride"]["from"] == "Rail R"]
+        self.assertTrue(rail and rail[0]["arrive"] < hms(12, 0), [o["final_ride"]["from"] for o in
+                                                                  res["finish_with_ride"]])   # about 11:21
+        self.assertEqual(res["finish_info"]["untried"], [])
+        self.assertFalse(any("not tried" in w for w in res["warnings"]), res["warnings"])
+
+    def test_untried_coach_stop_is_named_in_warnings(self):
+        res = self.plan(coaches=4)
+        self.assertEqual(res["finish_info"]["untried"], ["Coach K4"])
+        self.assertTrue(any("not tried" in w and "Coach K4" in w for w in res["warnings"]), res["warnings"])
+
+    def test_a_train_stop_across_the_border_is_still_left_out(self):
+        region = {"id": "home", "name": "Home (test)", "country": "CA", "timezone": "America/Toronto",
+                  "bbox": {"min_lat": 43.0, "max_lat": 44.3, "min_lon": -80.2, "max_lon": -79.4}}
+        res = self.plan(region=region,   # the destination (44.00) is in US, Rail R (43.96) in CA
+                        place_info=lambda lat, lon, warnings: {"names": set(), "country": "US" if lat >= 43.97
+                                                               else "CA", "state": None})
+        names = [d["name"] for d in res["finish_info"]["drop_points"]]
+        self.assertNotIn("Rail R", names)
+        self.assertNotIn("Coach K1", names)
+        self.assertTrue(any("2 drop points across the border" in w for w in res["warnings"]), res["warnings"])
 
 
 if __name__ == "__main__":

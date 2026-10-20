@@ -105,7 +105,8 @@ Read the output in this order:
    legs with route and headsign (branch and direction), `backup if missed` (arrive-by: `safer earlier
    option`), sometimes `STRETCH` (under 3 minutes of slack), and check links.
 7. `FINISH WITH A RIDE`: transit to a drop point, then Uber or a local taxi (with phone numbers where
-   ride-hail is sparse). Lead with one when nothing reaches the door by transit.
+   ride-hail is sparse). Lead with one when nothing reaches the door by transit. A WARNING names
+   coach or train stops near the destination that were not tried.
 8. `SECOND OPINION`: Transitous's best trip from the origin and each top hub, `agrees` (within 3
    minutes) or the difference. Compare routes before recommending against it, and keep its link to
    https://transitous.org/sources/ when you quote it.

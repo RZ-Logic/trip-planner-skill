@@ -3311,7 +3311,7 @@ def plan(args):
     # ---- drop points for finishing with a ride: transit to a stop short of the destination, then a
     # ride for the rest. One scan per drop point keeps it cost-aware: a single scan would always pick
     # the earliest arrival, which is usually "leave the bus early and ride far".
-    pick, fpricing, area = [], None, None
+    pick, fpricing, area, untried = [], None, None, []
     if final_m > 0:
         fpricing = dict(DEFAULT_PRICING, currency=pricing.get("currency", DEFAULT_PRICING["currency"]))
         if d_foreign:   # the region files' cards and ride notes are for their own country
@@ -3351,6 +3351,21 @@ def plan(args):
                 pick.append(e)
             if len(pick) >= FINAL_RIDE_DROP_POINTS:
                 break
+        # every train line's stop nearest the destination too: a line with few trips ranks below busy coaches
+        rail_best = {}   # (feed, route_id) -> its drop point nearest the destination
+        for ti, stops_ in long_haul.items():
+            if net.trips[ti][4] != 2:
+                continue
+            e = min((home_of[st] for st in stops_ if st in home_of), key=lambda x: x["straight_m"], default=None)
+            key = (net.trips[ti][0], net.trips[ti][7])
+            if e is not None and (key not in rail_best or e["straight_m"] < rail_best[key]["straight_m"]):
+                rail_best[key] = e
+        extra_rail = []
+        for e in sorted(rail_best.values(), key=lambda x: x["straight_m"]):
+            if e not in pick and e not in extra_rail and len(extra_rail) < FINAL_RIDE_DROP_POINTS:
+                extra_rail.append(e)
+        pick += extra_rail
+        untried = [e for e in lines if e not in pick]   # coach or train stops past the cap, named in WARNINGS
         if cross_border and pick:   # a final ride from across the border (VIA Windsor for Detroit) is not planned
             same = [e for e in pick if place_info(e["lat"], e["lon"])["country"] in (None, d_cc)]
             if len(same) < len(pick):
@@ -3358,6 +3373,7 @@ def plan(args):
                                 "from there would cross the %s-%s border, which this plan cannot price or time."
                                 % (len(pick) - len(same), o_cc, d_cc))
             pick = same
+            untried = [e for e in untried if place_info(e["lat"], e["lon"])["country"] in (None, d_cc)]
         for e in pick:
             km, sec = heuristic_ride(e["straight_m"])
             e.update(ride_km=km, ride_free_s=sec, osrm=False)
@@ -4034,7 +4050,13 @@ def plan(args):
             finish.append(o)
         finish_info = {"radius_km": round(final_m / 1000.0, 1), "drop_points": [
             {"name": net.stop_name[e["stops"][0]], "km": round(e["ride_km"], 1), "cost": round(e["cost"], 2)}
-            for e in pick], "area": area}
+            for e in pick], "area": area, "untried": [net.stop_name[e["stops"][0]] for e in untried]}
+        if untried:
+            warnings.append("finish with a ride tried %d stops near the destination; %d more coach or train stops "
+                            "within %.0f km were not tried (%s), so a better plan through them can be missing."
+                            % (len(pick), len(untried), final_m / 1000.0,
+                               ", ".join(net.stop_name[e["stops"][0]] for e in untried[:3])
+                               + (", ..." if len(untried) > 3 else "")))
         if not pick:
             warnings.append("no stop within %.0f km of the destination has arrivals in the window, so no plan "
                             "finishes with a ride." % (final_m / 1000.0))

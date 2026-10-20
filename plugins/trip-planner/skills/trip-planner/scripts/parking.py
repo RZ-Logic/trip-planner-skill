@@ -2388,6 +2388,7 @@ def _overpass(query, warnings, max_age_h=24):
                                  timeout=max(5.0, min(40.0, budget - (time.time() - t0))),
                                  stale_max_h=oc.get("stale_max_h", 720), validate=_overpass_check)
         except urllib.error.HTTPError as e:
+            th.close_quietly(e)   # its body is never read; the code is all the warning needs
             if e.code in (429, 406, 504) and attempt == 0:   # busy: both slots taken, or the queue timed out
                 wait = min(30.0, budget - (time.time() - t0) - 10.0)   # keep 10 s for the retry itself
                 if wait > 0:

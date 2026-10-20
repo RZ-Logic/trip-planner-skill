@@ -2792,6 +2792,7 @@ def overpass_parking(box, warnings, max_age_h=24.0):
                 err, data = "Overpass: %s" % data["remark"][:120], None
             break
         except urllib.error.HTTPError as ex:
+            close_quietly(ex)   # its body is never read; the warning uses the code and message only
             err = ex
             if ex.code in (429, 504) and attempt == 0:
                 log("Overpass is busy (HTTP %d): waiting 30 s, then one retry" % ex.code)

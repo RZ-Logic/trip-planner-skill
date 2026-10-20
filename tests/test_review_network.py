@@ -644,5 +644,58 @@ class GeocodeCache(unittest.TestCase):
         self.assertEqual(hg.call_count, 1)
 
 
+def busy():
+    """Overpass's HTTP 429 with a body, as urllib raises it."""
+    return urllib.error.HTTPError(th.OVERPASS_URL, 429, "Too Many Requests", {}, io.BytesIO(b"busy"))
+
+
+class HttpErrorsClosed(unittest.TestCase):
+    """gem-G4: the Overpass retry loops close the HTTPError they drop (its body is never read); dc.fetch still
+    re-raises an HTTPError unread, because place_reviews reads the error body."""
+
+    def setUp(self):
+        fresh_cache(self)
+        for p in (mock.patch("time.sleep"), mock.patch.dict(th._LAST_CALL, clear=True)):
+            p.start()
+            self.addCleanup(p.stop)
+
+    def test_parking_overpass_retry_closes_busy_reply(self):
+        import parking as pk
+        err = busy()
+        with mock.patch.object(dc, "fetch_json", side_effect=[err, {"elements": []}]):
+            self.assertEqual(pk._overpass("q", []), {"elements": []})
+        self.assertTrue(err.fp.closed)
+
+    def test_parking_overpass_final_failure_closes(self):
+        import parking as pk
+        errs, w = [busy(), busy()], []
+        with mock.patch.object(dc, "fetch_json", side_effect=list(errs)):
+            self.assertIsNone(pk._overpass("q", w))
+        self.assertTrue(any("HTTP 429" in x for x in w), w)
+        self.assertTrue(all(e.fp.closed for e in errs))
+
+    def test_hubs_overpass_retry_closes_busy_reply(self):
+        err = busy()
+        with mock.patch.object(th, "http_get", side_effect=[err, json.dumps({"elements": []}).encode()]):
+            self.assertEqual(th.overpass_parking(th.box_around(43.5, -79.8, 3000), []), [])
+        self.assertTrue(err.fp.closed)
+
+    def test_hubs_overpass_final_failure_closes(self):
+        errs, w = [busy(), busy()], []
+        with mock.patch.object(th, "http_get", side_effect=list(errs)):
+            self.assertIsNone(th.overpass_parking(th.box_around(43.5, -79.8, 3000), w))
+        self.assertTrue(any("HTTP Error 429" in x for x in w), w)
+        self.assertTrue(all(e.fp.closed for e in errs))
+
+    def test_place_reviews_can_still_read_error_body(self):
+        import place_reviews
+        body = io.BytesIO(b'{"error": {"status": "PERMISSION_DENIED"}}')
+        err = urllib.error.HTTPError("https://places.example/v1", 403, "Forbidden", {}, body)
+        with mock.patch.object(dc._OPENER, "open", side_effect=err):
+            with self.assertRaises(urllib.error.HTTPError) as cm:
+                dc.fetch("https://places.example/v1", data=b"{}")
+        self.assertIn("PERMISSION_DENIED", place_reviews._http_error(cm.exception))
+
+
 if __name__ == "__main__":
     unittest.main()

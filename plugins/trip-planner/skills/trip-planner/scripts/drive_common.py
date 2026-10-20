@@ -146,7 +146,7 @@ def fetch(url, data=None, headers=None, timeout=30, min_interval=0.0, max_age_h=
 
     On a failure a cached copy older than `max_age_h` stands in when it is at most `stale_max_h` hours old
     (None: any age; 0: never), and stale_notes() reports it for the run's warnings. Otherwise the error is
-    raised.
+    raised; an HTTPError is raised unread, and the caller closes it (place_reviews reads its body).
 
     `allowed_hosts` (host names) refuses the URL, and any redirect, on another host with a ValueError or an
     HTTPError."""

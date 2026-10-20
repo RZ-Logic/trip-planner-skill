@@ -4,6 +4,49 @@ Releases of the trip-planner skill. Before shipping, each release was reviewed b
 agents (separate sessions with no part in the build) or an outside GPT review; agent findings were
 re-checked by a verifier before anything was fixed. Counts are given where they were recorded.
 
+## Unreleased
+
+**Review:** a ten-area review of 0.9.8 (reviewers, then one adversarial verifier per area) produced 110
+verified findings. They are fixed in batches below, test first; IDs in brackets refer to that review.
+
+### Batch 1: critical and high
+
+- **EV battery by trim.** A looked-up EV whose NRCan range and rating imply a battery more than 10%
+  smaller than its preset's (RWD, Standard Range, Light trims) plans with that smaller battery and a
+  WARNING asking for --battery-kwh; fast charging stays the preset's. The 2017 to 2021 IONIQ Electric is
+  no longer planned as an IONIQ 5, and an EV with no preset gets a battery scaled the same way.
+  [ev-vehicles-1, ev-vehicles-2]
+- **EV routes and the drive back.** A route whose charging (or drive back) cannot be planned is not
+  recommended when another route's can. Round trips that need a destination charge plan the drive back
+  from the charge the note advises (with a single-stall first charger's 20% reserve), show it as
+  "(charged at the destination)", and price the top-up at the home rate instead of $0.
+  [ext-1, ev-vehicles-3, ext-5, gem-G1S]
+- **Unpriced tolls.** Tolls the routing engine reports that are not priced here (US toll roads, crossings
+  missing from the list) no longer print as "No tolls": the route is marked "tolls not priced", the
+  toll-free comparison is kept, and TRADE-OFF says so. A Canada-US drive over an unlisted crossing gets the
+  30 min border allowance and a passport reminder. adding-a-region.md no longer says toll roads can be
+  added to tolls.json. [drive-core-1, architecture-product-6]
+- **Time zones.** New --tz flag for origins on another clock (Kenora: --tz America/Winnipeg); an origin
+  outside the region files with no --tz gets a WARNING that Toronto time was assumed. [drive-core-2]
+- **US border cities.** Detroit, Buffalo and other US places inside the Ontario boxes are no longer
+  treated as Ontario: their feeds are discovered, rides use a generic estimate instead of Ontario Uber
+  rates with HST, cross-border trips get a warning and final rides from across the border are left out.
+  The country comes from a town-level lookup; offline, the boxes decide as before. [hubs-pricing-io-1]
+- **No ride-hail at the origin.** Trips starting where the region file says there is no ride-hail
+  (Sauble Beach, Tobermory) price the first ride and ride-all-the-way as a local taxi with a 30 min wait
+  and no Uber link; a sparse origin gets a book-ahead warning. [hubs-pricing-io-2, architecture-product-7]
+- **Book-by in traffic.** Depart-mode book-by times, the stretch connection, the arrive-by backup,
+  finish-with-a-ride options and the short first ride are timed in the traffic at the pickup, not at the
+  start time, so a book-by that falls into rush hour no longer misses the train. [hubs-engine-1]
+- **Parking rate text.** A price written before its window charges that window; a night maximum with no
+  hours no longer replaces the day maximum; "$2/hr Mon-Fri, Sat-Sun free" is paid on weekdays (a rate
+  that frees every paid day shows as price unknown, never $0); "free evenings and weekends" is no longer
+  inverted; "$3/hr, $10 after 5pm" charges the daytime rate. [parking-1, parking-2, parking-verifier-1,
+  parking-verifier-2]
+- **OSM opening hours.** Day forms, several rules, "off" and public holidays ("Mo-Fr 07:00-19:00; Su
+  off") are read, so a lot closed during the stay no longer fits; hours that cannot be read show in the
+  lot's notes and check line. [parking-5]
+
 ## 0.9.8 (2026-10-12)
 
 **Review:** a code, test and security review by Sonnet and Opus agents raised 80 findings. Verifiers

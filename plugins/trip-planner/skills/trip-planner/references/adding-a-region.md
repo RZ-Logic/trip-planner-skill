@@ -105,8 +105,9 @@ Rules:
   gets `"holiday_service": "none" | "sunday" | "saturday"` (default `as_feed`: trust the file), applied on
   the region's statutory dates (`"stat": false` dates are skipped) or, better, on the feed's own
   `holiday_dates` list (agencies differ: one runs on Easter Monday, another stops on Easter Sunday).
-  Trips in the Ontario region files (`ontario`, `gtha`) also get the Ontario ESA holidays computed for the
-  trip year, for traffic and station parking prices.
+  Hub ride and drive traffic and station parking prices use the holidays of the trip's own region files
+  only (none with `--region none`). Trips in the Ontario region files (`ontario`, `gtha`) also get the
+  Ontario ESA holidays computed for the trip year.
 - `exclude_routes`: route ids, short or long names to drop from a feed (a train in the file that is not
   running yet).
 - `board_buffer_min`: minutes a rider must be at the stop before a coach or train leaves (VIA, FlixBus,

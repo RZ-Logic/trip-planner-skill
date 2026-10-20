@@ -3558,9 +3558,11 @@ def plan(args):
     ride_time = deadline - dt.timedelta(minutes=60) if arrive_by else depart
     tf_basis = None
     # traffic.json's areas are drawn for Ontario: elsewhere every drive stays on the congested rows
-    area_model = any((r or {}).get("id") in TRAFFIC_AREA_REGIONS for r in ([home] + list(extra) if home else []))
-    # the region lists stop at the end of next year: an Ontario trip also gets the ESA holidays for its year
-    hol = stat_holidays(regions, range(day.year - 1, day.year + 2) if area_model else ())
+    trip_regions = [home] + list(extra) if home else []
+    area_model = any((r or {}).get("id") in TRAFFIC_AREA_REGIONS for r in trip_regions)
+    # holidays of the trip's own region files only (a US trip keeps its working days); the region lists stop at
+    # the end of next year: an Ontario trip also gets the ESA holidays for its year
+    hol = stat_holidays(trip_regions, range(day.year - 1, day.year + 2) if area_model else ())
     if args.traffic_factor:
         tf = args.traffic_factor
     elif car:   # leave-by on the planning allowance, like drive_plan.py, not the typical time

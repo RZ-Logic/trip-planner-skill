@@ -230,8 +230,14 @@ class RideTrafficByArea(unittest.TestCase):
                          row("congested", "daytime")["typical"])                # Canada Day: no weekday peak
 
     def test_listed_holiday_ride_is_not_priced_at_the_weekday_peak(self):
+        # the trip's own region file lists the holiday (outside the traffic areas, so the congested rows apply);
+        # with --region none no region file is the trip's, see HolidaysFromTheTripsOwnRegions
+        listed = {"id": "listed", "name": "Listed holidays (test)", "timezone": "America/Toronto", "feeds": [],
+                  "bbox": {"min_lat": 43.0, "max_lat": 44.4, "min_lon": -80.3, "max_lon": -78.5},
+                  "holidays": [{"date": "2027-07-01", "name": "Canada Day"}]}
         p = train_at("08:30:00", "08:50:00", calendar=ALL_YEARS)
-        res = run(HUB_ARGS + ["--arrive-by", "2027-07-01 11:30", "--feed", "t=" + p] + BASE)
+        res = run(HUB_ARGS + ["--arrive-by", "2027-07-01 11:30", "--feed", "t=" + p, "--no-discover", "--routing",
+                              "estimate"], regions=[listed])
         o = option(res, "Hub H")
         self.assertAlmostEqual(o["ride_min"], round(FREE_S * row("congested", "daytime")["typical"] / 60.0, 1),
                                places=1)                                         # was x1.45 on Canada Day
@@ -394,6 +400,24 @@ class OneHolidaySource(unittest.TestCase):
                    "Hub H")
         self.assertAlmostEqual(o["ride_min"], round(FREE_S * row("congested", "weekday peak")["typical"] / 60.0, 1),
                                places=1)
+
+
+# ------------------------------------------------------------- review follow-up (architecture-product-3, tests-ci-eng-6)
+class HolidaysFromTheTripsOwnRegions(unittest.TestCase):
+    def test_chicago_trip_is_not_timed_on_an_ontario_holiday(self):
+        # the real region files load (ontario.json lists 2027-05-24, Victoria Day), but --region none uses none of
+        # them: an ordinary US Monday keeps the weekday peak
+        stops = [("H", "Hub H", 41.6900, -87.6000), ("C", "Dest C", 41.8000, -87.6000)]
+        p = feed(stops, [("X", "WK", "x1", "C")],
+                 [("x1", "08:30:00", "08:30:00", "H", 1, 0, 0), ("x1", "08:50:00", "08:50:00", "C", 2, 0, 0)],
+                 calendar=ALL_YEARS)
+        free = th.heuristic_ride(th.haversine_m(41.5, -87.6, 41.69, -87.6))[1]
+        for day in ("2027-05-17", "2027-05-24"):
+            res = run(["--origin", "41.5000,-87.6000", "--dest", "41.8000,-87.6000", "--arrive-by", day + " 11:30",
+                       "--feed", "t=" + p, "--min-saving", "0", "--radius-km", "25", "--origin-walk-m", "300"] + BASE)
+            o = option(res, "Hub H")
+            self.assertAlmostEqual(o["ride_min"], round(free * row("congested", "weekday peak")["typical"] / 60.0, 1),
+                                   places=1, msg=day)                            # 2027-05-24 was x1.20
 
 
 if __name__ == "__main__":

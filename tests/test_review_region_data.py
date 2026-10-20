@@ -1,7 +1,7 @@
 """Regression tests for the review's region data findings: the Ontario region's curated fares and timetables
 (distance- and zone-based rural fares shown as approximate, route-level prices; hand-entered and projected
 timetables flagged at run time, region files past their recheck age), the region notes against the data, and
-the docs, manifests and zip against the code (flags, labels, versions, paths, zip contents, coverage numbers).
+the docs, manifests and zip against the code (flags, labels, versions, paths, zip contents, example numbers).
 
 Offline: the bundled region files and docs, synthetic legs, plan runs with every network call mocked, a fixed clock.
 Run: python -m unittest tests.test_review_region_data -v
@@ -401,6 +401,13 @@ def parser_actions():
     return [a for ap in (th.build_parser(), drive_plan.build_parser()) for a in ap._actions]
 
 
+def readme_section(readme, start, end):
+    """README text from the heading line ending in start to the next line starting with end."""
+    m = re.search(r"^#+ .*%s\n" % re.escape(start), readme, re.M)
+    rest = readme[m.end():]
+    return rest[:rest.index(end)]
+
+
 def load_build_zip():
     """tools/build_zip.py as a module (it is not a package)."""
     spec = importlib.util.spec_from_file_location("build_zip", os.path.join(TOOLS_DIR, "build_zip.py"))
@@ -412,7 +419,8 @@ def load_build_zip():
 class DocContract(unittest.TestCase):
     """docs-contract-9: nothing checked the docs, manifests or zip against the code, so a renamed flag or label,
     a version bump in one file, or a stray file in the zip went unnoticed. docs-contract-7: README's coverage
-    claim used numbers from another run than its own example and timed only the scan."""
+    claim used numbers from another run than its own example and timed only the scan. docs-contract-11: a
+    'Real trips' row said it was a home run but repeated the stand-in example to the cent."""
 
     def test_every_flag_in_the_docs_exists(self):
         known = set()
@@ -501,6 +509,16 @@ class DocContract(unittest.TestCase):
         bd = read("docs/build-decisions.md")
         self.assertIn("that is %d hubs" % hubs, bd)
         self.assertIn("%d rate-limited calls" % hubs, bd)
+
+    def test_real_trip_rows_are_not_the_stand_in_example_unless_they_say_so(self):
+        readme = read("README.md")
+        example = readme_section(readme, "Example", "\n---")
+        amounts = set(re.findall(r"\$\d+\.\d\d", example))
+        rows = [ln for ln in readme_section(readme, "Real trips", "\n### ").splitlines() if ln.startswith("| **")]
+        self.assertGreaterEqual(len(rows), 5)
+        for row in rows:
+            if len(set(re.findall(r"\$\d+\.\d\d", row)) & amounts) >= 2:
+                self.assertTrue(re.search(r"stand-in|example above", row), row)
 
 
 if __name__ == "__main__":

@@ -158,12 +158,12 @@ The trade-off prices the default case, no transponder: the $13.05 toll, the $5 a
 
 ### Real trips
 
-From a home in Milton (the address is not published), October 2026, except the EV run. The quick start and the example above start from a public stand-in point (Milton Community Park), so their distances and times differ a little.
+From a home in Milton (the address is not published), October 2026, except the EV run and the Bay St run, which is the driving example above. The quick start and the examples start from a public stand-in point (Milton Community Park), so their distances and times differ a little from the home runs.
 
 | Trip | Outcome |
 |---|---|
 | **Milton to Mississauga, weekday 21:00** (ride + transit) | Uber 7.6 km to the Bronte Rd @ Hwy 407 Park & Ride, then a GO bus: about $20 and 22:19, against $34 for Uber all the way and 23:17 by transit alone. |
-| **Milton to Bay St, arrive by 09:00** (drive) | Toll-free, leave by 07:03; the 407 only lets you leave 3 min later, for $18.52. Better: Milton GO, $21.74 there and back against $31.87 driving and parking. |
+| **Milton to Bay St, arrive by 09:00** (drive; the example above, from the stand-in point) | Toll-free, leave by 07:03; the 407 only lets you leave 3 min later, for $18.52. Better: Milton GO, $21.74 there and back against $31.87 driving and parking. |
 | **Milton to the Toronto Island ferry, Sunday** (drive) | The first version ranked a Green P lot first that **closed in 2021**; a manual check caught it. Closed lots are now dropped, possibly closed ones flagged, and stale ones carry a check line. |
 | **Milton to Niagara Falls, Sunday 13:51** (TomTom live) | A 10 min jam showed up about 30 km out, near Burlington. The 407 saved about 16 min each way for $14.85 without a transponder. The agent verified a city lot on Ellen Ave at $12 for 8 h, against $30 at Table Rock. |
 | **Toronto to Ottawa, Equinox EV at 80%** | One stop at a 100 kW FLO charger at km 211, 40 min, about $11.73; arrives with 20%. |

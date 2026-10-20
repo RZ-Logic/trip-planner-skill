@@ -83,9 +83,9 @@ are in range. Ask the user for a dropped pin or `lat,lon`.
   forbid price comparison; Lyft's developer program is closed. Do not scrape app internals.
 - Estimate with the region's rate card (`ride_pricing` in the region JSON), then tell the user to
   confirm in the app. Upfront prices already include sales tax. Off-peak they sit close to the
-  published rate card plus tax (GTHA, checked 2026-10-10: Uber's own averages ran 0.90x to 1.19x of it,
-  about 1.02x on average; Uber's one-month average per route, and Uber does not say which hours or
-  surcharges it includes); surge raises them.
+  published rate card plus tax (GTHA, one-off check 2026-10-10 on 12 routes whose list is not in this
+  repo: Uber's own averages ran 0.90x to 1.19x of it, about 1.02x on average; Uber's one-month average
+  per route, and Uber does not say which hours or surcharges it includes); surge raises them.
 - **Calibration source**: Uber publishes average UberX prices per city pair (past month):
   `https://www.uber.com/global/en/r/routes/<from>-<state>-<country>-to-<to>-<state>-<country>/`
   (e.g. `milton-on-ca-to-mississauga-on-ca`). Use several pages to fit or check a region's rate card;

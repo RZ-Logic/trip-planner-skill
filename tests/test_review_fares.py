@@ -375,5 +375,34 @@ class RankingCountsTheFare(unittest.TestCase):
                          [(1, 16.66), (3, 11.0), (4, 10.5)])
 
 
+# ------------------------------------------------------------------------------------ architecture-product-10
+class RankingNoFinerThanTheRateCard(unittest.TestCase):
+    """Ride prices are rate-card estimates, so no list splits hubs on less than the BEST TRADE-OFFS step."""
+
+    def feed(self):
+        # one bus: Hub A 10:40, M 10:50, Hub B 10:55, Dest C 11:45; a train from M at 10:58 reaches C at 11:05
+        stops = [("A", "Hub A", HUB_1[0], HUB_1[1]), ("M", "Change M", HUB_2[0], HUB_2[1]),
+                 ("B", "Hub B", HUB_3[0], HUB_3[1]), ("C", "Dest C", DEST[0], DEST[1])]
+        p = os.path.join(tempfile.mkdtemp(dir=_TMP), "f.zip")
+        make_feed(p, stops, [("BUS", "WK", "b1", "C"), ("TRAIN", "WK", "t1", "C")],
+                  [("b1", "10:40:00", "10:40:00", "A", 1, 0, 0), ("b1", "10:50:00", "10:50:00", "M", 2, 0, 0),
+                   ("b1", "10:55:00", "10:55:00", "B", 3, 0, 0), ("b1", "11:45:00", "11:45:00", "C", 4, 0, 0),
+                   ("t1", "10:58:00", "10:58:00", "M", 1, 0, 0), ("t1", "11:05:00", "11:05:00", "C", 2, 0, 0)])
+        return p
+
+    def test_same_bus_a_few_cents_cheaper_is_not_listed(self):
+        # ride all the way 60 (step 3): Hub B boards Hub A's bus, arrives 40 minutes later, saves 0.50
+        with priced_rides({DEST: 60.0, HUB_1: 20.0, HUB_2: 40.0, HUB_3: 19.5}):
+            res = run(plan_args(self.feed(), "--min-saving", "0"))
+        self.assertEqual([o["hub"] for o in res["pareto"]], ["Hub A"])
+        self.assertNotIn("Hub B", [o["hub"] for o in res["others"]])                       # was listed
+        self.assertEqual(res["hidden_hubs"]["same_vehicle"], 2)   # with Change M, dearer on Hub A's train; was 1
+
+    def test_same_bus_more_than_a_step_cheaper_is_listed(self):
+        with priced_rides({DEST: 60.0, HUB_1: 20.0, HUB_2: 40.0, HUB_3: 16.0}):   # saves 4, more than the step
+            res = run(plan_args(self.feed(), "--min-saving", "0"))
+        self.assertEqual([o["hub"] for o in res["pareto"]], ["Hub A", "Hub B"])
+
+
 if __name__ == "__main__":
     unittest.main()

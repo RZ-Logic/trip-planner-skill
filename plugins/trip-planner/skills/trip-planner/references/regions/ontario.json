@@ -90,7 +90,7 @@
     "tax": 0.13,
     "uplift": 1.0,
     "out_of_area_per_km": 0.35,
-    "source": "Uber Ontario P2P rate addendum 2024-02-22 by rate region, + 13% HST; checked against 39 Uber route averages 2026-10-10 (about +/-15%)",
+    "source": "Uber Ontario P2P rate addendum 2024-02-22 by rate region, + 13% HST; checked once against 39 Uber route averages 2026-10-10 (about +/-15%; route list not published in this repo)",
     "currency": "CAD"
   },
   "ride_pricing_areas": [
@@ -158,7 +158,7 @@
         "uplift": 1.0,
         "out_of_area_per_km": 0.35,
         "currency": "CAD",
-        "source": "Uber Ontario P2P rate addendum 2024-02-22, London rate region, + 13% HST; checked against Uber's own route averages 2026-10-10 (about +/-15%). Rides that end outside this region add $0.35/km for the whole trip"
+        "source": "Uber Ontario P2P rate addendum 2024-02-22, London rate region, + 13% HST; checked once against Uber's own route averages 2026-10-10 (about +/-15%; route list not published in this repo). Rides that end outside this region add $0.35/km for the whole trip"
       }
     },
     {
@@ -212,7 +212,7 @@
         "uplift": 1.0,
         "out_of_area_per_km": 0.35,
         "currency": "CAD",
-        "source": "Uber Ontario P2P rate addendum 2024-02-22, Niagara rate region, + 13% HST; checked against Uber's own route averages 2026-10-10 (about +/-15%). Rides that end outside this region add $0.35/km for the whole trip"
+        "source": "Uber Ontario P2P rate addendum 2024-02-22, Niagara rate region, + 13% HST; checked once against Uber's own route averages 2026-10-10 (about +/-15%; route list not published in this repo). Rides that end outside this region add $0.35/km for the whole trip"
       }
     },
     {
@@ -278,7 +278,7 @@
         "uplift": 1.0,
         "out_of_area_per_km": 0.35,
         "currency": "CAD",
-        "source": "Uber Ontario P2P rate addendum 2024-02-22, Hamilton rate region, + 13% HST; checked against Uber's own route averages 2026-10-10 (about +/-15%). Rides that end outside this region add $0.35/km for the whole trip"
+        "source": "Uber Ontario P2P rate addendum 2024-02-22, Hamilton rate region, + 13% HST; checked once against Uber's own route averages 2026-10-10 (about +/-15%; route list not published in this repo). Rides that end outside this region add $0.35/km for the whole trip"
       }
     },
     {
@@ -345,7 +345,7 @@
         "uplift": 1.0,
         "out_of_area_per_km": 0.35,
         "currency": "CAD",
-        "source": "Uber Ontario P2P rate addendum 2024-02-22, Kitchener-Waterloo rate region, + 13% HST; checked against Uber's own route averages 2026-10-10 (about +/-15%). Rides that end outside this region add $0.35/km for the whole trip"
+        "source": "Uber Ontario P2P rate addendum 2024-02-22, Kitchener-Waterloo rate region, + 13% HST; checked once against Uber's own route averages 2026-10-10 (about +/-15%; route list not published in this repo). Rides that end outside this region add $0.35/km for the whole trip"
       }
     },
     {
@@ -423,7 +423,7 @@
         "uplift": 1.18,
         "out_of_area_per_km": 0.35,
         "currency": "CAD",
-        "source": "Uber Ontario P2P rate addendum 2024-02-22, Ottawa rate region, + 13% HST; checked against Uber's own route averages 2026-10-10 (about +/-15%). Rides that end outside this region add $0.35/km for the whole trip"
+        "source": "Uber Ontario P2P rate addendum 2024-02-22, Ottawa rate region, + 13% HST; checked once against Uber's own route averages 2026-10-10 (about +/-15%; route list not published in this repo). Rides that end outside this region add $0.35/km for the whole trip"
       }
     },
     {
@@ -498,7 +498,7 @@
         "uplift": 1.0,
         "out_of_area_per_km": 0.35,
         "currency": "CAD",
-        "source": "Uber Ontario P2P rate addendum 2024-02-22, Kingston rate region, + 13% HST; checked against Uber's own route averages 2026-10-10 (about +/-15%). Rides that end outside this region add $0.35/km for the whole trip"
+        "source": "Uber Ontario P2P rate addendum 2024-02-22, Kingston rate region, + 13% HST; checked once against Uber's own route averages 2026-10-10 (about +/-15%; route list not published in this repo). Rides that end outside this region add $0.35/km for the whole trip"
       }
     },
     {
@@ -546,7 +546,7 @@
         "uplift": 0.87,
         "out_of_area_per_km": 0.35,
         "currency": "CAD",
-        "source": "Uber Ontario P2P rate addendum 2024-02-22, Windsor rate region, + 13% HST; checked against Uber's own route averages 2026-10-10 (about +/-15%). Rides that end outside this region add $0.35/km for the whole trip"
+        "source": "Uber Ontario P2P rate addendum 2024-02-22, Windsor rate region, + 13% HST; checked once against Uber's own route averages 2026-10-10 (about +/-15%; route list not published in this repo). Rides that end outside this region add $0.35/km for the whole trip"
       }
     },
     {
@@ -629,7 +629,7 @@
         "uplift": 1.0,
         "out_of_area_per_km": 0.35,
         "currency": "CAD",
-        "source": "Uber Ontario P2P rate addendum 2024-02-22, Toronto rate region, + 13% HST; checked against Uber's own route averages 2026-10-10 (about +/-15%). Rides that end outside this region add $0.35/km for the whole trip"
+        "source": "Uber Ontario P2P rate addendum 2024-02-22, Toronto rate region, + 13% HST; checked once against Uber's own route averages 2026-10-10 (about +/-15%; route list not published in this repo). Rides that end outside this region add $0.35/km for the whole trip"
       }
     }
   ],

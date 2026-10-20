@@ -52,7 +52,8 @@ is more than six months old.
   Owen Sound), Hamilton, Kitchener-Waterloo (with Guelph, Brantford, Oxford), London (Middlesex, Elgin,
   Lambton incl. Grand Bend and Sarnia), Niagara, Kingston, Ottawa, Windsor. **A ride that starts in one
   region and ends outside it adds $0.35/km for the whole distance** (Milton to Guelph or Hamilton, Kingston
-  to Gananoque). Checked against 39 of Uber's own route averages: within about 15%.
+  to Gananoque). A one-off check against 39 of Uber's own route averages (2026-10-10) found them within
+  about 15%; that route list is not published in this repo.
 - **No rate card, ride-hail sparse or absent:** Huron (Goderich, Bayfield), Bruce (Tobermory, Lion's Head,
   Sauble), Perth (Stratford), Muskoka (an Uber pilot since 2026-08-24, few drivers), Leeds and Grenville
   (Gananoque), Prince Edward County (uses the Uride app), Peterborough, Norfolk (Port Dover). The script

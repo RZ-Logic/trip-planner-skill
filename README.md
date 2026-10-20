@@ -231,7 +231,7 @@ On Windows, Python trusts only root certificates Windows has already downloaded.
   - Cheaper lots beyond the walk limit can sit in the notes instead of the ranked list.
 - **Prices are estimates.**
   - Rural operators with distance or zone fares (Huron Shores, PC Connect, GOST, LINX, Corridor 11, Middlesex Route 4) show one common fare as "about" that price, with the scale.
-  - Uber estimates come from rate cards. Across 12 GTHA routes, Uber's published averages were 1.02x our estimates on average; individual ratios ranged from 0.90x to 1.19x. Real quotes need the rider's login.
+  - Uber estimates come from rate cards. A one-off check on 12 GTHA routes found Uber's published averages 1.02x our estimates on average, individual ratios 0.90x to 1.19x; that route list is not in the repo, and a test pins only two Milton routes within $1. Ride + fare totals within 5% count as equal when hubs are ranked. Real quotes need the rider's login.
   - 407 tolls are computed from the rate chart; 407 ETR's own calculator needs reCAPTCHA, so it is never called.
   - Only the 407 ETR and ten listed border crossings are priced. Other tolls a routing engine reports (US toll roads, crossings not in the list such as Sault Ste. Marie) print as "tolls not priced", with a toll-free comparison and a WARNING; the OSRM fallback cannot see them.
 - **Timetables, not live departures.** The agent checks live departures for same-day trips. On-demand transit is not in timetable data. Hand-entered timetables are marked in FEEDS; projected seasons are flagged "assumed" with a WARNING, and region files over six months old raise one too.

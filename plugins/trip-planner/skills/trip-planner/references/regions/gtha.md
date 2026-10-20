@@ -128,10 +128,13 @@ paid: a free transfer never restarts it.
 - **UP Express** is not in One Fare: UP and GO are separate fares.
 
 **Ride-hail prices.** `gtha.json` uses Uber's Ontario rate card (Toronto region = Toronto, Halton,
-Peel) plus 13% HST with no uplift. Checked 2026-10-10 against Uber's own UberX one-month averages on
-12 GTA routes: Uber's averages were 1.02x our estimates on average, individual routes 0.90x to 1.19x. Off-peak quotes are usually at
-or a little below the estimate, Wait & Save 10 to 25% lower, surge higher. Trips that start in one
-region and end in another (for example Halton to Hamilton or Guelph) add about $0.35/km; the script
+Peel) plus 13% HST with no uplift. A one-off check on 2026-10-10 against Uber's own UberX one-month
+averages on 12 GTA routes found Uber's averages 1.02x our estimates on average, individual routes 0.90x
+to 1.19x. That route list is not published in this repo, so the figures are a record, not a tested
+bound; a test pins two Milton routes (to Trafalgar 407 and to Square One) within $1. The ranking
+treats ride + fare totals within 5% of the ride-all cost (at least $1) as equal. Off-peak quotes are
+usually at or a little below the estimate, Wait & Save 10 to 25% lower, surge higher. Trips that start
+in one region and end in another (for example Halton to Hamilton or Guelph) add about $0.35/km; the script
 applies this, and prices Hamilton and Guelph pickups on their own regional cards (from `ontario.json`).
 Airport pickups use different rates, which the script does not model.
 

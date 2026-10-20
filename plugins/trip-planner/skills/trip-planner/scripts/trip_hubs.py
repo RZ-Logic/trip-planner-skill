@@ -4159,7 +4159,8 @@ def plan(args):
         return (rides[0]["trip_key"], rides[-1]["trip_key"]) if rides else (None, None)
 
     # runners-up: skip hubs that board the same first vehicle, or finish on the same last vehicle,
-    # as an option already listed, unless they cost less in total (cost_of: fare included)
+    # as an option already listed, unless they cost more than one step less in total (cost_of: fare
+    # included; ride prices are rate-card estimates, so a smaller saving is not a real one)
     firsts, lasts = {}, {}   # vehicle key -> lowest cost_of among the listed hubs on it
 
     def listed(o):
@@ -4177,7 +4178,7 @@ def plan(args):
         if id(o) == keep_rt:   # the round-trip keep: exempt from the same-vehicle rule and --top
             runners.append(o)
             continue
-        if cost_of(o) >= min(firsts.get(first, INF), lasts.get(last, INF)):
+        if cost_of(o) > min(firsts.get(first, INF), lasts.get(last, INF)) - step:
             same_vehicle += 1
             continue
         if len([r for r in runners if id(r) != keep_rt]) >= max(0, args.top - len(pareto)):
@@ -4783,7 +4784,8 @@ def render(res):
     if hid.get("same_vehicle") or hid.get("past_top"):
         bits = ([("%d past --top %d (--top N lists them)" % (hid["past_top"], hid.get("top", 0)))]
                 if hid.get("past_top") else []) + (
-            ["%d on the same first or last vehicle as a listed hub, at no lower total (--all lists them)"
+            ["%d on the same first or last vehicle as a listed hub, at no lower total beyond the 5%% margin "
+             "(--all lists them)"
              % hid["same_vehicle"]] if hid.get("same_vehicle") else [])
         out.append("NOT SHOWN  %d more hubs that beat the baselines: %s."
                    % (hid.get("past_top", 0) + hid.get("same_vehicle", 0), ", ".join(bits)))

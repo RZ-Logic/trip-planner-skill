@@ -22,6 +22,7 @@ import os
 import sys
 import tempfile
 import unittest
+import urllib.parse
 from contextlib import redirect_stderr, redirect_stdout
 from unittest import mock
 
@@ -135,6 +136,51 @@ class DepartBookByTraffic(unittest.TestCase):
         res = run(HUB_ARGS + ["--depart", "2026-10-15 15:00", "--feed", "t=" + train_at("16:30:00", "16:50:00"),
                               "--traffic-factor", "1.2"] + BASE)
         self.assertEqual(option(res, "Hub H")["book_by"], hms(16, 30) - (360 + int(FREE_S * 1.2) + 60 + 180))
+
+
+# --------------------------------------------------------------------------------------------- ext-2 (batch 2)
+def one_way_s(a, b):
+    """(seconds, metres) from a to b: northbound at 15 m/s, southbound at 7.5 m/s (one-way streets)."""
+    d = th.haversine_m(a[0], a[1], b[0], b[1]) * 1.3
+    return d / (15.0 if b[0] >= a[0] else 7.5), d
+
+
+def osrm_one_way(url, **_k):
+    """A fake OSRM table reply that honours sources= and destinations= (default: every point)."""
+    u = urllib.parse.urlsplit(url)
+    pts = [tuple(float(x) for x in c.split(","))[::-1] for c in u.path.split("/driving/")[1].split(";")]
+    q = urllib.parse.parse_qs(u.query)
+    src = [int(i) for i in q["sources"][0].split(";")] if "sources" in q else list(range(len(pts)))
+    dst = [int(i) for i in q["destinations"][0].split(";")] if "destinations" in q else list(range(len(pts)))
+    cell = lambda i, j, k: 0.0 if i == j else one_way_s(pts[i], pts[j])[k]  # noqa: E731
+    return json.dumps({"code": "Ok", "durations": [[cell(i, j, 0) for j in dst] for i in src],
+                       "distances": [[cell(i, j, 1) for j in dst] for i in src]}).encode()
+
+
+class FinalRideDirection(unittest.TestCase):
+    def test_osrm_table_to_origin_reads_point_to_origin(self):
+        with mock.patch.object(th, "http_get", side_effect=osrm_one_way) as hg:
+            out = th.osrm_table("https://x", (43.99, -79.80), [(43.90, -79.80)], to_origin=True)
+        self.assertAlmostEqual(out[0][0], one_way_s((43.90, -79.80), (43.99, -79.80))[0])
+        self.assertIn("destinations=0", hg.call_args[0][0])
+
+    def test_osrm_table_default_still_reads_origin_to_point(self):
+        with mock.patch.object(th, "http_get", side_effect=osrm_one_way):
+            out = th.osrm_table("https://x", (43.30, -79.80), [(43.49, -79.80), (43.20, -79.80)])
+        self.assertAlmostEqual(out[0][0], one_way_s((43.30, -79.80), (43.49, -79.80))[0])
+        self.assertAlmostEqual(out[1][0], one_way_s((43.30, -79.80), (43.20, -79.80))[0])
+
+    def test_final_ride_is_timed_from_the_drop_point_to_the_door(self):
+        stops = [("O", "Origin stop", 43.3010, -79.8000), ("T", "Town stop", 43.9000, -79.8000)]
+        p = feed(stops, [("K", "WK", "k1", "T")],
+                 [("k1", "06:30:00", "06:30:00", "O", 1, 0, 0), ("k1", "08:30:00", "08:30:00", "T", 2, 0, 0)])
+        with mock.patch.object(th, "http_get", side_effect=osrm_one_way):
+            res = run(["--origin", "43.3000,-79.8000", "--dest", "43.9900,-79.8000", "--depart", "2026-10-15 06:00",
+                       "--feed", "t=" + p, "--min-saving", "0", "--traffic-factor", "1.0", "--region", "none",
+                       "--no-discover", "--routing", "osrm"])
+        fin = res["finish_with_ride"][0]["final_ride"]
+        x_to_d = one_way_s((43.90, -79.80), (43.99, -79.80))[0]
+        self.assertAlmostEqual(fin["min"], round(x_to_d / 60.0, 1), places=1)   # was the D->X time, twice as long
 
 
 if __name__ == "__main__":

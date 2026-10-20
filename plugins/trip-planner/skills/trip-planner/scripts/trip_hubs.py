@@ -2410,7 +2410,9 @@ def heuristic_ride(straight_m):
     return road_km, road_km / speed * 3600 + 120
 
 
-def osrm_table(base, origin, points):
+def osrm_table(base, origin, points, to_origin=False):
+    """Driving (seconds, metres) from `origin` to each point, or with to_origin from each point to `origin`
+    (a final ride is driven from the drop point to the destination). None where OSRM has no route."""
     out = []
     for start in range(0, len(points), OSRM_BATCH):
         if start // OSRM_BATCH >= OSRM_MAX_REQUESTS:
@@ -2418,12 +2420,19 @@ def osrm_table(base, origin, points):
             break
         chunk = points[start:start + OSRM_BATCH]
         coords = ";".join("%.5f,%.5f" % (lon, lat) for lat, lon in [origin] + chunk)
-        url = "%s/table/v1/driving/%s?sources=0&annotations=duration,distance" % (base.rstrip("/"), coords)
+        ends = "sources=0"
+        if to_origin:
+            ends = "sources=%s&destinations=0" % ";".join(str(i) for i in range(1, len(chunk) + 1))
+        url = "%s/table/v1/driving/%s?%s&annotations=duration,distance" % (base.rstrip("/"), coords, ends)
         data = json.loads(http_get(url, timeout=30, min_interval=1.0))  # demo servers: max 1 request/second
         if data.get("code") != "Ok":
             raise RuntimeError("OSRM error: %s" % (data.get("message") or data.get("code")))
-        durs = data["durations"][0][1:]
-        dists = (data.get("distances") or [[None] * (len(chunk) + 1)])[0][1:]
+        if to_origin:   # one row per point, one column (the origin)
+            durs = [row[0] for row in data["durations"]]
+            dists = [row[0] for row in (data.get("distances") or [[None]] * len(chunk))]
+        else:
+            durs = data["durations"][0][1:]
+            dists = (data.get("distances") or [[None] * (len(chunk) + 1)])[0][1:]
         for du, di in zip(durs, dists):
             out.append(None if du is None or di is None else (du, di))
     return out
@@ -3314,7 +3323,7 @@ def plan(args):
         if pick and args.routing in ("auto", "osrm"):
             for base in [args.osrm_url, OSRM_FALLBACK]:
                 try:
-                    res = osrm_table(base, (d_lat, d_lon), [(e["lat"], e["lon"]) for e in pick])
+                    res = osrm_table(base, (d_lat, d_lon), [(e["lat"], e["lon"]) for e in pick], to_origin=True)
                 except Exception:  # noqa: BLE001
                     continue
                 osrm_hosts.add(urllib.parse.urlsplit(base).netloc)

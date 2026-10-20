@@ -665,6 +665,32 @@ class DstParkedTime(unittest.TestCase):
         self.assertAlmostEqual(seen[-1], res["parking_stay_min"], delta=1)   # the lot is priced for that time
         self.assertEqual(res["parking_until"].hour, plain["parking_until"].hour - 1)       # the wall clock jumps
 
+class TorontoClockForTheGtha(unittest.TestCase):
+    """Follow-up to drive-core-2: with --tz for another zone the 407 rate table and the congested-area rows, which
+    are Ontario (Toronto) clock times, are read on the Toronto clock; times shown stay on the trip's clock."""
+
+    def test_407_band_and_gtha_rows_on_toronto_time(self):
+        f = _milton_markham()[0]
+        tor, wpg = copy.deepcopy(f), copy.deepcopy(f)
+        drt.retime(tor, dt.datetime(2026, 10, 14, 7, 0), dict(tdr.OPTS))
+        drt.retime(wpg, dt.datetime(2026, 10, 14, 6, 0), dict(tdr.OPTS, tz="America/Winnipeg"))   # the same instant
+        a, b = tor["etr"][0], wpg["etr"][0]
+        self.assertEqual(b["entry_time"], a["entry_time"] - dt.timedelta(hours=1))   # shown on the trip's clock
+        self.assertEqual((b["band_start"], b["toll_transponder"]), (a["band_start"], a["toll_transponder"]))
+        self.assertEqual(a["band_start"], "07:00")
+        self.assertEqual(wpg["typical_s"], tor["typical_s"])
+        self.assertIn("Toronto time", dp.band_text(b))
+        self.assertNotIn("Toronto time", dp.band_text(a))
+
+    def test_407_option_reads_gtha_rows_on_toronto_time(self):
+        r = tdr.calib_route("kingston_401")
+        wpg = dict(tdr.OPTS, tz="America/Winnipeg")
+        for hh, mm in ((5, 30), (7, 30), (10, 45), (13, 30), (19, 45)):   # Toronto clock, a Wednesday
+            when = dt.datetime(2026, 10, 14, hh, mm)
+            self.assertEqual(drt.wants_407_option(r, when - dt.timedelta(hours=1), wpg),
+                             drt.wants_407_option(r, when, dict(tdr.OPTS)), when)
+
+
 
 if __name__ == "__main__":
     unittest.main()

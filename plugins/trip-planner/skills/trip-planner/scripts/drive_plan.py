@@ -2848,7 +2848,8 @@ def band_text(s):
             end = starts[(starts.index(start) + 1) % len(starts)]
         except (KeyError, ValueError, IndexError):
             end = None
-    return "%s %s to %s band" % (kind, start, end) if end else "%s band from %s" % (kind, start)
+    tor = " (Toronto time)" if s.get("band_toronto") else ""   # --tz for another zone: the 407 runs on Toronto's clock
+    return ("%s %s to %s band%s" % (kind, start, end, tor)) if end else "%s band from %s%s" % (kind, start, tor)
 
 
 def etr_lines(r, transponder, fee):

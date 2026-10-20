@@ -328,9 +328,12 @@ def wants_407_option(route, depart, opts):
     tt = traffic_data()
     hol = set(opts.get("holidays") or ()) | tolls.holidays_default()
     getaway = _getaway_dir(route)
+    tor = _toronto(opts)
     t = gtha = busy = 0.0
     for c in route["chunks"]:
         when = depart + dt.timedelta(seconds=t)
+        if tor and (c.get("etr") or c["urban"]):
+            when = tor(when)
         if c["urban"] and c.get("area") == "GTHA":
             gtha += c["s"]
             if _row(tt["congested"], when, hol)["name"] in ("weekday peak", "weekday shoulder"):
@@ -939,6 +942,22 @@ def _clock(depart, opts):
     return lambda s: dc.add_s(depart, s, tz, reg)
 
 
+TRAFFIC_TZ = "America/Toronto"   # the 407 rate bands and the congested areas' rows are Ontario Eastern clock times
+
+
+def _toronto(opts):
+    """trip wall clock -> Toronto wall clock, for the 407 rate bands and the congested-area traffic rows (every
+    area in traffic.json is in the Eastern zone); None when the trip is on Toronto time (--tz for another zone)."""
+    tz, reg = opts.get("tz") or TRAFFIC_TZ, opts.get("region")
+    if tz == TRAFFIC_TZ:
+        return None
+
+    def conv(when):
+        utc = when - th.offset_at_local(when, tz, reg)[0]
+        return utc + th.offset_at_utc(utc, TRAFFIC_TZ, None)[0]
+    return conv
+
+
 def retime(route, depart, opts):
     """Recompute typical and plan times, arrivals, 407 entry times and toll prices for `depart`. Stops from
     set_stops move the clock (later chunks and 407 entries) but not typical_s, plan_s or arrive."""
@@ -952,6 +971,7 @@ def retime(route, depart, opts):
     wt = 1.0 if live else w
     getaway = None if tomtom else _getaway_dir(route)
     clock = _clock(depart, opts)
+    tor = _toronto(opts)
     t = p = base = 0.0
     marks = [(0.0, 0.0)]   # (base seconds, clock seconds: driving plus the stops passed)
     stats = {}   # (class, label) -> [base seconds, typical factor x base seconds, plan factor x base seconds]
@@ -964,6 +984,8 @@ def retime(route, depart, opts):
             si += 1
             marks.append((base, t + waited))
         when = clock(t + waited)
+        if tor and (c.get("etr") or c["urban"]):
+            when = tor(when)
         if tomtom:
             ft = 1.0
             fp, lab = tomtom_plan_factor(c, when, hol)
@@ -1007,11 +1029,12 @@ def retime(route, depart, opts):
     for sg in route["etr"]:
         sg["offset_s"] = round(to_typ(sg["offset_base_s"]), 1)
         entry = clock(sg["offset_s"]).replace(second=0, microsecond=0)
-        pt = tolls.price_407(sg, entry, True)
-        pc = tolls.price_407(sg, entry, False)
+        at = tor(entry) if tor else entry   # entry_time stays on the trip's clock; the band is Toronto time
+        pt = tolls.price_407(sg, at, True)
+        pc = tolls.price_407(sg, at, False)
         sg.update({"entry_time": entry, "band_start": pt["band_start"], "day_type": pt["day_type"],
                    "toll_transponder": pt["toll"], "toll_camera": pc["toll"], "zones": pt["zones"],
-                   "note": pc["note"]})
+                   "note": pc["note"], "band_toronto": bool(tor)})
         tot_tp += pt["toll"]
         tot_cam += pc["toll"]
     route["toll_407_transponder"] = round(tot_tp, 2)

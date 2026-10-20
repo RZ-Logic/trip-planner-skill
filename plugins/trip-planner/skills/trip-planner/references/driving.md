@@ -21,7 +21,7 @@ python3 scripts/drive_plan.py --origin "ORIGIN" --dest "DESTINATION" --depart "Y
 | Option | Use |
 |---|---|
 | `--depart`, `--arrive-by` | leave at a time (`now` works), or be at the door by a deadline |
-| `--tz America/Winnipeg` | the time zone for the times you give and see, for an origin outside the region files (default America/Toronto; a WARNING says when it was assumed). Arrival and parking times stay on the origin's clock |
+| `--tz America/Winnipeg` | the time zone for the times you give and see, for an origin outside the region files (default America/Toronto; a WARNING says when it was assumed). Arrival and parking times stay on the origin's clock; the 407 rate band and the city traffic rows are read on Toronto time |
 | `--stay-hours N`, `--leave-at HH:MM` | how long the car is parked (default 2 h), or when you leave (on the trip day); prices parking and times the return |
 | `--round-trip` | also prices the drive back after the stay (407 direction and time band change the toll) |
 | `--transponder` | you have a 407 ETR transponder (default: you do not, so camera charges apply) |

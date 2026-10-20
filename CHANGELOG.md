@@ -249,10 +249,20 @@ confirmed 31 problems in the fixes themselves; all are fixed below, test first.
   listed as such. SKILL.md, the README and both plugin manifests point to it ("code MIT; data see
   NOTICE"). City parking layers carry their licence links, and drive plans credit every city whose lot is
   shown on the SOURCES line. [data-integrity-2, security-tos-2, security-tos-6]
+- **Routing servers.** TRIP_PLANNER_VALHALLA_URL and TRIP_PLANNER_OSRM_URL (comma-separated) replace the keyless
+  demo routers everywhere: drive plans, park and ride, trip_hubs, --check-network, NETWORK BLOCKED and SOURCES.
+  Unset keeps the defaults; a value that is not a plain http(s) base URL is refused in one line. README and
+  sources.md now quote the usage terms: the OSRM demo servers and Open-Meteo's free API are for non-commercial
+  use; personal use fits, commercial or hosted use needs your own or a paid router. [architecture-product-1,
+  security-tos-1, drive-core-6]
+- **Onex and Megabus provenance.** README, architecture.md, build-decisions.md, sources.md and NOTICE now say
+  these three coach timetables were built by automated searches of the operators' booking systems and are kept by
+  the owner's decision; the timetables themselves are unchanged. [architecture-product-5, data-integrity-3]
+- **Kept as is.** A GO tap credits every earlier separately paid local fare within 2 h (PRESTO's exact rule is
+  unconfirmed; the case is rare), and rolling parking maximums count blocks from entry. Both are recorded in
+  build-decisions.md and pinned by tests. [gem-G2A, gem-G3]
 
-**Not fixed, waiting on owner decisions:** architecture-product-1 (non-commercial routing and weather
-hosts), architecture-product-5 (Onex and Megabus provenance), gem-G2A (PRESTO credits before a GO tap),
-gem-G3 (rolling-maximum semantics).
+All six owner decisions from the review are now settled.
 
 ## 0.9.8 (2026-10-12)
 

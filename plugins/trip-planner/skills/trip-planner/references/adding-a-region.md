@@ -31,6 +31,7 @@ history as a fallback URL.
   "id": "example",
   "name": "Example metro area",
   "timezone": "America/Chicago",
+  "country": "US",
   "dst_rule": "north_america",
   "utc_std_offset_hours": -6,
   "bbox": {"min_lat": 0, "max_lat": 0, "min_lon": 0, "max_lon": 0},
@@ -61,6 +62,10 @@ Rules:
 - Region `bbox` decides when the file is used: when the origin is inside it (its rate card, time
   zone and fares lead) or the destination is inside it (its feeds load too). Feed `bbox` (from the
   catalog or the feed's `stops.txt`) decides which feeds load for a trip.
+- `country` (ISO 3166-1 alpha-2, such as `CA` or `US`): a region file never claims a point that reverse
+  geocoding (town level) places in another country, so a box may reach across a border. Such ends get feed
+  discovery and a generic ride estimate, and final rides from across the border are left out. Without
+  `country`, or offline, the box alone decides.
 - `dst_rule` is `north_america`, `eu` or omitted (no daylight saving). It is only used when Python
   has no time zone database (common on Windows).
 - `ride_pricing.booking_fee_tiers` (optional) is a list of `[max_km, fee]` pairs. Keep `uplift` at

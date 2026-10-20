@@ -2,6 +2,7 @@
   "id": "gtha",
   "name": "Greater Toronto and Hamilton Area and neighbours, Ontario, Canada",
   "timezone": "America/Toronto",
+  "country": "CA",
   "bbox": {
     "min_lat": 42.85,
     "max_lat": 44.45,

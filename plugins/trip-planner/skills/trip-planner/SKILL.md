@@ -68,8 +68,9 @@ python3 ${CLAUDE_SKILL_DIR}/scripts/trip_hubs.py --origin "ORIGIN" --dest "DESTI
 - `--payment card|contactless|cash` sets the fare basis (default `card`: PRESTO or a fare card in a
   phone wallet; some agencies charge a bank-card tap the cash price).
 - **Most cities work.** Region files in `references/regions/` cover the GTHA and Ontario getaways;
-  elsewhere the script discovers local feeds in the MobilityDatabase catalog (`--discover` lists them,
-  `--feed id=URL` adds one; see `references/adding-a-region.md`).
+  elsewhere (US border cities such as Buffalo and Detroit too) the script discovers local feeds in the
+  MobilityDatabase catalog (`--discover` lists them, `--feed id=URL` adds one; see
+  `references/adding-a-region.md`).
 - **Long trips** (from 50 km) add intercity and rural service from `ontario.json`. From 60 km the
   window grows with the drive (up to 9 h, `--max-hours`) and plans ending with a ride from a stop short
   of the destination are listed (`--final-ride on|off`). If nothing is found, rerun 1 to 2 hours

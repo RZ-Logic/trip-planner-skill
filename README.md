@@ -149,7 +149,7 @@ The trade-off prices the default case, no transponder: the $13.05 toll, the $5 a
 - **Handoff.** Google Maps, Waze and Apple Maps links that navigate to the chosen lot.
 
 **Coverage.**
-- **Transit:** the Greater Toronto and Hamilton Area (13 working feeds; Grand River Transit is listed but skipped until a current file is available; transfer rules, Uber rate cards) and 48 Ontario getaway destinations, from Grand Bend and Tobermory to Muskoka, Prince Edward County and Niagara. Elsewhere, feeds are discovered automatically.
+- **Transit:** the Greater Toronto and Hamilton Area (13 working feeds; Grand River Transit is listed but skipped until a current file is available; transfer rules, Uber rate cards) and 48 Ontario getaway destinations, from Grand Bend and Tobermory to Muskoka, Prince Edward County and Niagara. Elsewhere, feeds are discovered automatically, including US cities inside the Ontario boxes (Detroit, Buffalo), which also get a generic ride estimate.
 - **Driving:** routes, OpenStreetMap parking and weather support trips beyond Ontario. Charger data covers the US and Canada (NLR, queried with `country=all`). The 407 model, fuel prices, city parking data and curated tourist parking are Ontario.
 
 ---
@@ -234,6 +234,7 @@ On Windows, Python trusts only root certificates Windows has already downloaded.
   - 407 tolls are computed from the rate chart; 407 ETR's own calculator needs reCAPTCHA, so it is never called.
   - Only the 407 ETR and ten listed border crossings are priced. Other tolls a routing engine reports (US toll roads, crossings not in the list such as Sault Ste. Marie) print as "tolls not priced", with a toll-free comparison and a WARNING; the OSRM fallback cannot see them.
 - **Timetables, not live departures.** The agent checks live departures for same-day trips. On-demand transit is not in timetable data.
+- **Border trips are partial.** Rides that would cross the Canada-US border are flagged, not priced or timed with the crossing, and final rides from across the border are left out. Which country an end is in comes from a town-level Nominatim lookup; offline, the region boxes decide.
 - **Ontario-first driving data.** Outside Ontario you get routes, OpenStreetMap parking and weather, plus `--fuel-price`.
 - **Untested keys.** Ontario 511, Google Places and a personal NLR key are tested only against replies shaped like their documentation. TomTom has run live.
 - **The Transitous second opinion is light-use only.** Transitous is open-source, non-commercial and best effort, and asks to be contacted before routing at volume, so `--crosscheck` is optional and off by default.

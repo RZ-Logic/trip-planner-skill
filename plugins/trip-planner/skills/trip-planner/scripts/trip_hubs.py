@@ -593,7 +593,7 @@ SHARED_HOSTS = {"www.arcgis.com", "drive.google.com", "drive.usercontent.google.
 def trip_domains(args, regions):
     """The hosts this particular trip needs, and a note when the list cannot be complete yet."""
     coords = LATLON_RE.match(args.origin or "") and LATLON_RE.match(args.dest or "")
-    hosts, note, optional = [], "", []
+    hosts, note, optional, border = [], "", [], False
     if not coords:
         hosts += ["nominatim.openstreetmap.org", "photon.komoot.io"]
     if args.routing != "estimate":
@@ -631,6 +631,9 @@ def trip_domains(args, regions):
             hosts.append("files.mobilitydatabase.org")
             note = ("With no region file, feeds come from the MobilityDatabase mirror (files.mobilitydatabase.org); "
                     "a few agencies may also need their own host.")
+        # plan() asks Nominatim which country each end is in when a region file that names one holds it
+        border = args.region == "auto" and any(r.get("country") and r.get("bbox") and in_bbox(lat, lon, r["bbox"])
+                                               for r in regions for lat, lon in ((o_lat, o_lon), (d_lat, d_lon)))
     out = []
     for h in hosts:
         if h and h not in out:
@@ -639,6 +642,9 @@ def trip_domains(args, regions):
     if optional:
         note = (note + " " if note else "") + ("Optional (shared platforms; the mirror is used without them): %s."
                                                % ", ".join(optional))
+    if border and "nominatim.openstreetmap.org" not in out:
+        note = (note + " " if note else "") + ("Optional: nominatim.openstreetmap.org (confirms which country each "
+                                               "end is in; without it the region boxes decide).")
     return out, note
 
 
@@ -670,12 +676,13 @@ def check_network(hosts, timeout=6):
 
 
 def preflight(args, regions, warnings):
-    """Tell 'network blocked' apart from 'address not found' before anything else fails."""
+    """Tell 'network blocked' apart from 'address not found' before anything else fails. Returns
+    {host: 'ok' | 'blocked: reason'} for the hosts it checked ({} when the trip needs no network)."""
     local_only = (args.region == "none" and args.routing == "estimate" and not args.crosscheck
                   and all(os.path.exists(FEED_ID_RE.sub(r"\2", s)) or os.path.exists(s) for s in (args.feed or []))
                   and LATLON_RE.match(args.origin) and LATLON_RE.match(args.dest or ""))
     if local_only:
-        return
+        return {}
     status = check_network(["files.mobilitydatabase.org", "nominatim.openstreetmap.org", "router.project-osrm.org"])
     blocked = [h for h, s in status.items() if s != "ok"]
     if len(blocked) == len(status):
@@ -683,6 +690,7 @@ def preflight(args, regions, warnings):
         raise SystemExit(network_blocked_message(blocked, hosts, note))
     if blocked:
         warnings.append("some services are unreachable from here: %s" % ", ".join(blocked))
+    return status
 
 
 # --------------------------------------------------------------------------- regions and feeds
@@ -731,7 +739,14 @@ def bbox_dist_m(lat, lon, b):
     return haversine_m(lat, lon, min(max(lat, b["min_lat"]), b["max_lat"]), min(max(lon, b["min_lon"]), b["max_lon"]))
 
 
-def pick_region(regions, region_arg, lat, lon):
+def region_claims(r, lat, lon, cc=None):
+    """r's box holds the point, and the point is not known to be in another country than r's (the Ontario
+    boxes hold Detroit and Buffalo)."""
+    return (bool(r.get("bbox")) and in_bbox(lat, lon, r["bbox"])
+            and not (cc and r.get("country") and r["country"] != cc))
+
+
+def pick_region(regions, region_arg, lat, lon, country=None):
     if region_arg in ("none", ""):
         return None
     if region_arg != "auto":
@@ -740,7 +755,7 @@ def pick_region(regions, region_arg, lat, lon):
                 return r
         raise SystemExit("unknown region %r. Known: %s" % (region_arg, ", ".join(r["id"] for r in regions) or "none"))
     for r in regions:
-        if r.get("bbox") and in_bbox(lat, lon, r["bbox"]):
+        if region_claims(r, lat, lon, country):
             return r
     return None
 
@@ -749,25 +764,26 @@ def _bbox_area(b):
     return (b["max_lat"] - b["min_lat"]) * (b["max_lon"] - b["min_lon"])
 
 
-def regions_for_trip(regions, region_arg, o, d, od_m):
+def regions_for_trip(regions, region_arg, o, d, od_m, countries=(None, None)):
     """(home, extra). home: the most specific region file holding the origin (its rate card, time zone
     and fares lead). extra: the most specific one holding the destination, plus intercity region files
     holding either end when the trip is long or when no local region file holds the destination.
-    '--region ID' pins home; 'none' uses no region file."""
+    '--region ID' pins home; 'none' uses no region file. `countries` (origin, destination country codes,
+    None when unknown) keeps a region file from holding an end in another country."""
     if region_arg in ("none", ""):
         return None, []
+    o_cc, d_cc = countries
 
-    def holding(lat, lon, intercity):
-        rs = [r for r in regions if r.get("bbox") and in_bbox(lat, lon, r["bbox"])
-              and bool(r.get("intercity")) == intercity]
+    def holding(lat, lon, intercity, cc):
+        rs = [r for r in regions if region_claims(r, lat, lon, cc) and bool(r.get("intercity")) == intercity]
         return sorted(rs, key=lambda r: _bbox_area(r["bbox"]))
 
     if region_arg != "auto":
         home = pick_region(regions, region_arg, o[0], o[1])
     else:
-        home = (holding(o[0], o[1], False) or holding(o[0], o[1], True) or [None])[0]
+        home = (holding(o[0], o[1], False, o_cc) or holding(o[0], o[1], True, o_cc) or [None])[0]
     extra = []
-    dest_local = holding(d[0], d[1], False)
+    dest_local = holding(d[0], d[1], False, d_cc)
 
     def serves(r, pt):   # some feed of region r has stops within 3 km of pt (unknown without stop maps: yes)
         maps = [f["coverage"] for f in r.get("feeds", []) if f.get("coverage") and not f.get("skip")]
@@ -777,7 +793,8 @@ def regions_for_trip(regions, region_arg, o, d, od_m):
     # GTHA box, but only the intercity file has its buses)
     want_intercity = (od_m >= INTERCITY_MIN_M or not dest_local or not serves(dest_local[0], d)
                       or (home is not None and not home.get("intercity") and not serves(home, o)))
-    for r in dest_local[:1] + (holding(o[0], o[1], True) + holding(d[0], d[1], True) if want_intercity else []):
+    for r in dest_local[:1] + (holding(o[0], o[1], True, o_cc) + holding(d[0], d[1], True, d_cc)
+                               if want_intercity else []):
         if r is not home and r not in extra:
             extra.append(r)
     if home is None and extra:
@@ -785,10 +802,10 @@ def regions_for_trip(regions, region_arg, o, d, od_m):
     return home, extra
 
 
-def pricing_regions(regions, lat, lon):
+def pricing_regions(regions, lat, lon, country=None):
     """Region files that hold a point and carry ride-hail rate areas (used for pricing even on trips that
     do not load their feeds)."""
-    return [r for r in regions if r.get("ride_pricing_areas") and r.get("bbox") and in_bbox(lat, lon, r["bbox"])]
+    return [r for r in regions if r.get("ride_pricing_areas") and region_claims(r, lat, lon, country)]
 
 
 def merge_regions(home, extra, d_lat=None, d_lon=None, pricing_from=()):
@@ -2185,10 +2202,13 @@ def ride_cost(pricing, km, seconds, ends=None):
     return c * (1.0 + p.get("tax", 0.0)) * p.get("uplift", 1.0)
 
 
-def pricing_at(region, lat, lon, fallback):
+def pricing_at(region, lat, lon, fallback, country=None):
     """The rate card for a ride picked up at (lat, lon): the first of the region's ride_pricing_areas whose
     boxes hold the point (its boxes become the service area for the out-of-area surcharge), else the
-    region's card for places with no published rate (ride_pricing_outside), else `fallback`."""
+    region's card for places with no published rate (ride_pricing_outside), else `fallback`. A point known
+    to be in another country than the region file's gets `fallback` (Windsor's rate box holds Detroit)."""
+    if country and (region or {}).get("country") and country != region["country"]:
+        return fallback
     for a in (region or {}).get("ride_pricing_areas") or []:
         if any(in_bbox(lat, lon, b) for b in a["boxes"]):
             p = dict(fallback)
@@ -2541,18 +2561,45 @@ def plan(args):
     if not args.arrive_by:
         check_when_text("--depart", args.depart)
     regions = load_regions()
-    preflight(args, regions, warnings)
+    net_status = preflight(args, regions, warnings)
     strict = not args.allow_street_match
     o_lat, o_lon, o_label = resolve_place(args.origin, "origin", warnings, strict)
     d_lat, d_lon, d_label = resolve_place(args.dest, "destination", warnings, strict)
     if haversine_m(o_lat, o_lon, d_lat, d_lon) < SAME_PLACE_M:
         raise SystemExit("the origin and destination are the same place (%.0f m apart), so there is no trip to plan. "
                          "Check the two addresses." % haversine_m(o_lat, o_lon, d_lat, d_lon))
+    infos = {}   # town-level reverse geocoding, once per point and run: country checks, discovery, border checks
+
+    def place_info(lat, lon):
+        k = ("%.3f" % lat, "%.3f" % lon)
+        if k not in infos:
+            infos[k] = reverse_place_info(lat, lon, warnings)   # zoom 10, 3 decimals: never the door
+        return infos[k]
+
+    # a region file never claims a point in another country (the Ontario boxes hold Detroit and Buffalo). Ask only
+    # for ends inside a box of a region file that names its country, and not when preflight found Nominatim blocked:
+    # then, or when the lookup fails, the boxes decide as before
+    look_up = args.region == "auto" and net_status.get("nominatim.openstreetmap.org", "ok") == "ok"
+
+    def country_of(lat, lon):
+        if not look_up or not any(r.get("country") and r.get("bbox") and in_bbox(lat, lon, r["bbox"]) for r in regions):
+            return None
+        return place_info(lat, lon)["country"]
+
+    o_cc, d_cc = country_of(o_lat, o_lon), country_of(d_lat, d_lon)
     home, extra = regions_for_trip(regions, args.region, (o_lat, o_lon), (d_lat, d_lon),
-                                   haversine_m(o_lat, o_lon, d_lat, d_lon))
+                                   haversine_m(o_lat, o_lon, d_lat, d_lon), countries=(o_cc, d_cc))
     region = merge_regions(home, extra, d_lat, d_lon,
-                           pricing_regions(regions, o_lat, o_lon) if args.region != "none" else ())
+                           pricing_regions(regions, o_lat, o_lon, o_cc) if args.region != "none" else ())
     tzname = (region or {}).get("timezone")
+    rc = (region or {}).get("country")
+    o_foreign = bool(rc and o_cc and o_cc != rc)   # an end in another country than the region file pricing the trip
+    d_foreign = bool(rc and d_cc and d_cc != rc)
+    cross_border = bool(o_cc and d_cc and o_cc != d_cc)
+    if cross_border:
+        warnings.append("this trip crosses the %s-%s border: riding all the way, and rides to hubs on the other side, "
+                        "need a service that crosses it; prices and times leave out the border crossing."
+                        % (o_cc, d_cc))
 
     od_m, radius_m, dest_zone_m, query_box, near = trip_geometry(o_lat, o_lon, d_lat, d_lon, args)
     final_m = final_ride_radius(od_m, args)
@@ -2612,7 +2659,7 @@ def plan(args):
     promo = []   # large official feeds, used only if the local feeds leave either end without stops
     if not region and not args.no_discover:
         log("no region file covers this trip: discovering feeds in the MobilityDatabase catalog")
-        o_info, d_info = reverse_place_info(o_lat, o_lon, warnings), reverse_place_info(d_lat, d_lon, warnings)
+        o_info, d_info = place_info(o_lat, o_lon), place_info(d_lat, d_lon)
         places = o_info["names"] | d_info["names"]
         found, too_big, far, dups = discover_feeds(query_box, places=places)
         countries = {c for c in (o_info["country"], d_info["country"]) if c}
@@ -2633,26 +2680,34 @@ def plan(args):
         for h in found:
             if not any(u in known for u in h["urls"]):
                 feeds.append((unique_id(h["id"]), feed_label(h), h["urls"], True, {}))
-    elif region and not args.no_discover and od_m >= DEST_DISCOVER_MIN_M and not dest_feeds:
-        # the region files cover the origin but have no transit near the destination: find it there
-        reach = max(dest_zone_m, final_m)
-        log("no region file has transit near the destination: discovering feeds within %.0f km of it" % (reach / 1000))
-        d_info = reverse_place_info(d_lat, d_lon, warnings)
-        try:
-            found = discover_feeds(box_around(d_lat, d_lon, reach), places=d_info["names"])[0]
-        except (Exception, SystemExit) as e:  # noqa: BLE001  (the catalog loader exits when offline)
-            found = []
-            warnings.append("could not search the feed catalog near the destination: %s" % e)
-        found.sort(key=lambda h: bbox_dist_m(d_lat, d_lon, h.get("bbox")))
-        known = {u for f in feeds for u in f[2]} | {u for f in region.get("feeds", []) for u in f.get("urls", [])}
-        added = []
-        for h in found[:DISCOVER_DEST_MAX]:
-            if not any(u in known for u in h["urls"]):
-                feeds.append((unique_id(h["id"]), feed_label(h), h["urls"], False, {}))
-                added.append(feed_label(h))
-        warnings.append("no region file has transit near the destination; feeds found there: %s. Check that they "
-                        "run on the date (holidays are often missing from these files)."
-                        % (", ".join(added) or "none"))
+    elif region and not args.no_discover:
+        # ends the region files do not serve: no transit near the destination, or an end in another country
+        # than the region files' (Toronto to Buffalo): find feeds there
+        ends = []
+        if d_foreign or (od_m >= DEST_DISCOVER_MIN_M and not dest_feeds):
+            ends.append(("destination", d_lat, d_lon, max(dest_zone_m, final_m), d_cc if d_foreign else None))
+        if o_foreign:
+            ends.append(("origin", o_lat, o_lon, radius_m, o_cc))
+        for end, lat, lon, reach, foreign in ends:
+            log("no region file %s the %s: discovering feeds within %.0f km of it"
+                % ("of its country covers" if foreign else "has transit near", end, reach / 1000))
+            info = place_info(lat, lon)
+            try:
+                found = discover_feeds(box_around(lat, lon, reach), places=info["names"])[0]
+            except (Exception, SystemExit) as e:  # noqa: BLE001  (the catalog loader exits when offline)
+                found = []
+                warnings.append("could not search the feed catalog near the %s: %s" % (end, e))
+            found.sort(key=lambda h: bbox_dist_m(lat, lon, h.get("bbox")))
+            known = {u for f in feeds for u in f[2]} | {u for f in region.get("feeds", []) for u in f.get("urls", [])}
+            added = []
+            for h in found[:DISCOVER_DEST_MAX]:
+                if not any(u in known for u in h["urls"]):
+                    feeds.append((unique_id(h["id"]), feed_label(h), h["urls"], False, {}))
+                    added.append(feed_label(h))
+            warnings.append(("the %s is in %s, outside the region files' country (%s); " % (end, foreign, rc)
+                             if foreign else "no region file has transit near the destination; ")
+                            + "feeds found there: %s. Check that they run on the date (holidays are often missing "
+                            "from these files)." % (", ".join(added) or "none"))
     if not feeds and not promo:
         msg = "no GTFS feeds for this trip."
         if discovery and discovery["too_big"]:
@@ -2816,7 +2871,12 @@ def plan(args):
         if cur:
             pricing["currency"] = cur
             pricing["source"] = "generic North American-style rate card in local currency, not a local quote"
-    pricing = pricing_at(region, o_lat, o_lon, pricing)   # the first ride is priced where it starts
+    if o_foreign:   # no rate card of the origin's country: the generic card, in the trip's currency
+        pricing = dict(DEFAULT_PRICING, currency=pricing.get("currency"),
+                       source="generic North American-style rate card, not a local quote: the origin is outside the "
+                              "region files' country")
+    else:
+        pricing = pricing_at(region, o_lat, o_lon, pricing)   # the first ride is priced where it starts
     wait_s = int((args.pickup_wait_min if args.pickup_wait_min is not None
                   else (region or {}).get("pickup_wait_min", 6)) * 60)
     # --access car: drive your own car to the hub (no pickup wait; park and walk to the platform instead)
@@ -2874,9 +2934,13 @@ def plan(args):
     pick, fpricing, area = [], None, None
     if final_m > 0:
         fpricing = dict(DEFAULT_PRICING, currency=pricing.get("currency", DEFAULT_PRICING["currency"]))
-        fpricing.update((region or {}).get("final_ride_pricing") or pricing)
+        if d_foreign:   # the region files' cards and ride notes are for their own country
+            fpricing["source"] = ("generic North American-style rate card, not a local quote: the destination is "
+                                  "outside the region files' country")
+        else:
+            fpricing.update((region or {}).get("final_ride_pricing") or pricing)
         fpricing.setdefault("currency", pricing.get("currency"))
-        area = ride_area(region, d_lat, d_lon)
+        area = None if d_foreign else ride_area(region, d_lat, d_lon)
         pts = []
         for s in used:
             dd = haversine_m(d_lat, d_lon, net.stop_lat[s], net.stop_lon[s])
@@ -2907,6 +2971,13 @@ def plan(args):
                 pick.append(e)
             if len(pick) >= FINAL_RIDE_DROP_POINTS:
                 break
+        if cross_border and pick:   # a final ride from across the border (VIA Windsor for Detroit) is not planned
+            same = [e for e in pick if place_info(e["lat"], e["lon"])["country"] in (None, d_cc)]
+            if len(same) < len(pick):
+                warnings.append("%d drop points across the border from the destination were left out: a final ride "
+                                "from there would cross the %s-%s border, which this plan cannot price or time."
+                                % (len(pick) - len(same), o_cc, d_cc))
+            pick = same
         for e in pick:
             km, sec = heuristic_ride(e["straight_m"])
             e.update(ride_km=km, ride_free_s=sec, osrm=False)
@@ -2933,7 +3004,7 @@ def plan(args):
                 if w <= FINAL_RIDE_WALK_M:
                     eg[st] = walk_s(w) + lead_e
             e["scan"] = ProfileScan(net, eg, foot, min_change_s, change_at)
-            ep = pricing_at(region, e["lat"], e["lon"], fpricing)
+            ep = pricing_at(region, e["lat"], e["lon"], fpricing, country=d_cc)
             if (area or {}).get("uber") == "no" and taxi_pricing(region, area):
                 ep = taxi_pricing(region, area)   # no ride-hail at the destination: a local taxi
             e["pricing_label"], e["pricing"] = ep.get("label", ""), ep

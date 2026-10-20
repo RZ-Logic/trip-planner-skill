@@ -3,6 +3,7 @@
   "name": "Ontario getaways: intercity rail and coach, and local transit at tourist destinations beyond the GTHA",
   "intercity": true,
   "timezone": "America/Toronto",
+  "country": "CA",
   "dst_rule": "north_america",
   "utc_std_offset_hours": -5,
   "bbox": {

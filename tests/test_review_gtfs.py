@@ -233,5 +233,48 @@ class StationTransfersTests(unittest.TestCase):
         self.assertEqual(self.arrival("BS,BS,2,480\nP1,P2,2,120\n"), hms(10, 25))
 
 
+
+class CalendarDatesTests(unittest.TestCase):
+    """tests-ci-eng-1: service added only through calendar_dates.txt (exception_type=1) loads, including the
+    after-midnight trips of the day before."""
+
+    def test_service_from_calendar_dates_only(self):
+        p = feed([("1", "X", "t1", "C"), ("N", "X", "n1", "C")],
+                 [("t1", "10:00:00", "10:00:00", "A", 1, 0, 0), ("t1", "10:30:00", "10:30:00", "C", 2, 0, 0),
+                  ("n1", "24:30:00", "24:30:00", "A", 1, 0, 0), ("n1", "25:00:00", "25:00:00", "C", 2, 0, 0)],
+                 calendar_dates=[("X", "20261014", 1), ("X", "20261015", 1), ("X", "20261016", 1)])
+        drop_files(p, {"calendar.txt"})
+        net, scan, idx = scan_for(p, hms(9, 0), hms(13, 0))   # Thursday Oct 15
+        self.assertIn("Hub A", idx)
+        self.assertEqual(scan.evaluate(idx["Hub A"], hms(9, 55))[0], hms(10, 30))
+        self.assertFalse([w for w in net.warnings if "NO service" in w], net.warnings)
+        net, scan, idx = scan_for(p, hms(0, 15), hms(4, 0), day=dt.date(2026, 10, 17))   # Friday's 24:30 trip
+        self.assertIn("Hub A", idx)
+        self.assertEqual(scan.evaluate(idx["Hub A"], hms(0, 20))[0], hms(1, 0))
+        net, scan, idx = scan_for(p, hms(9, 0), hms(13, 0), day=dt.date(2026, 10, 18))   # not listed: no service
+        self.assertEqual(len(net.conns), 0)
+
+    def test_peterborough_thanksgiving_runs_holiday_services(self):
+        import csv
+        ont = next(r for r in th.load_regions() if r["id"] == "ontario")
+        f = next(x for x in ont["feeds"] if x["id"] == "peterborough-transit")
+        path = th.manual_feed_zip(f)
+        with zipfile.ZipFile(path) as z:
+            trips = list(csv.DictReader(io.StringIO(z.read("trips.txt").decode("utf-8"))))
+        service = {t["trip_id"]: t["service_id"] for t in trips}
+        net = th.Network()
+        th.load_feed(net, f["id"], f["name"], path, dt.date(2026, 10, 12), 0, 30 * 3600)   # Thanksgiving Monday
+        count = {}
+        for c in net.conns:
+            if c[0] < hms(4, 0):
+                continue   # Sunday's after-midnight runs, not Monday's own service
+            sid = service[net.trips[c[4]][6]]
+            count[sid] = count.get(sid, 0) + 1
+        self.assertGreater(count.get("pt_hol_sa_su", 0), 0, count)   # added for the day through calendar_dates
+        self.assertGreater(count.get("pt_hol_su", 0), 0, count)
+        self.assertEqual(count.get("pt_wkl", 0), 0, count)            # the regular weekday service is removed
+        self.assertEqual(count.get("pt_sa_wkl", 0), 0, count)
+
+
 if __name__ == "__main__":
     unittest.main()

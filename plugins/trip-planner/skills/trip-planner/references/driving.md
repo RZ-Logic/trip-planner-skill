@@ -412,7 +412,8 @@ Other environment variables:
 | `TRIP_HOME` | `lat,lon` or `lat,lon;label`: an origin or destination within 50 m of it is labelled (default "home") with no geocoder lookup. Other place labels are looked up at street level (zoom 16) with 3-decimal coordinates, so no house number is requested |
 
 Text output shows control, line-separator and bidi-override characters from feeds, OpenStreetMap, NLR and
-reviews as spaces and drops invisible ones (zero-width marks, tag characters, BOM); `--json` keeps the raw values.
+reviews as spaces and drops invisible ones (zero-width spaces, tag characters, BOM; the zero-width joiner and
+non-joiner that Persian and Indic names and emoji need are kept); `--json` keeps the raw values.
 
 ## Hosts it calls (for a network allow-list)
 

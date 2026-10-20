@@ -157,6 +157,9 @@ _UNSAFE_CHARS = re.compile("[\x00-\x1f\x7f-\x9f\u2028\u2029\u202a-\u202e\u2066-\
 # other invisible characters: format characters (zero-width marks, LRM/RLM/ALM, BOM, soft hyphen), private use
 # and surrogate code points; plane 14 (tag characters, variation selectors 17-256) is removed as a block
 _HIDDEN_CATEGORIES = ("Cf", "Co", "Cs")
+# except the zero-width non-joiner and joiner: Persian and Indic names are spelled with them and emoji sequences
+# are built with them, and neither can reorder or hide a line
+_JOINERS = "\u200c\u200d"
 
 
 def safe_text(s):
@@ -168,8 +171,8 @@ def safe_text(s):
     s = _UNSAFE_CHARS.sub(" ", s if isinstance(s, str) else str(s))
     if s.isascii():
         return s
-    return "".join(ch for ch in s if not ("\U000e0000" <= ch <= "\U000e0fff"
-                                          or unicodedata.category(ch) in _HIDDEN_CATEGORIES))
+    return "".join(ch for ch in s if ch in _JOINERS or not ("\U000e0000" <= ch <= "\U000e0fff"
+                                                            or unicodedata.category(ch) in _HIDDEN_CATEGORIES))
 
 
 def safe_url(url):

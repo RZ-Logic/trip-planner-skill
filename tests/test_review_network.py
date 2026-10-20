@@ -834,5 +834,23 @@ class BlockedFeedHostsAbroad(unittest.TestCase):
             self.assertNotIn(h, code)
 
 
+class SafeTextJoiners(unittest.TestCase):
+    """Follow-up to security-tos-3: the zero-width non-joiner and joiner (U+200C, U+200D) are part of how Persian
+    and Indic names are written and how emoji sequences render, so safe_text keeps them; the other invisible
+    characters (zero-width space, tag characters, BOM, LRM/RLM) are still removed."""
+
+    def test_joiners_kept(self):
+        for s in ("\u0645\u06cc\u200c\u0631\u0648\u0645",          # Persian 'mi-ravam' with its ZWNJ
+                  "\u0915\u094d\u200d\u0937",                       # Devanagari conjunct with a ZWJ
+                  "\U0001f468\u200d\U0001f469\u200d\U0001f467",    # family emoji (ZWJ sequence)
+                  "Tajrish \u062a\u062c\u0631\u06cc\u0634"):
+            self.assertEqual(th.safe_text(s), s)
+
+    def test_other_invisible_characters_still_removed(self):
+        self.assertEqual(th.safe_text("Main\u200b\u200c Lot\ufeff\u200e"), "Main\u200c Lot")
+        self.assertEqual(th.safe_text("\U0001f3f4\U000e0067\U000e0062\U000e0065\U000e006e\U000e0067\U000e007f"),
+                         "\U0001f3f4")   # tag characters can hide text, so they still go
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -2213,6 +2213,8 @@ def _plan(args):
                                    wx.get("temp_c"), warnings, eo)
             keep_stations(ch, poly)
             ch = {k: v for k, v in ch.items() if not k.startswith("_")}
+            ch.setdefault("soc_start", soc)
+            ch["soc_assumed"] = args.soc is None   # the CHARGING header marks the 90% default
             cost = (ch.get("public_cost") or 0.0) + (ch.get("home_energy_cost") or 0.0)
             return {"kind": "ev", "charging": ch, "cost": cost, "extra_s": ch.get("extra_s") or 0.0,
                     "kwh": ch.get("kwh_used"), "kwh100": ch.get("kwh_100km"),
@@ -2236,6 +2238,9 @@ def _plan(args):
         if st and hasattr(dr, "set_stops"):   # the waits go on the clock, so the 407 band is for after them
             dr.set_stops(r, st)
             dr.retime(r, r.get("depart") or depart, opts)
+    if ev and evc is not None and args.soc is None:
+        warnings.append("the starting charge was not given, so charging assumes you leave with 90%; pass --soc "
+                        "with the battery percent")
     if hasattr(dr, "relabel") and any(r.get("_stops") for r in routes):
         dr.relabel(routes)
         fast = routes[0]
@@ -3246,18 +3251,21 @@ def render(res):
     ch = res.get("charging")
     if ch is not None:
         n_st = len(ch.get("stops") or [])
+        start = "from %d%%%s" % (round((ch.get("soc_start") or 0) * 100),
+                                 " (assumed; pass --soc)" if ch.get("soc_assumed") else "")
         if ch.get("needed") and ch.get("feasible") is False:
-            first = ("%d stop(s) planned, but no reachable compatible fast charger was found for the rest of the trip "
-                     "(see WARNINGS): plan Level 2 stops" % n_st if n_st else
-                     "charging is needed, but no reachable compatible fast charger was found (see WARNINGS): leave "
-                     "with more charge or plan Level 2 stops")
+            first = ("%d stop(s) planned %s, but no reachable compatible fast charger was found for the rest of the "
+                     "trip (see WARNINGS): plan Level 2 stops" % (n_st, start) if n_st else
+                     "charging is needed %s, but no reachable compatible fast charger was found (see WARNINGS): "
+                     "leave with more charge or plan Level 2 stops" % start)
         elif ch.get("needed"):
-            first = "%d stop%s%s, %s extra, public charging ~%s; arrive with %d%%" % (
-                n_st, "" if n_st == 1 else "s", " (estimate, charger lists unavailable)" if ch.get("estimated") else "",
+            first = "%d stop%s %s%s, %s extra, public charging ~%s; arrive with %d%%" % (
+                n_st, "" if n_st == 1 else "s", start,
+                " (estimate, charger lists unavailable)" if ch.get("estimated") else "",
                 dc.fmt_dur(ch.get("extra_s") or 0), dc.money(ch.get("public_cost") or 0),
                 round((ch.get("arrive_soc") or 0) * 100))
         else:
-            first = "no stop needed; arrive with about %d%%" % round((ch.get("arrive_soc") or 0) * 100)
+            first = "no stop needed %s; arrive with about %d%%" % (start, round((ch.get("arrive_soc") or 0) * 100))
         L += sec("CHARGING", first)
         for i, st in enumerate(ch.get("stops") or [], 1):
             L.append("  %d. %s (%s, %s kW%s) at km %.0f: %d%% to %d%%, %d min, ~%s (%s)%s" % (

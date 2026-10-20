@@ -231,7 +231,8 @@ python3 ${CLAUDE_SKILL_DIR}/scripts/drive_plan.py --origin "ORIGIN" --dest "DEST
   read its transit-only baseline, or the operator's planner; check the last departure and the lot's
   access hours; give a return backup.
 - **`CHARGING`** (EV): each stop's charger, power, minutes and cost estimate, any top-up for the drive
-  home, chargers near the destination. Prices are network estimates unless the station lists one.
+  home, chargers near the destination. Prices are network estimates unless the station lists one. If it
+  says "assumed", the 90% start default was used: say so or ask.
 - **`LINKS`** navigate to the chosen lot (avoid-tolls version for the toll-free route, a via point for a
   route Google would not pick by itself; Waze and Apple Maps may not follow it); give the one for the
   route you recommend.

@@ -285,5 +285,44 @@ class StretchChargeTest(unittest.TestCase):
         self.assertIn("leave with more charge", head)
 
 
+class StartChargeTest(tcp.CarCase):
+    """ev-vehicles-6: the CHARGING header shows the starting charge, marked assumed (with a WARNING) when --soc is
+    not given and the 90% default was used."""
+
+    def head(self, text):
+        return [x for x in text.splitlines() if x.startswith("CHARGING")][0]
+
+    def soc_warnings(self, res):
+        return [w for w in res["warnings"] if "--soc" in w]
+
+    def test_default_start_is_marked_assumed(self):
+        res, text = self.run_plan("--vehicle", "ev", ev=True)
+        self.assertIn("from 90% (assumed; pass --soc)", self.head(text))
+        self.assertTrue(any("90%" in w for w in self.soc_warnings(res)), res["warnings"])
+
+    def test_given_start_is_shown_plain(self):
+        res, text = self.run_plan("--vehicle", "ev", "--soc", "70", ev=True)
+        self.assertIn("from 70%", self.head(text))
+        self.assertNotIn("assumed", self.head(text))
+        self.assertEqual(self.soc_warnings(res), [])
+
+    def test_stop_and_infeasible_headers_show_the_start(self):
+        stop = {"name": "S1", "network": "Ivy", "max_kw": 150.0, "ports": 4, "km_along": 20.0, "arrive_soc": 0.2,
+                "depart_soc": 0.6, "charge_min": 20.0, "detour_min": 2, "cost": 10.0, "price_text": "Ivy"}
+
+        def stub(feasible):
+            def pc(poly, km, dep, car, soc, t, w, opts=None):
+                return {"needed": True, "feasible": feasible, "stops": [dict(stop)], "arrive_soc": 0.3,
+                        "kwh_used": 10.0, "kwh_100km": 18.0, "public_cost": 10.0, "home_energy_cost": 1.0,
+                        "extra_s": 1320.0, "source": "test chargers"}
+            return pc
+        self.evc.plan_charging = stub(True)
+        res, text = self.run_plan("--vehicle", "ev", ev=True)
+        self.assertRegex(self.head(text), r"1 stop from 90% \(assumed; pass --soc\), .* arrive with 30%")
+        self.evc.plan_charging = stub(False)
+        res, text = self.run_plan("--vehicle", "ev", "--soc", "55", ev=True)
+        self.assertIn("1 stop(s) planned from 55%, but no reachable", self.head(text))
+
+
 if __name__ == "__main__":
     unittest.main()

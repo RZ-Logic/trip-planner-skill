@@ -82,8 +82,9 @@ Addresses work like `trip_hubs.py` (the same `ADDRESS NOT PRECISE` rule). Pass `
    hub beats driving it says so. It is the `trip_hubs.py --access car` search: drive to a station or park and
    ride lot, park (GO station parking is free, first come), take transit. Each option is costed there
    and back against driving plus parking.
-7. `CHARGING` (EV only): stops with network, power, charge from and to, minutes and estimated cost.
-   It also gives the arrival charge, whether the drive home needs a top-up, and chargers near the
+7. `CHARGING` (EV only): the starting charge ("assumed", with a WARNING, when `--soc` is not given:
+   90%), then stops with network, power, charge from and to, minutes and estimated cost. It also
+   gives the arrival charge, whether the drive home needs a top-up, and chargers near the
    destination.
 8. `INCIDENTS`: Toronto road closures along the route (City of Toronto feed). Highway closures need
    an Ontario 511 key; without one the line says to check 511on.ca.

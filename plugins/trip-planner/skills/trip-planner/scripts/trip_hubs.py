@@ -779,9 +779,9 @@ def network_blocked_message(blocked, hosts, note="", causes=None):
                  "estimate, a trip whose timetables are all hand-entered or cached plans offline.\n")
     return ("NETWORK BLOCKED: this environment cannot reach %s (%s), so the live "
             "planner cannot run here. This is not an address problem. %s%s"
-            "%s the manual method in SKILL.md: use a tool or connector that can request any URL (an "
-            "HTTP, fetch or scraping connector; built-in web-fetch tools often refuse URLs you build), and "
-            "plan from the region notes and the hand-entered timetables in the region files meanwhile."
+            "%s references/manual-method.md (for drives, references/driving.md): use a tool or connector that "
+            "can request any URL (an HTTP, fetch or scraping connector; built-in web-fetch tools often refuse URLs "
+            "you build), and plan from the region notes and the hand-entered timetables in the region files meanwhile."
             % (", ".join(blocked), "; ".join(causes) if causes else "no connection", allow,
                (note + "\n") if note else "", "Or follow" if not hosts else "or follow"))
 

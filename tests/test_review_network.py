@@ -376,5 +376,27 @@ class SharedPacing(unittest.TestCase):
         self.assertEqual(slept, [])
 
 
+SKILL_DIR = os.path.join(ROOT, "plugins", "trip-planner", "skills", "trip-planner")
+
+
+class ManualMethodPointer(unittest.TestCase):
+    """docs-contract-8: NETWORK BLOCKED and the SKILL.md compatibility line point to references/manual-method.md,
+    where 0.9.8 moved the manual method, not to SKILL.md."""
+
+    def test_blocked_message_points_to_manual_method_file(self):
+        for hosts in (["b"], []):
+            msg = th.network_blocked_message(["a"], hosts)
+            self.assertIn("references/manual-method.md", msg)
+            self.assertIn("references/driving.md", msg)
+            self.assertNotIn("in SKILL.md", msg)
+        self.assertTrue(os.path.exists(os.path.join(SKILL_DIR, "references", "manual-method.md")))
+
+    def test_skill_frontmatter_points_to_manual_method_file(self):
+        with open(os.path.join(SKILL_DIR, "SKILL.md"), encoding="utf-8") as fh:
+            line = next(x for x in fh if x.startswith("compatibility:"))
+        self.assertIn("references/manual-method.md", line)
+        self.assertNotIn("in this file", line)
+
+
 if __name__ == "__main__":
     unittest.main()

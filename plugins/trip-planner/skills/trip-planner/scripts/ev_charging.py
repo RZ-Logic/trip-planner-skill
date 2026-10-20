@@ -676,14 +676,18 @@ def plan_charging(poly, route_km, depart, car, soc_start, temp_c, warnings, opts
             arr = soc - (c["km"] - pos + half) * per_km
             target = _target(c, cands, per_km, reserve, cap, route_km, m)
             if target - arr < MIN_ADD and c["good"]:
-                # a good charger picked over a nearer slower one, where the stop adds nothing: skip it when
-                # adding the same charge at the farther charger (a stop anyway) is no slower
+                # a good charger picked over a nearer slower one, where the stop adds nothing: skip it when the
+                # next stop (alt) leaves with the same charge either way and adding it all there is no slower
                 alt = _farther(c, cands, pos, soc, per_km, reserve, cap, route_km, m)
-                if alt is not None and _skip_saves(car, c, alt, (cap - arr) * usable, temp_c, m):
-                    c = alt
-                    half = c["detour_km"] / 2.0
-                    arr = soc - (c["km"] - pos + half) * per_km
-                    target = _target(c, cands, per_km, reserve, cap, route_km, m)
+                if alt is not None:
+                    a_half = alt["detour_km"] / 2.0
+                    a_target = _target(alt, cands, per_km, reserve, cap, route_km, m)
+                    a_arr = soc - (alt["km"] - pos + a_half) * per_km   # without the stop at c
+                    a_after = cap - (alt["km"] - c["km"] + half + a_half) * per_km   # after charging at c
+                    if a_target - a_after >= MIN_ADD and _skip_saves(
+                            car, c, alt, (cap - arr) * usable, (a_target - a_after) * usable,
+                            (a_target - a_arr) * usable, temp_c):
+                        c, half, arr, target = alt, a_half, a_arr, a_target
             if target - arr < MIN_ADD:   # a stop that adds nothing: the next leg cannot be done from here
                 target = cap
             if target - arr < MIN_TOPUP:
@@ -1107,22 +1111,23 @@ def _pick(cands, pos, soc, per_km, reserve, max_soc, route_km, m):
 
 
 def _farther(c, cands, pos, soc, per_km, reserve, max_soc, route_km, m):
-    """The charger _pick would take among those beyond `c`, at any power, or None."""
-    reach = [x for x in _useful(cands, pos, soc, per_km, reserve, max_soc, m) if x["km"] > c["km"]]
-    if not reach:
+    """The stop the plan makes after charging at `c` to max_soc, when the car also reaches it without the stop
+    at `c`, else None (also when the destination is reached from `c`)."""
+    start = max_soc - c["detour_km"] / 2.0 * per_km
+    if start - (route_km - c["km"]) * per_km >= reserve - 1e-9:
         return None
-    ok = [x for x in reach if _onward(x, cands, per_km, reserve, max_soc, route_km, m)] or reach
-    ok = [x for x in ok if x["detour_min"] <= 10] or ok
-    far = max(x["km"] for x in ok)
-    return max([x for x in ok if x["km"] >= far - 15], key=lambda x: ((x["max_kw"] or 0), x["ports"], x["km"]))
+    nxt = _pick(cands, c["km"], start, per_km, reserve, max_soc, route_km, m)
+    if nxt is None or not any(x is nxt for x in _useful(cands, pos, soc, per_km, reserve, max_soc, m)):
+        return None
+    return nxt
 
 
-def _skip_saves(car, c, alt, kwh, temp_c, m):
-    """True when adding `kwh` at `alt` (a stop anyway, so no second plug-in) takes no longer than a stop at `c`
-    for it."""
-    stop = charge_minutes(car, kwh, c["max_kw"], temp_c) + c["detour_min"]
-    later = charge_minutes(car, kwh, alt["max_kw"], temp_c) - m["plug_in_min"]
-    return later <= stop
+def _skip_saves(car, c, alt, kwh_c, kwh_alt, kwh_skip, temp_c):
+    """True when one stop at `alt` adding `kwh_skip` takes no longer than a stop at `c` adding `kwh_c` and then
+    the stop at `alt` adding `kwh_alt`."""
+    stop = (charge_minutes(car, kwh_c, c["max_kw"], temp_c) + c["detour_min"]
+            + charge_minutes(car, kwh_alt, alt["max_kw"], temp_c))
+    return charge_minutes(car, kwh_skip, alt["max_kw"], temp_c) <= stop
 
 
 def _target(c, cands, per_km, reserve, max_soc, route_km, m):

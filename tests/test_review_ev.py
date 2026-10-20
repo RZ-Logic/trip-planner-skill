@@ -618,5 +618,27 @@ class AwdWordTest(unittest.TestCase):
         self.assertFalse(any("no AWD variant" in x for x in w), w)
 
 
+class SkipNextStopTest(unittest.TestCase):
+    """Follow-up to ev-vehicles-9: a good charger's no-gain stop is skipped only for the stop the plan makes next
+    anyway, when that stop leaves with the same charge either way, so the skip never makes the plan slower (two
+    layouts at 15 C where it did: a single-stall site taken instead, and a later stop no longer reaching the
+    destination). The plans are the ones made without the skip."""
+
+    def plan(self, car, km, sts, soc):
+        r, w = tev.plan_st([tev.nst(k, kw=kw, ports=p, name="S%d" % k) for k, kw, p in sts], km,
+                           ev.car_profile(car), soc, near=[])
+        self.assertTrue(r["feasible"], w)
+        return [s["name"] for s in r["stops"]], r["extra_s"] / 60.0
+
+    def test_skip_never_makes_the_plan_slower(self):
+        names, mins = self.plan("equinox", 700, [(140, 350.0, 1), (281, 62.5, 2), (495, 180.0, 2), (79, 150.0, 2),
+                                                 (88, 100.0, 2)], 0.8)
+        self.assertEqual(names, ["S79", "S281", "S495"])
+        self.assertLess(mins, 93.0)
+        names, mins = self.plan("niro", 400, [(144, 100.0, 4), (210, 62.5, 2), (347, 150.0, 8), (48, 350.0, 8)], 0.9)
+        self.assertEqual(names, ["S144", "S210"])
+        self.assertLess(mins, 48.0)
+
+
 if __name__ == "__main__":
     unittest.main()

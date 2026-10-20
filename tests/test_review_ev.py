@@ -529,5 +529,47 @@ class ReturnStretchNoteTest(unittest.TestCase):
             self.assertIn("%.0f%% at %s" % (s["depart_soc"] * 100, s["name"]), lines[i + 1])
 
 
+class ReturnNeedTemperatureTest(unittest.TestCase):
+    """Follow-up to ext-13: whether a round trip's drive back needs charging is decided at the drive back's own
+    forecast temperature (IONIQ 5, 110 km, --soc 90, 3 C out and -7 C back: the 54% on arrival covers the drive
+    back at 3 C, not at -7 C with the 20% reserve below 0 C)."""
+    O, D = InfeasibleRouteTest.O, InfeasibleRouteTest.D
+
+    def plan(self, t_back, fracs=(0.5,)):
+        temps = []
+
+        def weather_points(points, tzname, warnings, today=None):
+            temps.append(3.0 if not temps else t_back)
+            return {"mult": 1.0, "temp_c": temps[-1], "text": "t", "kind": "clear", "source": "test",
+                    "forecast": True, "days_out": 0}
+
+        def get_routes(o_, d_, depart, opts, warnings, arrive_at=None):
+            return [tdp.fake_retime(tdp.make_route("fastest", self.O, self.D, 110.0, 3600), depart, opts)]
+        with tdp.Env(), mock.patch.dict(sys.modules, {"ev_charging": real_ev(lambda km: list(fracs))}),                 mock.patch.object(dp, "weather_points", weather_points):
+            sys.modules["drive_route"].get_routes = get_routes
+            res = dp.plan(tdp.args_for(
+                "--origin", "%f,%f" % self.O, "--dest", "%f,%f" % self.D, "--weather", "auto", "--incidents", "off",
+                "--depart", "2026-10-16 08:00", "--park-and-ride", "off", "--round-trip", "--stay-hours", "3",
+                "--transponder", "--vehicle", "ev", "--ev-model", "ioniq5", "--soc", "90"))
+            text = dp.render(res)
+        self.assertGreaterEqual(len(temps), 2, temps)
+        return res, text
+
+    def test_colder_drive_back_gets_its_charging(self):
+        res, text = self.plan(-7.0)
+        ch, cr = res["charging"], res["charging_return"]
+        self.assertTrue(cr and cr["feasible"] and cr["stops"], cr)
+        self.assertGreaterEqual(cr["arrive_soc"], 0.20 - 0.005)
+        self.assertGreater(ch["return_soc_needed"], ch["arrive_soc"])
+        self.assertFalse(any("no charging is needed for the return" in n for n in ch["notes"]), ch["notes"])
+        self.assertTrue(any(n.startswith("Return trip") and "-7 C" in n for n in ch["notes"]), ch["notes"])
+        self.assertIn("leave the destination with %d%%" % round(ch["return_soc_needed"] * 100), text)
+
+    def test_same_temperature_needs_no_charging(self):
+        res, text = self.plan(3.0)
+        self.assertIsNone(res["charging_return"])
+        self.assertTrue(any("no charging is needed for the return" in n for n in res["charging"]["notes"]))
+
+
 if __name__ == "__main__":
     unittest.main()

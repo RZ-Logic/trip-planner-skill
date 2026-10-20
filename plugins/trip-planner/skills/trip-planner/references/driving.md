@@ -221,8 +221,10 @@ priced.
   `--battery-kwh` and `--max-dc-kw` override.
 
   City and highway figures are blended by the route's highway share. The result is 8% higher below
-  5 C and 15% higher below -5 C; a round trip's drive back uses its own forecast temperature. The
-  `CAR` line says which source was used, and says "assumed" when it is a default.
+  5 C and 15% higher below -5 C; a round trip's drive back uses its own forecast temperature, for an
+  EV also to decide whether it needs charging (a drive back that needs more than one charge has its
+  stops planned at the outbound temperature). The `CAR` line says which source was used, and says
+  "assumed" when it is a default.
 - **Fuel type:** cars rated on premium or diesel are priced with the survey's premium or diesel
   price.
 - **What the total includes:** fuel only, no wear.

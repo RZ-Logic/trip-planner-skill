@@ -2420,6 +2420,23 @@ def _plan(args):
             rp = ch.get("return_plan")
             soc0 = ch.get("arrive_soc") or 0.0
             need = ch.get("return_soc_needed")
+            tf, t_out = getattr(evc, "temp_factor", None), ch.get("temp_c")
+            if rp is None and need is not None and tf is not None and None not in (t_back, t_out, ch.get("reserve")):
+                # the need at the drive back's own temperature (its energy, and the 20% reserve below 0 C); a
+                # warmer drive back keeps the outbound need, as the outbound note advises
+                m_ev = dc.load_data("ev")["model"]
+                need_b = ((need - ch["reserve"]) * tf(t_back) / tf(t_out)
+                          + m_ev["reserve"]["below_0C" if t_back < 0 else "default"])
+                if soc0 >= need and soc0 < need_b - 1e-9:   # the outbound note said no charging is needed
+                    ch["notes"] = [n for n in ch.get("notes") or [] if not n.startswith("Return trip")]
+                    ch["notes"].append("Return trip: you arrive with %.0f%% but at its forecast %d C the drive back "
+                                       "needs about %.0f%%: charge at the destination, or stop on the way back as "
+                                       "planned above" % (soc0 * 100, round(t_back), need_b * 100))
+                    if need_b <= m_ev["max_soc"] + 1e-9:
+                        ch["return_soc_needed"] = round(need_b, 3)
+                    else:
+                        ch.pop("return_soc_needed", None)
+                need = max(need, need_b)
             if rp is None and need is not None and soc0 < need:
                 bw = []
                 bpoly = back.get("poly") or list(reversed(r.get("poly") or [o, d]))
@@ -2439,7 +2456,6 @@ def _plan(args):
                     back["charging_infeasible"] = True
             else:   # no charging needed on the way back: the energy is recharged at home
                 kwh_b = ch.get("kwh_used") or en.get("kwh") or 0.0
-                tf, t_out = getattr(evc, "temp_factor", None), ch.get("temp_c")
                 if tf is not None and t_back is not None and t_out is not None:
                     kwh_b *= tf(t_back) / tf(t_out)   # the drive back at its own temperature
                 back["energy_cost"] = kwh_b * home_rate

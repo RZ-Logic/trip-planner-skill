@@ -279,7 +279,7 @@ class PriceRule(unittest.TestCase):
     def test_per_unit_rounding_and_min_charge(self):
         rule = {"hourly": 1.0, "per_min": 15}
         self.assertEqual(pk.price_rule(rule, WED, 50)[0], 1.0)     # 4 units of 15 min
-        self.assertEqual(pk.price_rule({"hourly": 3.25, "min_charge": 3.25}, WED, 20)[0], 3.25)
+        self.assertEqual(pk.price_rule({"hourly": 2.0, "min_charge": 5.0}, WED, 20)[0], 5.0)   # minimum above the metered $2
 
     def test_season(self):
         rule = {"hourly": 8.0, "daily_max": 40.0, "season": ["05-15", "09-15"]}

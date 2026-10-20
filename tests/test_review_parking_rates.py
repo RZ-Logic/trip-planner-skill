@@ -1,5 +1,5 @@
 """Offline regression tests for the parking rate-text parser and pricing findings of the 2026-10 review
-(parking-1, -2, -5, -6, -7, -9, parking-verifier-1, -2).
+(parking-1, -2, -5, -6, -7, -9, parking-verifier-1, -2, tests-ci-eng-7).
 
 Every HTTP call is mocked (Overpass through parking._overpass); nothing here touches the network.
 
@@ -31,6 +31,7 @@ WED10 = dt.datetime(2026, 10, 14, 10, 0)
 SAT10 = dt.datetime(2026, 10, 17, 10, 0)
 SAT20 = dt.datetime(2026, 10, 17, 20, 0)
 SUN10 = dt.datetime(2026, 10, 18, 10, 0)
+JUL_WED = dt.datetime(2026, 7, 15, 11, 0)
 DEST = (43.6453, -79.3806)
 
 
@@ -233,6 +234,22 @@ class EveningOnlyPrice(unittest.TestCase):           # parking-7
         self.assertEqual(price("$1/Hr $6 Day (7am-6pm), $5 Eve (6pm-midnight)", WED10.replace(hour=8), 600), 6.0)
         self.assertEqual(price("Weekdays $15, Weekends $8", WED10, 180), 15.0)
         self.assertNotIn("_partial_hours", pk.parse_rate_text("Mon-Fri, 8:30 -18:00, $0.50/7.5 min, $19 Max")[0])
+
+
+class MoneyTestStrength(unittest.TestCase):          # tests-ci-eng-7
+    def test_minimum_charge_above_the_metered_price(self):
+        self.assertEqual(pk.price_rule({"hourly": 2.0, "min_charge": 5.0}, WED10, 20)[0], 5.0)
+
+    def test_wasaga_twelve_dollar_minimum(self):
+        with open(os.path.join(pk.PLACES_DIR, "parking-places-west.json"), encoding="utf-8") as fh:
+            places = json.load(fh)["places"]
+        lot = [x for p in places if p.get("id") == "wasaga-beach" for x in p["lots"] if x["name"] == "Fourth Street Lot (town)"][0]
+        self.assertEqual(pk.price_rule(lot["rule"], JUL_WED, 30)[0], 13.56)   # $12 minimum + 13% HST, not $4.52
+
+    def test_arrival_inside_a_window_that_began_the_day_before(self):
+        wed02 = dt.datetime(2026, 10, 14, 2, 0)
+        self.assertEqual(pk.price_rule({"hourly": 3.0, "paid_hours": ["18:00", "06:00"]}, wed02, 180)[0], 9.0)
+        self.assertEqual(pk.price_rule({"hourly": 3.0, "periods": [{"days": [1], "hours": ["18:00", "06:00"]}]}, wed02, 180)[0], 9.0)
 
 
 if __name__ == "__main__":

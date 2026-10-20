@@ -276,5 +276,39 @@ class CalendarDatesTests(unittest.TestCase):
         self.assertEqual(count.get("pt_sa_wkl", 0), 0, count)
 
 
+
+class MalformedRowsTests(unittest.TestCase):
+    """tests-ci-eng-10: one malformed stop_times row skips that row, not the whole feed."""
+
+    def load(self, p):
+        net = th.Network()
+        th.load_feed(net, "t", "test", p, DAY, hms(9, 0), hms(13, 0))
+        self.assertIn((hms(10, 0), hms(10, 30)), [(c[0], c[1]) for c in net.conns])   # t1 still loads
+        bad = [w for w in net.warnings if "malformed stop_times" in w]
+        self.assertEqual(len(bad), 1, net.warnings)
+        self.assertIn("test: 1 malformed", bad[0])
+
+    def test_hhmm_row_skips_only_that_row(self):
+        self.load(feed([("1", "WK", "t1", "C"), ("1", "WK", "t2", "C")],
+                       [("t1", "10:00:00", "10:00:00", "A", 1, 0, 0), ("t1", "10:30:00", "10:30:00", "C", 2, 0, 0),
+                        ("t2", "11:00", "11:00", "A", 1, 0, 0), ("t2", "11:30:00", "11:30:00", "C", 2, 0, 0)]))
+
+    def test_truncated_row_skips_only_that_row(self):
+        p = feed([("1", "WK", "t1", "C"), ("1", "WK", "t2", "C")],
+                 [("t1", "10:00:00", "10:00:00", "A", 1, 0, 0), ("t1", "10:30:00", "10:30:00", "C", 2, 0, 0),
+                  ("t2", "11:00:00", "11:00:00", "A", 1, 0, 0)])
+        with zipfile.ZipFile(p) as z:
+            text = z.read("stop_times.txt").decode("utf-8")
+        add_files(p, {"stop_times.txt": text + "t2,11:30:00\n"})   # a last line cut short
+        self.load(p)
+
+    def test_untimed_trip_is_not_counted_twice(self):
+        # t2's middle stop has no time, so its rows are read a second time for interpolation
+        self.load(feed([("1", "WK", "t1", "C"), ("1", "WK", "t2", "C")],
+                       [("t1", "10:00:00", "10:00:00", "A", 1, 0, 0), ("t1", "10:30:00", "10:30:00", "C", 2, 0, 0),
+                        ("t2", "11:00:00", "11:00:00", "A", 1, 0, 0), ("t2", "", "", "B", 2, 0, 0),
+                        ("t2", "11:20", "11:20", "D", 3, 0, 0), ("t2", "11:30:00", "11:30:00", "C", 4, 0, 0)]))
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -1719,17 +1719,24 @@ def load_feed(net, fid, label, path, day, t0, t_end, holidays=None, local_tz=Non
         net.idle_stops[label] = net.feed_stops[label]
 
     lo, hi = t0 - 3600, t_end + 3 * 3600
+    bad = [0]   # malformed rows of active trips, counted on the main pass only
 
     def stream_stop_times(only=None):
         """Rows for active trips. Timed rows far outside the window are skipped unless the trip is
-        headway-based or listed in `only` (trips that need every timepoint for interpolation)."""
+        headway-based or listed in `only` (trips that need every timepoint for interpolation).
+        A malformed row (cut short, or a time not written HH:MM:SS) is skipped and counted in `bad`."""
         found, untimed = {}, set()
         idx, rows = gz.table("stop_times.txt")
         i_trip, i_arr, i_dep = idx["trip_id"], idx["arrival_time"], idx["departure_time"]
         i_stop, i_seq = idx["stop_id"], idx["stop_sequence"]
         i_pk, i_dk, i_sh = idx.get("pickup_type"), idx.get("drop_off_type"), idx.get("stop_headsign")
+        need = max(i_trip, i_arr, i_dep, i_stop, i_seq)
         for r in rows:
             if not r:
+                continue
+            if len(r) <= need:
+                if only is None and len(r) > i_trip and r[i_trip].strip() in trip_off:
+                    bad[0] += 1
                 continue
             tid = r[i_trip].strip()
             if only is not None and tid not in only:
@@ -1737,7 +1744,12 @@ def load_feed(net, fid, label, path, day, t0, t_end, holidays=None, local_tz=Non
             offs = trip_off.get(tid)
             if offs is None:
                 continue
-            a, d = parse_time(r[i_arr]), parse_time(r[i_dep])
+            try:
+                a, d = parse_time(r[i_arr]), parse_time(r[i_dep])
+            except ValueError:
+                if only is None:
+                    bad[0] += 1
+                continue
             if a is None:
                 a = d
             if d is None:
@@ -1751,6 +1763,8 @@ def load_feed(net, fid, label, path, day, t0, t_end, holidays=None, local_tz=Non
             try:
                 seq = int(float(r[i_seq]))
             except ValueError:
+                if only is None:
+                    bad[0] += 1
                 continue
             sh = r[i_sh].strip() if i_sh is not None and i_sh < len(r) else ""
             pkc = r[i_pk].strip() if i_pk is not None and i_pk < len(r) else ""
@@ -1761,6 +1775,9 @@ def load_feed(net, fid, label, path, day, t0, t_end, holidays=None, local_tz=Non
     per_trip, untimed = stream_stop_times()
     if untimed:  # interpolation needs the timed stops on both sides, even outside the window
         per_trip.update(stream_stop_times(only=untimed)[0])
+    if bad[0]:
+        net.warnings.append("%s: %d malformed stop_times rows were skipped (missing columns, or a time not written "
+                            "HH:MM:SS), so some of its trips may miss a stop." % (label, bad[0]))
 
     local = {}
 

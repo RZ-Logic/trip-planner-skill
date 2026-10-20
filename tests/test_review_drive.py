@@ -1,6 +1,7 @@
 """Regression tests for the review fixes to the driving route core: tolls the routing engine reports that the
-planner does not price (US toll roads, crossings missing from tolls.json) and the time zone of an origin outside
-the region files.
+planner does not price (US toll roads, crossings missing from tolls.json), the time zone of an origin outside
+the region files, border waits and charging stops placed in the timeline, and navigation links that follow the
+recommended route.
 
 Every HTTP call is mocked: either drive_common.fetch with test_drive_route.FakeFetch, or test_drive_plan.Env.
 
@@ -17,10 +18,12 @@ _atexit.register(_shutil.rmtree, _TMP, True)            # even when exported: se
 _os.environ["TRIP_PLANNER_CONFIG"] = _os.path.join(_TMP, "config", "car.json")
 _os.environ["TRIP_PLANNER_CACHE"] = _os.path.join(_TMP, "cache")
 _os.environ.setdefault("TRIP_PLANNER_QUIET", "1")   # no progress lines on stderr (TRIP_PLANNER_QUIET=0 shows them)
+import copy
 import datetime as dt
 import json
 import os
 import sys
+import types
 import unittest
 import urllib.parse
 from unittest import mock
@@ -31,6 +34,7 @@ if HERE not in sys.path:
 import test_car_profile as tcp  # noqa: E402,F401  (keeps the run away from the user's saved car)
 import test_drive_plan as tdp  # noqa: E402
 import test_drive_route as tdr  # noqa: E402
+import test_final_integration as tfi  # noqa: E402
 
 dp, dc = tdp.dp, tdp.dc
 th = dc.th
@@ -247,6 +251,120 @@ class TimeZoneTests(unittest.TestCase):
         self.assertEqual(res["depart"], dt.datetime(2026, 10, 14, 11, 30))
         self.assertEqual(_tz_warnings(res), [])
         self.assertNotIn("times America", text)
+
+
+
+def _milton_markham():
+    fake = tdr.FakeFetch([(("valhalla", "exclude_tolls"), tdr.milton_markham_tollfree()),
+                          (("valhalla",), tdr.milton_markham_valhalla())])
+    with mock.patch.object(dc, "fetch", side_effect=fake):
+        return drt.get_routes(tdr.MILTON, tdr.MARKHAM, tdr.WED_0730, dict(tdr.OPTS), [])
+
+
+class StopsInTimeline(unittest.TestCase):
+    """drive-core-3: a border wait or a charging stop before the 407 moves the entry clock, its toll band and the
+    time-of-day factors after it; the arrival keeps adding the stop once."""
+    D0630 = dt.datetime(2026, 10, 14, 6, 30)
+
+    def test_stop_before_407_moves_entry_band(self):
+        f = _milton_markham()[0]
+        ref = copy.deepcopy(f)
+        drt.retime(ref, dt.datetime(2026, 10, 14, 7, 0), tdr.OPTS)
+        f["_stops"] = [(0.0, 1800.0)]
+        drt.retime(f, self.D0630, tdr.OPTS)
+        self.assertEqual(f["etr"][0]["entry_time"], ref["etr"][0]["entry_time"])
+        self.assertEqual(f["etr"][0]["band_start"], "07:00")
+        self.assertEqual(f["etr"][0]["toll_transponder"], 50.62)
+        self.assertAlmostEqual(f["typical_s"], ref["typical_s"], delta=1)
+        self.assertEqual(f["arrive"], self.D0630 + dt.timedelta(seconds=f["typical_s"]))   # driving time only
+
+    def test_stop_after_407_does_not_move_entry(self):
+        f = _milton_markham()[0]
+        ref = copy.deepcopy(f)
+        drt.retime(ref, self.D0630, tdr.OPTS)
+        f["_stops"] = [(f["base_s"], 1800.0)]
+        drt.retime(f, self.D0630, tdr.OPTS)
+        self.assertEqual(f["etr"][0]["entry_time"], ref["etr"][0]["entry_time"])
+        self.assertEqual(f["etr"][0]["band_start"], ref["etr"][0]["band_start"])
+        self.assertAlmostEqual(f["typical_s"], ref["typical_s"], delta=1)
+
+    def test_stop_at_407_entry_is_before_it(self):
+        f = _milton_markham()[0]
+        ref = copy.deepcopy(f)
+        drt.retime(ref, self.D0630, tdr.OPTS)
+        f["_stops"] = [(f["etr"][0]["offset_base_s"] - 30.0, 1800.0)]   # inside a chunk, just before the ramp
+        drt.retime(f, self.D0630, tdr.OPTS)
+        self.assertAlmostEqual(f["etr"][0]["offset_s"], ref["etr"][0]["offset_s"] + 1800.0, delta=1)
+
+    def test_set_stops_converts_metres(self):
+        f = _milton_markham()[0]
+        drt.set_stops(f, [(0.0, 60), (sum(c["m"] for c in f["chunks"]), 90), (5000.0, 0)])
+        self.assertEqual(f["_stops"], [(0.0, 60.0), (round(f["base_s"], 1), 90.0)])   # a zero-length stop is dropped
+
+    def test_return_drops_the_outbound_stops(self):
+        f = _milton_markham()[0]
+        drt.set_stops(f, [(0.0, 1800.0)])
+        back = drt.reverse_for_return(f, dt.datetime(2026, 10, 14, 17, 0), tdr.OPTS)
+        self.assertEqual(back["_stops"], [])
+
+    def test_route_stops_list(self):
+        got = dp.route_stops({"bridges": [{"along_m": 5000.0}]},
+                             {"stops": [{"km_along": 12.5, "charge_min": 20, "detour_min": 1}]}, 30)
+        self.assertEqual(got, [(5000.0, 1800.0), (12500.0, 1260.0)])
+
+    def test_ev_charging_stop_moves_407_band_in_plan(self):
+        evm = types.ModuleType("ev_charging")
+        evm.car_profile = lambda *a, **k: {"name": "Test EV", "connectors": {"CCS"}}
+        evm.plan_charging = lambda *a, **k: {
+            "needed": True, "feasible": True, "arrive_soc": 0.4, "extra_s": 1800, "public_cost": 10.0,
+            "kwh_used": 10.0, "kwh_100km": 18.0, "home_energy_cost": 0.0, "notes": [], "dest_chargers": [],
+            "source": "NLR", "stops": [{"name": "Test DC", "network": "Ivy", "km_along": 1.0, "max_kw": 150,
+                                        "ports": 4, "arrive_soc": 0.2, "depart_soc": 0.6, "charge_min": 30,
+                                        "cost": 10.0, "price_text": "$0.69/kWh", "detour_min": 0}]}
+        fake = tdr.FakeFetch([(("valhalla", "exclude_tolls"), tdr.milton_markham_tollfree()),
+                              (("valhalla",), tdr.milton_markham_valhalla())])
+
+        def fetch(url, **kw):
+            if "fueltypesall" in url:
+                return tdp.FUEL_CSV.encode("utf-8")
+            return fake(url, **kw)
+        with tdp.Env(), tdp.at_now(tdp.NOW),                 mock.patch.dict(sys.modules, {"drive_route": drt, "ev_charging": evm}),                 mock.patch.object(dc, "fetch", side_effect=fetch):
+            res = dp.plan(tdp.args_for("--origin", "%f,%f" % tdr.MILTON, "--dest", "%f,%f" % tdr.MARKHAM,
+                                       "--vehicle", "ev", "--depart", "2026-10-14 06:30", "--weather", "clear",
+                                       "--incidents", "off", "--park-and-ride", "off"))
+        row = next(r for r in res["routes"] if r["label"] == "fastest")
+        self.assertEqual(row["etr"][0]["band_start"], "07:00")
+        self.assertNotIn("_stops", row)
+        rec = next(r for r in res["routes"] if r["letter"] == res["recommended"])
+        self.assertEqual(res["arrival"]["at_lot"], rec["arrive"] + dt.timedelta(minutes=30))   # the stop added once
+
+
+    def test_border_wait_placed_on_the_way_back(self):
+        fake = tdr.FakeFetch([(("valhalla", "use_tolls"), tdr._border_no407()), (("valhalla",), tdr._border_fast())])
+
+        def fetch(url, **kw):
+            if "fueltypesall" in url:
+                return tdp.FUEL_CSV.encode("utf-8")
+            return fake(url, **kw)
+        with tdp.Env(), tdp.at_now(tdp.NOW), mock.patch.dict(sys.modules, {"drive_route": drt}),                 mock.patch.object(dc, "fetch", side_effect=fetch),                 mock.patch.object(drt, "set_stops", wraps=drt.set_stops) as ss:
+            res = dp.plan(tdp.args_for("--origin", "%f,%f" % tdr.MILTON, "--dest", "%f,%f" % tdr.DETROIT,
+                                       "--depart", "2026-10-20 06:00", "--weather", "clear", "--incidents", "off",
+                                       "--park-and-ride", "off", "--round-trip", "--stay-hours", "3"))
+        wait = dp.costs()["arrival"]["border_wait_min"] * 60.0
+        calls = [c[0] for c in ss.call_args_list]
+        out = [r for r, _st in calls if not r["_return"]]
+        back = [r for r, _st in calls if r["_return"] and r["etr"]][0]
+        self.assertEqual(len(out), 2)   # both routes cross the bridge near Detroit, at the far end
+        self.assertTrue(all(st == [(r["bridges"][0]["along_m"], wait)] for r, st in calls))
+        self.assertLess(back["_stops"][0][0], 0.1 * back["base_s"])   # the drive back crosses near its start
+        plain = copy.deepcopy(back)
+        plain["_stops"] = []
+        drt.retime(plain, back["depart"], tdr.OPTS)
+        # the 407 entry is at least the wait later (more, when the later clock meets heavier traffic before it)
+        self.assertGreaterEqual(back["etr"][0]["offset_s"] - plain["etr"][0]["offset_s"], wait - 1)
+        row = next(r for r in res["routes"] if r["etr"])["return"]
+        self.assertEqual(row["etr"][0]["entry_time"], back["etr"][0]["entry_time"])
+        self.assertEqual(row["arrive"], row["depart"] + dt.timedelta(seconds=row["typical_s"] + wait))   # added once
 
 
 if __name__ == "__main__":

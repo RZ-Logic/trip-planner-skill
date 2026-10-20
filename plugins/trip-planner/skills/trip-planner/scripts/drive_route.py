@@ -876,8 +876,31 @@ def _cls(c):
     return "etr" if c.get("etr") else ("urban" if c["urban"] else "other")
 
 
+def set_stops(route, stops):
+    """stops: [(metres along the route, seconds stopped)] -> route["_stops"] = [(base seconds, seconds)], sorted.
+    retime puts each stop on the clock at its point, so later chunks and 407 entries are timed after it;
+    typical_s, plan_s and arrive stay driving time (drive_plan adds the stops to the arrival)."""
+    out = []
+    for m_at, dur in stops or []:
+        if not dur or dur <= 0:
+            continue
+        acc_m = acc_s = 0.0
+        pos = None
+        for c in route["chunks"]:
+            if acc_m + c["m"] >= m_at:
+                frac = (m_at - acc_m) / c["m"] if c["m"] > 0 else 0.0
+                pos = acc_s + c["s"] * max(0.0, min(1.0, frac))
+                break
+            acc_m += c["m"]
+            acc_s += c["s"]
+        out.append((round(acc_s if pos is None else pos, 1), float(dur)))
+    route["_stops"] = sorted(out)
+    return route
+
+
 def retime(route, depart, opts):
-    """Recompute typical and plan times, arrivals, 407 entry times and toll prices for `depart`."""
+    """Recompute typical and plan times, arrivals, 407 entry times and toll prices for `depart`. Stops from
+    set_stops move the clock (later chunks and 407 entries) but not typical_s, plan_s or arrive."""
     w = float(opts.get("weather") or 1.0)
     hol = set(opts.get("holidays") or ()) | tolls.holidays_default()
     tomtom = route["engine"] == "tomtom"
@@ -888,11 +911,17 @@ def retime(route, depart, opts):
     wt = 1.0 if live else w
     getaway = None if tomtom else _getaway_dir(route)
     t = p = base = 0.0
-    marks = [(0.0, 0.0)]
+    marks = [(0.0, 0.0)]   # (base seconds, clock seconds: driving plus the stops passed)
     stats = {}   # (class, label) -> [base seconds, typical factor x base seconds, plan factor x base seconds]
     areas = []
+    stops = list(route.get("_stops") or [])
+    si, waited = 0, 0.0
     for c in route["chunks"]:
-        when = depart + dt.timedelta(seconds=t)
+        while si < len(stops) and stops[si][0] <= base + 1e-6:   # a stop at the chunk's start
+            waited += stops[si][1]
+            si += 1
+            marks.append((base, t + waited))
+        when = depart + dt.timedelta(seconds=t + waited)
         if tomtom:
             ft = 1.0
             fp, lab = tomtom_plan_factor(c, when, hol)
@@ -905,10 +934,17 @@ def retime(route, depart, opts):
         st[2] += c["s"] * fp
         if c["urban"] and not c.get("etr") and c.get("area") and c["area"] not in areas:
             areas.append(c["area"])
+        while si < len(stops) and stops[si][0] < base + c["s"]:   # a stop inside the chunk, at its own point
+            b_at = stops[si][0]
+            t_at = t + c["s"] * ft * wt * (b_at - base) / c["s"]
+            marks.append((b_at, t_at + waited))
+            waited += stops[si][1]
+            si += 1
+            marks.append((b_at, t_at + waited))
         t += c["s"] * ft * wt
         p += c["s"] * fp * wt
         base += c["s"]
-        marks.append((base, t))
+        marks.append((base, t + waited))
     route["typical_s"] = round(t, 1)
     route["plan_s"] = round(max(p, t), 1)
     route["depart"] = depart
@@ -916,10 +952,14 @@ def retime(route, depart, opts):
     route["arrive_plan"] = depart + dt.timedelta(seconds=route["plan_s"])
 
     def to_typ(b):
+        # a stop at b adds a mark at the same base position: the time after the stop is the one returned
+        out, b = marks[-1][1], max(0.0, b)
         for (b0, t0), (b1, t1) in zip(marks, marks[1:]):
-            if b <= b1:
-                return t0 + (t1 - t0) * ((b - b0) / (b1 - b0) if b1 > b0 else 0.0)
-        return marks[-1][1]
+            if b1 > b0 and b0 <= b <= b1:
+                out = t0 + (t1 - t0) * (b - b0) / (b1 - b0)
+                if b < b1:
+                    return out
+        return out
 
     tot_tp = tot_cam = 0.0
     for sg in route["etr"]:
@@ -982,6 +1022,7 @@ def _factor_note(route, stats, areas, w, depart, live=False):
 def reverse_for_return(route, depart, opts):
     """The same roads driven back: reversed geometry and chunks, 407 direction flipped, retimed for `depart`."""
     r = copy.deepcopy(route)
+    r["_stops"] = []   # the outbound stops do not apply backwards; drive_plan sets the return's own
     chunks = route["chunks"]
     end = route["poly"][-1] if route["poly"] else (chunks[-1]["lat"], chunks[-1]["lon"]) if chunks else (0.0, 0.0)
     rev = []

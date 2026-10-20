@@ -1244,6 +1244,16 @@ def plan_backwards(dr, route, deadline, extra_s, opts):
     return dep
 
 
+def route_stops(route, charging, border_min):
+    """[(metres along, seconds)] for the border allowance at each listed crossing and each charging stop, for
+    drive_route.set_stops (a crossing missing from tolls.json has no position, so its allowance is not placed)."""
+    out = [(float(b.get("along_m") or 0.0), border_min * 60.0) for b in route.get("bridges") or []]
+    for s in (charging or {}).get("stops") or []:
+        out.append((float(s.get("km_along") or 0.0) * 1000.0,
+                    (float(s.get("charge_min") or 0.0) + float(s.get("detour_min") or 0.0)) * 60.0))
+    return out
+
+
 # --------------------------------------------------------------------------- money and the trade-off
 
 def route_tolls(route, transponder):
@@ -2222,6 +2232,13 @@ def _plan(args):
 
     for r in routes[:3]:
         energy[id(r)] = energy_for(r)
+        st = route_stops(r, energy[id(r)].get("charging"), border_min)
+        if st and hasattr(dr, "set_stops"):   # the waits go on the clock, so the 407 band is for after them
+            dr.set_stops(r, st)
+            dr.retime(r, r.get("depart") or depart, opts)
+    if hasattr(dr, "relabel") and any(r.get("_stops") for r in routes):
+        dr.relabel(routes)
+        fast = routes[0]
 
     def border_s(r):
         """Planning allowance for each border crossing on the route (CBSA / CBP wait); one for a crossing
@@ -2343,6 +2360,10 @@ def _plan(args):
                     back["charging_infeasible"] = True
             else:   # no charging needed on the way back: the energy is recharged at home
                 back["energy_cost"] = (ch.get("kwh_used") or en.get("kwh") or 0.0) * home_rate
+        st = route_stops(back, back.get("charging"), border_min)
+        if st and hasattr(dr, "set_stops"):   # before the arrival additions below: retime resets arrive
+            dr.set_stops(back, st)
+            dr.retime(back, back_at, o_back)
         back["border_s"] = border_s(back)
         if back["charge_s"] or back["border_s"]:
             for k in ("arrive", "arrive_plan"):

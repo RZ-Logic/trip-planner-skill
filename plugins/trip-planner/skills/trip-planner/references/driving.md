@@ -132,6 +132,10 @@ congestion figures. They are a model, not measurements.
   reflects the weather.
 - **Border crossings:** each one adds a 30 minute planning allowance, an assumption since posted waits
   are often 15 to 60 minutes. Check the CBSA and CBP wait pages before leaving.
+- **Stops on the clock:** the border wait is placed at its crossing and each charging stop at its
+  charger, so the 407 time band and the traffic factors after a stop are for the clock time after it.
+  A crossing missing from `tolls.json` has no known position, so its allowance is only added to the
+  arrival.
 - **TomTom:** with a key, times come from TomTom's traffic (live for now, historic for later dates),
   and "allow" adds 8 to 30%. A round trip's drive back is asked from TomTom at its own departure time
   (one more call per route); if that fails, the return line says the time is reused from the drive there.

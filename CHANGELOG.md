@@ -115,6 +115,35 @@ verified findings. They are fixed in batches below, test first; IDs in brackets 
   Middlesex Route 4) print as "about X" with the operator's fare scale; LINX Route 4 gets its own $2 fare.
   [data-integrity-6]
 
+### Batch 5: docs, agent contract and security
+
+- **Hub ranking counts the fare.** Ride-mode BEST TRADE-OFFS compares ride + fare, --min-saving applies
+  to the total, a hub that riding all the way beats on cost and time is not listed, and an unknown or
+  approximate fare counts as at least the dearest exact fare in the run. A same-vehicle hub with a lower
+  total is no longer hidden. --all lines and JSON all_options carry each hub's fare.
+  [architecture-product-2, docs-contract-3]
+- **Ride traffic by area.** Hub rides use the same traffic.json rows as drives: outside the GTHA, Ottawa,
+  Kitchener-Waterloo and London boxes the lighter rows apply (x1.03 by day, was the x1.45 Toronto rush
+  hour), the weekday shoulders x1.3, and holidays the daytime row. [architecture-product-3,
+  data-integrity-10]
+- **Finish with a ride.** Each train line's stop nearest the destination is always tried, and a WARNING
+  names stops that were not tried. [architecture-product-8]
+- **Hand-entered and projected timetables.** Hand-entered feeds are marked on the FEEDS line; legs whose
+  times are projected from an earlier schedule are marked "timetable assumed" with a WARNING; a region file
+  verified more than six months ago raises a WARNING. Legs whose published times are faster than the road
+  allows (GOST's 10:38 Guelph run, checked against the operator's page on 2026-10-19; two Onex weekend
+  trips) are marked "times doubtful"; the operators' times are kept. [architecture-product-4,
+  data-integrity-8]
+- **Offline transit.** A lat,lon trip with --routing estimate whose timetables are all hand-entered or
+  cached plans offline with a warning instead of stopping at NETWORK BLOCKED; NETWORK BLOCKED never lists
+  an empty set of domains. [docs-contract-4]
+- **Terms of service.** Check lines never point the agent at Impark or SpotHero pages taken from
+  OpenStreetMap; the docs no longer recommend Scrapling and forbid stealth or anti-bot modes.
+  [docs-contract-5, security-tos-9]
+- **Park-and-ride trigger.** The automatic trigger and the "vs driving + parking" total no longer trust an
+  unverified, old or unknown price on the top lot; they use the cheapest walkable lot with a checked price
+  when that costs more, and say why. [docs-contract-verifier-1]
+
 ## 0.9.8 (2026-10-12)
 
 **Review:** a code, test and security review by Sonnet and Opus agents raised 80 findings. Verifiers

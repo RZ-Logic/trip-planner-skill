@@ -153,8 +153,8 @@ with the Ontario region files; elsewhere every drive uses the congested rows. Pa
   are often 15 to 60 minutes. Check the CBSA and CBP wait pages before leaving.
 - **Stops on the clock:** the border wait is placed at its crossing and each charging stop at its
   charger, so the 407 time band and the traffic factors after a stop are for the clock time after it.
-  A crossing missing from `tolls.json` has no known position, so its allowance is only added to the
-  arrival.
+  A crossing missing from `tolls.json` (any route of a cross-border trip with no listed crossing) has
+  no known position, so its allowance is only added to the arrival.
 - **TomTom:** with a key, times come from TomTom's traffic (live for now, historic for later dates),
   and "allow" adds 8 to 30%. The 407 entry time comes from TomTom's turn-by-turn times along the
   route. A round trip's drive back is asked from TomTom at its own departure time (one more call per
@@ -464,5 +464,6 @@ Meanwhile, do the rest by hand and say it is manual:
 - **Tolls:** 407 tolls are an estimate from the rate chart. Billing can differ by a little at zone
   edges. Only the 407 ETR and ten listed border crossings are priced. Other tolls a routing engine
   reports (US toll roads, crossings not in the list such as Sault Ste. Marie) print as "tolls not
-  priced", with a toll-free comparison and a WARNING; the OSRM fallback cannot see them.
+  priced" with a WARNING, and with a toll-free comparison when the engine finds one within 30% of the
+  distance (excluding tolls also rules out an unlisted crossing); the OSRM fallback cannot see them.
 - **EV:** charger availability and prices change. Busy sites add waits that are not modelled.

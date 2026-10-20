@@ -749,6 +749,47 @@ class FreeRoadTollFlags(unittest.TestCase):
         self.assertIs(r["has_tolls"], True)
 
 
+SSM_ON = (46.5219, -84.3461)
+SSM_MI = (46.4953, -84.3453)
+
+
+class UnlistedCrossingComparison(unittest.TestCase):
+    """Follow-up to drive-core-1: excluding tolls also excludes a crossing missing from tolls.json, so the
+    'toll-free' route for a trip over one can go hundreds of km round; it is not compared. A route with no listed
+    crossing on a cross-border trip keeps its border allowance when another route crosses at a listed one."""
+
+    def test_detour_around_an_unlisted_crossing_is_not_compared(self):
+        ca, us = (46.5130, -84.3560), (46.5010, -84.3490)   # the International Bridge, which tolls.json does not list
+        fast = tdr._valhalla_trip([(tdr.densify([SSM_ON, ca], 200), ["Huron Street"], False, 50.0),
+                                   (tdr.densify([ca, us], 100), ["Sault Ste. Marie International Bridge"], True, 40.0),
+                                   (tdr.densify([us, SSM_MI], 200), ["I 75"], False, 60.0)])
+        round_lake = tdr._valhalla_trip([(tdr.densify([SSM_ON, (48.38, -89.25), (47.99, -89.58), (46.78, -92.10),
+                                                       (46.40, -86.65), SSM_MI], 5000),
+                                          ["Highway 17", "MN 61", "US 2"], False, 85.0)])
+        routes, w, _fake = _routes([(("valhalla", "exclude_tolls"), round_lake), (("valhalla",), fast)],
+                                   SSM_ON, SSM_MI)
+        self.assertEqual([r["label"] for r in routes], ["fastest"])
+        self.assertIs(routes[0]["toll_unpriced"], True)
+        self.assertEqual(len(w), 1, w)
+        self.assertIn("no toll-free route", w[0])
+        self.assertIn("check Google Maps with tolls avoided", w[0])
+
+    def test_route_without_a_listed_crossing_keeps_its_allowance(self):
+        def edit(a, b, o, d):
+            b["bridges"] = [{"name": "Ambassador Bridge", "cad": 0.0, "text": "free this way", "along_m": 1000.0}]
+
+        def rev(lat, lon):
+            return {"label": "X", "country": "CA" if lat > 46.51 else "US", "state": None}
+        m = _router(tdp.fake_drive_route(), edit)
+        with tdp.Env(), mock.patch.dict(sys.modules, {"drive_route": m}), tdp.at_now(tdp.NOW),                 mock.patch.object(dp, "reverse_address", side_effect=rev),                 mock.patch.object(dp, "reverse_country", side_effect=lambda lat, lon: rev(lat, lon)["country"]):
+            res = dp.plan(tdp.args_for("--origin", "%f,%f" % SSM_ON, "--dest", "%f,%f" % SSM_MI, "--weather", "clear",
+                                       "--incidents", "off", "--depart", "2026-10-17 10:00", "--park-and-ride", "off"))
+        allow = dp.costs()["arrival"]["border_wait_min"] * 60
+        got = {r["label"]: r["border_s"] for r in res["routes"]}
+        self.assertEqual(got, {"fastest": allow, "toll-free": allow}, got)
+        self.assertTrue(any("crossing with no data here" in x for x in res["warnings"]), res["warnings"])
+
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -2176,7 +2176,7 @@ def _plan(args):
     a_cfg = costs()["arrival"]
     border_min = float(a_cfg.get("border_wait_min", 30))
     orig_cc = (o_info or {}).get("country") or _country_from_text(o_label)
-    listed = any(r.get("bridges") for r in routes)
+    listed = all(r.get("bridges") for r in routes)   # each route without a listed crossing needs the allowance
     if not orig_cc and dest_cc and not listed:
         if _home_label(o_lat, o_lon):
             orig_cc = (region.get("country") or REGION_COUNTRY) if region else None

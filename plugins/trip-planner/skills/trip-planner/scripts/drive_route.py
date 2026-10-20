@@ -312,13 +312,20 @@ def _valhalla(o, d, depart, opts, warnings, arrive_at=None):
 
 def _keep_comparison(fast, cand, engine, warnings):
     """The route compared with the 407 must keep the fastest route's border crossing: excluding tolls also
-    excludes the toll bridges, which can send the 'toll-free' route hundreds of km through the US."""
+    excludes the toll bridges, which can send the 'toll-free' route hundreds of km through the US. The same holds
+    for a route whose only tolls are unpriced, which may cross at a crossing tolls.json does not list."""
     if cand is None:
         return None
     if fast["bridges"] and (not cand["bridges"] or cand["km"] > 1.3 * fast["km"] or cand["etr"]):
         warnings.append("%s found no route without the 407 that keeps the border crossing (its toll-free route "
                         "was %.0f km against %.0f km); check Google Maps with tolls avoided"
                         % (engine, cand["km"], fast["km"]))
+        return None
+    if fast.get("toll_unpriced") and not fast.get("etr") and cand["km"] > 1.3 * fast["km"]:
+        # the unpriced toll can be a crossing missing from tolls.json (Sault Ste. Marie): excluding tolls bans it
+        warnings.append("%s found no toll-free route close to the route with tolls (its toll-free route was %.0f km "
+                        "against %.0f km; an unpriced toll can be a border crossing), so none is compared; check "
+                        "Google Maps with tolls avoided" % (engine, cand["km"], fast["km"]))
         return None
     return cand
 

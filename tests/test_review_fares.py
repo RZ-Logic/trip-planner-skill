@@ -181,5 +181,27 @@ class MixedCurrencies(unittest.TestCase):
         self.assertNotIn("total ~", txt)
 
 
+# ---------------------------------------------------------------------------------------------------- gem-G2B
+class RefundedFareGivesNoWindow(unittest.TestCase):
+    def group(self, agency, depart, fare, first="A", last="B", routes=("1",)):
+        return {"agency": agency, "feed": agency.lower(), "depart": hm(depart), "first_stop": first, "last_stop": last,
+                "routes": set(routes), "fare": fare}
+
+    def test_later_legs_run_from_the_go_fare_not_the_refunded_local_fare(self):
+        g = [self.group("MiWay", "08:00", 3.5), self.group("GO Transit", "08:30", 6.0),
+             self.group("Brampton Transit", "09:30", 3.55, last="Argentia Rd"),
+             self.group("Milton Transit", "10:15", 4.25, first="Argentia Rd at Second Line", routes=("21",))]
+        th.apply_transfers(g, GTHA["transfer_rules"], "card", dt.date(2026, 10, 13))
+        self.assertEqual([x["charged"] for x in g], [0.0, 6.0, 0.0, 0.0])                   # Milton was 4.25
+        self.assertIn("free from GO Transit", g[2]["note"])                                # was "free from MiWay"
+
+    def test_one_go_tap_still_credits_every_local_fare_before_it(self):
+        # unchanged (how many fares one GO tap credits is an open owner decision): MiWay and YRT both credited back
+        g = [self.group("MiWay", "08:00", 3.5), self.group("York Region Transit", "08:30", 4.25),
+             self.group("GO Transit", "09:00", 9.05)]
+        th.apply_transfers(g, GTHA["transfer_rules"], "card", dt.date(2026, 10, 13))
+        self.assertEqual([x["charged"] for x in g], [0.0, 0.0, 9.05])
+
+
 if __name__ == "__main__":
     unittest.main()

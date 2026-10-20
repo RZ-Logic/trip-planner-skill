@@ -78,7 +78,8 @@ Rules:
   feed's `name` or the GTFS `agency_name`. `same_agency`: a second fare on the same agency within
   `window_min` of the first boarding is free. `pairs`: a fare on a `to` agency is free (`action`
   `free`, the default) or the earlier `from` fare is credited back (`refund_from`, for "your local
-  fare is refunded when you tap the train"), within `window_min` of the earlier boarding. Optional
+  fare is refunded when you tap the train"), within `window_min` of the earlier boarding. A credited
+  fare covers nothing later: later transfers count from the fare that was paid. Optional
   limits: `payment` (`card`, `cash`), `days` (0 = Monday), `hours` (`[["05:30", "10:00"], ...]`,
   local time of the transfer), `at_stops` (stop-name substrings at the transfer point) and `routes`
   (route short names). `paper_only` (agency names) lists agencies with no card readers on board

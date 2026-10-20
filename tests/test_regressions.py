@@ -589,7 +589,8 @@ class FareRegressions(unittest.TestCase):
         g = [self.group("MiWay", "07:00", 3.5), self.group("GO Transit", "07:20", 7.0), self.group("TTC", "08:30", 3.3)]
         self.charged(g)
         self.assertIn("credited back when you tap GO", g[0]["note"])
-        self.assertIn("One Fare", g[2]["note"])   # free from MiWay (2 h) or GO (3 h); both hold
+        self.assertIn("One Fare", g[2]["note"])   # free from GO (3 h): the credited MiWay fare gives no window
+        self.assertIn("free from GO Transit", g[2]["note"])
         g = [self.group("TTC", "07:00", 3.3), self.group("MiWay", "07:30", 3.5)]
         self.charged(g)
         self.assertEqual(g[1]["note"], "free from TTC (One Fare, within 2 h)")

@@ -1998,7 +1998,8 @@ def apply_transfers(groups, rules, payment, day=None):
     charged (None when unknown) and note. Rules: same_agency {name: {window_min, payment}} and
     pairs [{from, to, window_min, payment, action 'free' | 'refund_from', days, hours, at_stops, routes,
     label}]. Windows run from the boarding of the fare that was paid: a leg that rides free keeps the
-    window of the fare that covered it, so a free transfer never restarts the clock. Payment
+    window of the fare that covered it, so a free transfer never restarts the clock, and a fare credited
+    back gives no window to later legs. Payment
     'contactless' (a bank card tap) gets the same transfers as 'card'. Paying cash, the rider holds the
     paper transfer of the agency they paid, so pair rules need a direct change and match that agency.
     rules['paper_only'] lists agencies with no card readers on board (Milton Transit): with a card the rider
@@ -2012,10 +2013,13 @@ def apply_transfers(groups, rules, payment, day=None):
         g["charged"], g["note"], g["window_from"] = g["fare"], None, g["depart"]
         g["issuer"], g["issuer_agency"] = {g["agency"], g["feed"]}, g["agency"]
         g["paper"] = pay == "cash" or bool({g["agency"], g["feed"]} & paper_only)
+        g["refunded"] = False
     for i, g in enumerate(groups):
         names = {g["agency"], g["feed"]}
         boundary = "%s | %s" % (groups[i - 1]["last_stop"], g["first_stop"]) if i else ""
         for p in groups[:i]:
+            if p["refunded"]:
+                continue   # its fare was credited back: later legs run from the fare that was paid
             # what the rider shows: a paper transfer names the agency that issued it; a card tap names the leg
             ppay = "cash" if p["paper"] else pay
             pnames = p["issuer"] if p["paper"] else {p["agency"], p["feed"]}
@@ -2042,6 +2046,7 @@ def apply_transfers(groups, rules, payment, day=None):
             if hit.get("action") == "refund_from":
                 if p["charged"] or p["charged"] is None:
                     p["charged"], p["note"] = 0.0, "free (%s)" % label
+                    p["refunded"] = True
             else:
                 src = p["issuer_agency"] if p["paper"] else p["agency"]   # paper: whose transfer the rider holds
                 g["charged"], g["note"] = 0.0, "free from %s (%s)" % (src, label)
@@ -2129,7 +2134,8 @@ def journey_fare(net, legs, flat=None, payment="card", card_discount=None, rules
     for p in parts:
         full = p.pop("fare")
         charged = p.pop("charged", full)
-        for k in ("depart", "first_stop", "last_stop", "routes", "window_from", "issuer", "issuer_agency", "paper"):
+        for k in ("depart", "first_stop", "last_stop", "routes", "window_from", "issuer", "issuer_agency", "paper",
+                  "refunded"):
             p.pop(k, None)
         if charged is None:
             complete = False

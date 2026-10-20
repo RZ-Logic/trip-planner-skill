@@ -2984,6 +2984,7 @@ def plan(args):
     net = Network()
     net.warnings = warnings
     loaded, skipped_far, capped, failed = [], [], [], []
+    failed_urls = {}   # label -> urls of a feed that failed, to tell blocked feed hosts from broken feeds
 
     def load_one(fid, label, urls, opts=None):
         opts = opts or {}
@@ -3001,6 +3002,7 @@ def plan(args):
             return True
         except Exception as e:  # noqa: BLE001
             failed.append(label)
+            failed_urls[label] = list(urls)
             warnings.append("feed %s failed to load, so its service is missing from this answer: %s" % (label, e))
             log("warning: feed %s failed: %s" % (label, e))
             return False
@@ -3052,7 +3054,33 @@ def plan(args):
     if any(not same_clock(tzs[0], z) for z in tzs[1:]):
         warnings.append("feeds use different time zones %s; times assume one local clock" % tzs)
     if not net.conns:
-        raise SystemExit("no transit departures found in the time window. Warnings: %s" % warnings)
+        # the probe hosts answered but a feed's every download failed on the network: the feed hosts are blocked
+        # (or fail TLS), which is the likely reason for no departures, so say that and list the hosts to allow
+        down, tls, causes = [], [], set()
+        for urls in failed_urls.values():
+            remote = [u for u in urls if not os.path.exists(u)]
+            errs = [bad_urls.get(u) for u in remote]
+            if not errs or not all(e is not None and (_tls_failed(e) or _unreachable(e)) for e in errs):
+                continue
+            for u, e in zip(remote, errs):
+                h = urllib.parse.urlsplit(u).netloc.rpartition("@")[2]   # never a user:password
+                if _tls_failed(e):
+                    tls.append(h)
+                else:
+                    down.append(h)
+                    causes.add(_net_cause(e))
+        if tls and not down:
+            raise SystemExit(tls_failed_message(sorted(set(tls))))
+        if down:
+            at = argparse.Namespace(**dict(vars(args), origin="%f,%f" % (o_lat, o_lon), dest="%f,%f" % (d_lat, d_lon)))
+            hosts, note = trip_domains(at, regions)
+            hosts += [h for h in sorted(set(down)) if h not in hosts]
+            if tls:
+                note = (note + " " if note else "") + "The certificate check failed for %s. %s" % (
+                    ", ".join(sorted(set(tls))), TLS_HELP)
+            raise SystemExit(network_blocked_message(sorted(set(down)), hosts, note, causes=sorted(causes)))
+        raise SystemExit("no transit departures found in the time window." + "".join(
+            "\nWARNING " + safe_text(w) for w in warnings))
 
     used = sorted({c[2] for c in net.conns} | {c[3] for c in net.conns})
     egress, dest_m = {}, args.dest_walk_m

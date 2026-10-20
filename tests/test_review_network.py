@@ -141,6 +141,68 @@ class TlsAndCauses(unittest.TestCase):
         self.assertEqual(rc, 1)
         self.assertIn("cannot verify HTTPS certificates", out)
 
+BOX = {"min_lat": 43.3, "max_lat": 43.8, "min_lon": -80.1, "max_lon": -79.5}
+
+
+def region(urls):
+    return {"id": "t", "timezone": "America/Toronto", "bbox": BOX,
+            "feeds": [{"id": "bus", "name": "Test Bus", "bbox": BOX, "urls": urls}]}
+
+
+ARGV = ["--origin", "43.5000,-79.8000", "--dest", "43.5500,-79.8000", "--depart", "2026-10-21 08:00",
+        "--routing", "estimate", "--region", "auto"]
+
+
+class FeedHostsBlocked(unittest.TestCase):
+    """hubs-pricing-io-5: the probe hosts answer but the feed hosts are blocked. The run says NETWORK BLOCKED with
+    the feed hosts, not 'no transit departures' with a Python list of warnings."""
+
+    def setUp(self):
+        fresh_cache(self)
+        for p in (mock.patch.object(th, "check_network", side_effect=ok_network),
+                  mock.patch.object(th, "reverse_place_info",
+                                    side_effect=AssertionError("no reverse geocoding expected"))):
+            p.start()
+            self.addCleanup(p.stop)
+
+    def run_with(self, urls, fetch_error=None):
+        with mock.patch.object(th, "load_regions", return_value=[region(urls)]):
+            if fetch_error is None:
+                return run_main(ARGV)
+            with mock.patch.object(th, "fetch_url", side_effect=fetch_error):
+                return run_main(ARGV)
+
+    def test_blocked_feed_hosts_give_network_blocked(self):
+        code, _out = self.run_with(["https://feeds.example.org/gtfs.zip"], PROXY_403)
+        self.assertTrue(code.startswith("NETWORK BLOCKED"), code)
+        self.assertIn("feeds.example.org", code)
+        self.assertIn("a proxy refused", code)
+        self.assertNotIn("Warnings: [", code)
+        self.assertNotIn("no transit departures", code)
+
+    def test_feed_tls_failure_gives_tls_failed(self):
+        code, _out = self.run_with(["https://feeds.example.org/gtfs.zip"], CERT)
+        self.assertTrue(code.startswith("TLS FAILED"), code)
+        self.assertIn("feeds.example.org", code)
+
+    def test_feed_that_answered_with_junk_is_not_blocked(self):
+        code, _out = self.run_with(["https://feeds.example.org/gtfs.zip"], ValueError("not a zip file"))
+        self.assertTrue(code.startswith("no transit departures found in the time window."), code)
+        self.assertIn("\nWARNING feed Test Bus failed to load", code)
+
+    def test_no_departures_message_has_no_list_repr(self):
+        path = os.path.join(tempfile.mkdtemp(), "evening.zip")
+        self.addCleanup(_shutil.rmtree, os.path.dirname(path), True)
+        make_feed(path, [("A", "Stop A", 43.5000, -79.8000), ("C", "Stop C", 43.5500, -79.8000)],
+                  [("R1", "WK", "T1", "C")],
+                  [("T1", "18:00:00", "18:00:00", "A", 1, 0, 0), ("T1", "18:30:00", "18:30:00", "C", 2, 0, 0)])
+        code, _out = self.run_with([path])
+        self.assertTrue(code.startswith("no transit departures found in the time window."), code)
+        self.assertNotIn("['", code)
+        self.assertNotIn("Warnings: [", code)
+
+
+
 
 if __name__ == "__main__":
     unittest.main()

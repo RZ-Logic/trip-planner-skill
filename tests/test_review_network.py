@@ -854,3 +854,45 @@ class SafeTextJoiners(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+# ---------------------------------------------------------------------------- lead follow-ups after the final review
+
+
+class MixedRoutingFailures(unittest.TestCase):
+    """blocked_note: one routing host failing its certificate check and the other blocked needs both fixes."""
+
+    def test_tls_on_one_host_and_blocked_on_the_other_names_both(self):
+        hosts = dp.ROUTING_HOSTS
+
+        def status(hs, timeout=6):
+            return {h: ("tls failed: x" if h == hosts[0] else "blocked: timed out (x)") for h in hs}
+        with mock.patch.object(dp.th, "check_network", side_effect=status):
+            note = dp.blocked_note([])
+        self.assertTrue(note.startswith("NETWORK BLOCKED"), note)
+        self.assertIn("certificate check also failed for %s" % hosts[0], note)
+        self.assertIn("cannot verify HTTPS certificates", note)
+
+    def test_all_hosts_failing_tls_stays_tls_failed(self):
+        def status(hs, timeout=6):
+            return {h: "tls failed: x" for h in hs}
+        with mock.patch.object(dp.th, "check_network", side_effect=status):
+            note = dp.blocked_note([])
+        self.assertTrue(note.startswith("TLS FAILED"), note)
+
+
+class OfflineCheckWithoutCacheFolder(unittest.TestCase):
+    """offline_blocker: a cache folder that cannot be created means nothing is stored, not a crash."""
+
+    def test_unusable_cache_folder_reads_as_not_stored(self):
+        d = tempfile.mkdtemp()
+        self.addCleanup(_shutil.rmtree, d, True)
+        blocker = os.path.join(d, "a-file")
+        with open(blocker, "w") as f:
+            f.write("x")
+        ns = th.argparse.Namespace(origin="43.5000,-79.8000", dest="43.5500,-79.8000", region="auto",
+                                   routing="estimate", crosscheck=False, no_discover=True, access="ride",
+                                   feed=["https://example.invalid/gtfs.zip"])
+        with mock.patch.dict(os.environ, {"TRIP_PLANNER_CACHE": os.path.join(blocker, "cache")}):
+            why = th.offline_blocker(ns, [])
+        self.assertIn("is not stored here", why)

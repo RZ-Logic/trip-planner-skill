@@ -789,7 +789,7 @@ def offline_blocker(args, regions):
         return "--crosscheck asks Transitous"
     for spec in args.feed or []:
         fid, src = parse_feed_spec(spec, set())
-        if not (os.path.exists(src) or os.path.exists(_feed_cache_path(fid, src))):
+        if not _stored(fid, src):
             return "the --feed %s is not stored here" % safe_url(src)
     region, feeds = _trip_feeds(args, regions)
     if not region:   # no region file: only --feed, and no catalog search
@@ -801,10 +801,20 @@ def offline_blocker(args, regions):
         return ("no feed in the region files is near this trip (rerun with the network so --discover can search "
                 "the MobilityDatabase catalog, or pass --feed with a local GTFS file)")
     missing = [safe_text(f.get("name") or f["id"]) for f in feeds if not (f.get("manual") or any(
-        os.path.exists(u) or os.path.exists(_feed_cache_path(f["id"], u)) for u in f.get("urls", [])))]
+        _stored(f["id"], u) for u in f.get("urls", [])))]
     if missing:
         return "these feeds are not stored here: %s" % ", ".join(missing)
     return ""
+
+
+def _stored(fid, src):
+    """A feed file on disk or in the cache (not stored when the cache folder cannot be created)."""
+    if os.path.exists(src):
+        return True
+    try:
+        return os.path.exists(_feed_cache_path(fid, src))
+    except OSError:
+        return False
 
 
 def trip_domains(args, regions, countries=(None, None)):

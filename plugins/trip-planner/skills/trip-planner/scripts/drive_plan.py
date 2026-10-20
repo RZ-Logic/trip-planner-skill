@@ -69,16 +69,19 @@ def blocked_note(warnings):
     if len(blocked) < len(ROUTING_HOSTS):
         return None
     tls = [h for h in blocked if status[h].startswith("tls failed")]
-    if tls:   # certificates, not the allow-list
+    if tls and len(tls) == len(blocked):   # certificates, not the allow-list
         return th.tls_failed_message(tls) + (" Meanwhile the parking above comes from the curated files and the "
                                              "post-2019 Green P carparks in parking.json only.")
-    return ("NETWORK BLOCKED: this environment cannot reach the routing hosts (%s), so there are no driving times. "
+    note = ("NETWORK BLOCKED: this environment cannot reach the routing hosts (%s), so there are no driving times. "
             "This is not an address problem. Allow these domains in this environment's network settings (on "
             "claude.ai, the code execution network access setting): %s. Meanwhile follow the manual method in "
             "references/driving.md (Google Maps for times, the 407 zone table in references/driving/tolls.json, "
             "the curated parking files); the parking above comes from those files and the post-2019 Green P "
             "carparks in parking.json only."
             % (", ".join(blocked), ", ".join(drive_hosts())))
+    if tls:   # one host failed its certificate check, another is blocked: both need fixing
+        note += " The certificate check also failed for %s: %s" % (", ".join(tls), th.TLS_HELP)
+    return note
 
 
 def geocode_blocked_message():

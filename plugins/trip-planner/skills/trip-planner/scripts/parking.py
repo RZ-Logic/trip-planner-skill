@@ -249,7 +249,8 @@ def _ampm(tok):
 
 def parse_hours(a, b):
     """Two time tokens -> (start_min, end_min) or None when they do not look like clock times. With no am/pm on
-    either and both hours 1-12, an end before the start is pm ("8:00-6:00" is 8am-6pm, not past midnight)."""
+    either and both hours 1-12 with no leading zero, an end before the start is pm ("8:00-6:00" is 8am-6pm, not
+    past midnight; "07:00-01:00" still runs to 1am)."""
     sa, sb = a.strip().lower(), b.strip().lower()
     clocky = lambda s: (":" in s) or _ampm(s) or s in ("midnight", "noon")
     if not (clocky(sa) or clocky(sb)):
@@ -264,9 +265,11 @@ def parse_hours(a, b):
         sa_min, _ = _clock(sa, hint)
         if hint == "pm" and sa_min > ea:
             sa_min, _ = _clock(sa, "am")
-    # hour 0 or above 12 is a 24 h time and midnight/noon carry their own meaning: those still wrap past midnight
+    # hour 0 or above 12 or a leading zero ("07:00-01:00") is a 24 h time and midnight/noon carry their own
+    # meaning: those still wrap past midnight
     hour = lambda s: int(re.match(r"\d+", s).group()) if re.match(r"\d+", s) else 0
-    if not (_ampm(sa) or _ampm(sb)) and 1 <= hour(sa) <= 12 and 1 <= hour(sb) <= 12 and ea < sa_min:
+    if not (_ampm(sa) or _ampm(sb)) and 1 <= hour(sa) <= 12 and 1 <= hour(sb) <= 12 and ea < sa_min \
+            and not (re.match(r"0\d", sa) or re.match(r"0\d", sb)):
         ea += 720
     if ea == 1439:
         ea = 1440

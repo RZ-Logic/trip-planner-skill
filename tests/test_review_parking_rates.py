@@ -314,5 +314,13 @@ class FreeWindowOnPaidDays(unittest.TestCase):       # follow-up of parking-2
             self.assertEqual(pk.price_rule(rule, WED10.replace(hour=20), 120, set())[0], 0.0, text)
 
 
+class ZeroPaddedTimes(unittest.TestCase):            # follow-up of parking-11
+    def test_zero_padded_times_are_24_hour(self):
+        self.assertEqual(pk.parse_hours("07:00", "01:00"), (420, 60))       # before: (420, 780), 7am-1pm
+        self.assertEqual(pk.parse_hours("08:00", "02:00"), (480, 120))
+        self.assertEqual(pk.parse_hours("8:00", "6:00"), (480, 1080))       # unpadded still reads as 8am-6pm
+        self.assertEqual(price("$2/hr 07:00-01:00", WED10.replace(hour=20), 120), 4.0)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -29,6 +29,7 @@ import math
 import os
 import re
 import sys
+import threading
 import time
 import unicodedata
 import urllib.error
@@ -245,10 +246,27 @@ def parse_date(s):
 
 
 _LAST_CALL = {}
+_CANCELLED = set()   # threads whose plan() the caller gave up on (drive_plan's park-and-ride time limit)
+
+
+class Cancelled(BaseException):
+    """Raised at the next request of a plan() its caller abandoned. A BaseException, so the per-feed and
+    per-source `except Exception` fallbacks do not swallow it and the abandoned run stops."""
+
+
+def cancel_thread(thread):
+    """Stop `thread`'s plan() at its next request (a thread cannot be killed; this ends its network use)."""
+    _CANCELLED.add(thread)
+
+
+def check_cancelled():
+    if _CANCELLED and threading.current_thread() in _CANCELLED:
+        raise Cancelled("abandoned by the caller after its time limit")
 
 
 def http_get(url, timeout=60, min_interval=0.0):
     """GET with an identifying User-Agent. min_interval paces calls per host (free-service policies)."""
+    check_cancelled()
     host = urllib.parse.urlsplit(url).netloc
     if min_interval:
         wait = _LAST_CALL.get(host, 0.0) + min_interval - time.time()
@@ -830,6 +848,7 @@ def check_network(hosts, timeout=6):
     """{host: 'ok' | 'tls failed: error' | 'blocked: cause (error)'} using one light request per host."""
     out = {}
     for h in hosts:
+        check_cancelled()
         try:
             req = urllib.request.Request("https://%s/" % h, method="HEAD", headers={"User-Agent": USER_AGENT})
             urllib.request.urlopen(req, timeout=timeout).close()
@@ -1194,6 +1213,7 @@ def fetch_url(fid, url, max_age_h, refresh, warnings=None):
         else:
             url_open = url
         req = urllib.request.Request(url_open, headers={"User-Agent": USER_AGENT})
+        check_cancelled()
         with urllib.request.urlopen(req, timeout=300) as r, open(tmp, "wb") as out:
             size = int((getattr(r, "headers", None) or {}).get("Content-Length") or 0)
             if size > FEED_MAX_BYTES:
@@ -1201,6 +1221,7 @@ def fetch_url(fid, url, max_age_h, refresh, warnings=None):
                                  % (size / 1e6, FEED_MAX_BYTES // 10 ** 6))
             got = 0
             while True:
+                check_cancelled()
                 chunk = r.read(1 << 20)
                 if not chunk:
                     break

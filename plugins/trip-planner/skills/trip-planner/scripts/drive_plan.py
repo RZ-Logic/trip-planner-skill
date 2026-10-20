@@ -1759,7 +1759,7 @@ def hub_args(o, d, when, arrive_by, cost_per_km, stay_h, warnings, traffic_facto
     return argparse.Namespace(**ns), argv
 
 
-def _run_with_timeout(fn, arg, timeout_s):
+def _run_with_timeout(fn, arg, timeout_s, cancel=None):
     box = {}
 
     def go():
@@ -1771,6 +1771,8 @@ def _run_with_timeout(fn, arg, timeout_s):
     t.start()
     t.join(timeout_s)
     if t.is_alive():
+        if cancel is not None:
+            cancel(t)   # its next request raises, so the abandoned search stops using the network
         return None, "took longer than %d s" % timeout_s
     if "err" in box:
         return None, str(box["err"]) or box["err"].__class__.__name__
@@ -1892,7 +1894,7 @@ def park_and_ride(o, d, when, arrive_by, cost_per_km, stay_h, drive_total, park_
                         ctx.get("safety_min"))
     cmd = "python3 trip_hubs.py " + " ".join('"%s"' % a if " " in a else a for a in argv[:-1])
     log("park and ride: running trip_hubs in car mode")
-    res, err = _run_with_timeout(th.plan, ns, timeout_s)
+    res, err = _run_with_timeout(th.plan, ns, timeout_s, getattr(th, "cancel_thread", None))
     if err:
         warnings.append("park and ride search failed (%s). Run it yourself: %s" % (err, cmd))
         return {"ran": False, "command": cmd, "error": err}

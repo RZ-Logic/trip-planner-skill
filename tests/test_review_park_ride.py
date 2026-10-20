@@ -23,6 +23,7 @@ import re
 import shutil
 import sys
 import tempfile
+import threading
 import types
 import unittest
 from contextlib import redirect_stdout
@@ -300,6 +301,58 @@ class Toll407Money(unittest.TestCase):
         self.assertEqual(toll(6, 59), 39.70)   # still the 05:00 band
         self.assertEqual(toll(9, 30), 39.79)   # 09:30 band
         self.assertEqual(tolls.band_index(dt.datetime(2026, 10, 14, 7, 0), ["05:00", "07:00", "09:30"]), 1)
+
+
+# ---------------------------------------------------------------------- gem-G5B
+
+class ParkRideTimeout(unittest.TestCase):
+    """gem-G5B: after park and ride's time limit, the abandoned trip_hubs search kept downloading and routing in
+    its daemon thread until the process exited. It is now cancelled at its next request."""
+
+    def test_timed_out_search_makes_no_more_requests(self):
+        started, release, finished = threading.Event(), threading.Event(), threading.Event()
+        box, opened = {}, []
+
+        def slow_plan(ns):
+            started.set()
+            release.wait(10)
+            try:
+                th.http_get("https://example.invalid/after-timeout", timeout=1)
+            except BaseException as e:   # noqa: BLE001
+                box["err"] = e
+                raise
+            finally:
+                finished.set()
+
+        def fake_urlopen(req, timeout=None):
+            opened.append(req.full_url)
+            raise OSError("mocked: no network in tests")
+        warnings = []
+        with mock.patch.object(th, "plan", side_effect=slow_plan),                 mock.patch.object(th.urllib.request, "urlopen", side_effect=fake_urlopen):
+            pr = dp.park_and_ride(tdp.MILTON, tdp.UNION, dt.datetime(2026, 10, 14, 9), True, 0.16, 9, 9.4, 18.0,
+                                  warnings, 0.3, ctx={"day": dt.date(2026, 10, 14)})
+            self.assertTrue(started.is_set())
+            self.assertFalse(pr["ran"])
+            self.assertIn("took longer than", pr["error"])
+            release.set()
+            self.assertTrue(finished.wait(10))
+        self.assertEqual(opened, [])
+        self.assertEqual(type(box["err"]).__name__, "Cancelled")
+
+    def test_cancel_is_per_thread(self):
+        done = threading.Thread(target=lambda: None)
+        done.start()
+        done.join()
+        th.cancel_thread(done)   # a finished thread: the main thread must still be allowed to fetch
+
+        class Resp(io.BytesIO):
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+        with mock.patch.object(th.urllib.request, "urlopen", return_value=Resp(b"ok")):
+            self.assertEqual(th.http_get("https://example.invalid/main", timeout=1), b"ok")
 
 
 if __name__ == "__main__":

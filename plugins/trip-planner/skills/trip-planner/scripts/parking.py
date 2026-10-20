@@ -27,8 +27,8 @@ Extensions used by the open-data parsers (all optional):
   "rate_year": 2026 (rates published for that year; later years get a note); "tax": 0.13 (published rates
   exclude HST); "per_person": {"adult", "child", "senior"} or true (admission per person: the cost is one
   adult unless the party is known); "per_passenger": $ (vehicle price covers the driver, plus $ for each
-  passenger); "first_hour": $ (the first hour costs this, later hours the hourly rate); "fill_cap": $ (cap
-  per day on time charged by "fill"); "_partial_days": [0-6] (the rate text priced only these weekdays;
+  passenger); "first_hour": $ (the first hour costs this, later hours the hourly rate; the day maximum
+  still caps the day); "fill_cap": $ (cap per day on time charged by "fill"); "_partial_days": [0-6] (the rate text priced only these weekdays;
   other days are unknown, not free); a period may carry "no_limit": true (max_stay does not bind in it) and
   "entry_max": [{"from", "to", "max"}] (the cap depends on the arrival time), "months": [1-12] (the window
   applies in those months only), "free_first_min": n (the first n minutes of the stay in it are free) and
@@ -200,10 +200,15 @@ UNIT_RE = re.compile(r"\s*(?:/|per|an?|for|each)?\s*(?P<n>\d+(?:\.\d+)?|1/2|half
 LIMIT_RE = re.compile(r"(?P<n>\d+(?:\.\d+)?)\s*-?\s*(?P<u>hr|hrs|hour|hours|h|min|mins|minute|minutes)\.?\s*(?:parking\s*)?"
                       r"(?:limit|max(?:imum)?)\b|(?:limit|max(?:imum)?\s*stay)\s*(?:of\s*)?(?P<n2>\d+)\s*(?P<u2>h|hr|hrs|hours?|min)"
                       r"|\bmax(?:imum)?\.?\s*(?:of\s*)?(?P<n3>\d+(?:\.\d+)?)\s*(?P<u3>hours?|hrs?|h|min(?:ute)?s?)\b", re.I)
-FIRST_HOUR_RE = re.compile(r"(?P<pre>US\s*\$|CA?\$|C\$|\$)\s*(?P<a>\d+(?:\.\d+)?)\s*(?:for\s+)?(?:the\s+)?first\s+(?:hour|hr|h)\b"
-                           r"[\s,;.]*(?:then\s+)?(?:\$\s*)?(?P<b>\d+(?:\.\d+)?)\s*(?:/|per|for)?\s*(?:each\s+)?"
-                           r"(?:additional|addt?'?l|extra|subsequent)\s*(?:hour|hr|h)\b", re.I)
-FREE_FIRST_RE = re.compile(r"first\s+(?P<n>\d+|one|two|half)?\s*(?P<u>hours?|hrs?|h|min(?:ute)?s?)\s*(?:is\s+)?free", re.I)
+# "$5 first hour, $2 each additional hour", "$5 1st hour, $3/hr after"
+FIRST_HOUR_RE = re.compile(r"(?P<pre>US\s*\$|CA?\$|C\$|\$)\s*(?P<a>\d+(?:\.\d+)?)\s*(?:for\s+)?(?:the\s+)?(?:first|1st)\s+(?:hour|hr|h)\b"
+                           r"[\s,;.]*(?:then\s+)?(?:\$\s*)?(?P<b>\d+(?:\.\d+)?)\s*(?:(?:/|per|for)?\s*(?:each\s+)?"
+                           r"(?:additional|addt?'?l|extra|subsequent)\s*(?:hour|hr|h)\b"
+                           r"|(?:/|per)\s*(?:hour|hr|h)\b(?:\s*(?:after|thereafter)\b)?)", re.I)
+# "first hour free", "2 hours free" (not "2 hours free parking limit"), "free for the first 2 hours"
+FREE_FIRST_RE = re.compile(r"first\s+(?P<n>\d+|one|two|half)?\s*(?P<u>hours?|hrs?|h|min(?:ute)?s?)\s*(?:is\s+|are\s+)?free"
+                           r"|\b(?P<n2>\d+|one|two|half)\s*(?P<u2>hours?|hrs?|h|min(?:ute)?s?)\s+free\b(?!\s*(?:parking\s*)?(?:limit|max))"
+                           r"|\bfree\s+(?:for\s+)?(?:the\s+)?(?:first\s+)?(?P<n3>\d+|one|two|half)\s*(?P<u3>hours?|hrs?|h|min(?:ute)?s?)\b", re.I)
 EVENING_RE = re.compile(r"\b(eve|evening|night|overnight)\b", re.I)
 CLAUSE_SEP = re.compile(r"[,;|]|//")    # what ends a clause of rate text ("$2/hr Mon-Fri 8am-6pm; $1/hr Sat ...")
 # what may stand between "free" and its days: "free Sat-Sun", "free on weekends", "free evenings and weekends"
@@ -323,9 +328,10 @@ def _tokens(text):
                                                "evening": bool(EVENING_RE.search(text[m.start():end + 20]) or EVENING_RE.search(prev))}))
         used.append((m.start(), end))
     for m in FREE_FIRST_RE.finditer(text):
-        q = (m.group("n") or "1").lower()
+        q = (m.group("n") or m.group("n2") or m.group("n3") or "1").lower()
         n = {"one": 1, "two": 2, "half": 0.5}.get(q) or float(q)
-        mins = n if m.group("u").lower().startswith("min") else n * 60
+        unit = (m.group("u") or m.group("u2") or m.group("u3")).lower()
+        mins = n if unit.startswith("min") else n * 60
         toks.append(("free_first", m.start(), m.end(), int(mins)))
         used.append((m.start(), m.end()))
     for m in LIMIT_RE.finditer(text):
@@ -446,8 +452,8 @@ def parse_rate_text(text):
     "First hour FREE. $1 per 1/2 hour. $9 Daily.", "Mon-Fri, 8:30 -18:00, $0.50/7.5 min, $19 Max, ...
     // Sat,Sun,Holidays - Free", "$18 a day weekdays" (other days unknown, not free), "Weekdays $15, Weekends $8",
     "$3/h, $12 max, free after 6pm", "$20 per day, $10 after 5pm", "$3/hr, $10 after 5pm" ($3/h until 17:00),
-    "$5 first hour, $2 each additional hour", "$2.25/hour, max 3 hours", "$2/hr Mon-Fri 8am-6pm; $1/hr Sat
-    9am-5pm" (each price before its window), "$12 Day Max, $5 Night Max" (a night maximum without hours is
+    "$5 first hour, $2 each additional hour", "$5 1st hour, $3/hr after", "2 hours free, then $3/hr",
+    "$2.25/hour, max 3 hours", "$2/hr Mon-Fri 8am-6pm; $1/hr Sat 9am-5pm" (each price before its window), "$12 Day Max, $5 Night Max" (a night maximum without hours is
     noted, not used), "$2/hr Mon-Fri, Sat-Sun free" (a paid day list, then the free one), "$2/hr 8am-6pm, free
     evenings and weekends". Unknown parts are left out; an empty dict means nothing was understood, or that the
     text calls every paid day free ("$2/hr, free Mon-Sun")."""
@@ -1260,6 +1266,8 @@ def _price_core(rule, arrive, stay_min, holidays=None):
                 return float(rule["evening_flat"]), "evening rate (%s)" % desc, fits
         return float(rule["flat"]), desc, fits
     total, per_day, paid_min = 0.0, {}, 0.0
+    # what the first hour costs above the hourly rate; added to the first charged day, inside its maximum
+    fh_extra = max(0.0, float(rule["first_hour"]) - hourly) if rule.get("first_hour") is not None and hourly is not None else 0.0
     covered, done_to, entries, rolling = [], None, {}, {}
     arr_tod = arrive.hour * 60 + arrive.minute
     for p, ws, we, d in sorted(wins, key=lambda w: w[1]):
@@ -1297,6 +1305,8 @@ def _price_core(rule, arrive, stay_min, holidays=None):
                     paid_min += mins
                     continue
                 c = math.ceil(mins / per - 1e-9) * h * per / 60.0
+                if fh_extra and h == hourly:   # the first hour costs more, inside the same day maximum
+                    c, fh_extra = c + fh_extra, 0.0
                 if cap is not None:
                     c = min(c, float(cap))
                 paid_min += mins
@@ -1354,8 +1364,8 @@ def _price_core(rule, arrive, stay_min, holidays=None):
         if rule.get("periods") and rule.get("daily_max") is not None:
             c = min(c, float(rule["daily_max"]))
         total += c
-    if rule.get("first_hour") is not None and hourly is not None and paid_min > 0:
-        total += max(0.0, float(rule["first_hour"]) - hourly)    # the first hour was charged at the hourly rate
+    if fh_extra and paid_min > 0:
+        total += fh_extra    # first charged in a rolling or fill stretch: the first hour was charged at the hourly rate
     if rule.get("evening_flat") is not None:
         ef = hm(rule.get("evening_from") or "18:00")
         d = arrive.date()

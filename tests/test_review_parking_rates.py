@@ -1,5 +1,5 @@
 """Offline regression tests for the parking rate-text parser and pricing findings of the 2026-10 review
-(parking-1, -2, -5, parking-verifier-1, -2).
+(parking-1, -2, -5, -9, parking-verifier-1, -2).
 
 Every HTTP call is mocked (Overpass through parking._overpass); nothing here touches the network.
 
@@ -162,6 +162,26 @@ class OsmOpeningHours(unittest.TestCase):            # parking-5
         lot = osm_lot(dt.datetime(2026, 10, 19, 12, 0), 120, charge="$3/hr", opening_hours="20:00-06:00")
         self.assertEqual(lot["unfit_reason"], "open 20:00 to 06:00 only")
         self.assertIn("open 20:00-06:00", lot["notes"])
+
+
+class FirstHourForms(unittest.TestCase):             # parking-9
+    def test_n_hours_free(self):
+        for text in ("2 hours free, then $3/hr", "Free for 2 hours, then $3/hr", "Free for the first 2 hours, $3/hr after"):
+            self.assertEqual(price(text, WED10, 180), 3.0, text)            # HEAD: 9.0
+            self.assertEqual(price(text, WED10, 90), 0.0, text)
+
+    def test_n_hours_free_is_not_a_time_limit(self):
+        rule, _ = pk.parse_rate_text("$3/hr, 2 hours free parking limit")
+        self.assertNotIn("free_first_min", rule)
+
+    def test_1st_hour(self):
+        self.assertEqual(price("$5 1st hour, $3/hr after", WED10, 180), 11.0)   # HEAD: 9.0
+
+    def test_first_hour_inside_the_day_maximum(self):
+        text = "$5 first hour, $2 each additional hour, $12 max"
+        self.assertEqual(price(text, WED10, 600), 12.0)                     # HEAD: 15.0
+        self.assertEqual(price(text, WED10, 180), 9.0)
+        self.assertEqual(price("$5 first hour, $2 each additional hour", WED10, 60), 5.0)
 
 
 if __name__ == "__main__":

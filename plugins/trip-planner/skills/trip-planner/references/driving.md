@@ -244,7 +244,8 @@ priced.
      river (Goat Island, across from Table Rock) is close on a map but not walkable. Chargers near the
      destination are filtered the same way.
 - **Pricing:** each lot is priced for the actual arrival time and stay length: paid hours, free
-  evenings and Sundays, daily caps, minimums, free first hours, seasons and maximum stays. Also:
+  evenings and Sundays, daily caps, minimums, free first hours ("first hour free", "2 hours free"),
+  first-hour prices ("$5 1st hour, $3/hr after") within the day maximum, seasons and maximum stays. Also:
   rolling maximums (Green P "any 4 hour period" or "24 hour rolling": each block of that length costs
   at most the maximum), block prices ("$7 for 3 hours": one charge per started block; next to an hourly
   rate, "$15/24 hours" stays a cap), prices written before their window ("$2/hr Mon-Fri 8am-6pm;

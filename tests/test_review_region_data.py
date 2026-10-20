@@ -632,5 +632,50 @@ class DataNotice(unittest.TestCase):
         self.assertNotIn("Quietville Licence", src)   # its layer had no lot to show
 
 
+ONTARIO_JSON = os.path.join(SKILL_DIR, "references", "regions", "ontario.json")
+SOURCES_MD = "plugins/trip-planner/skills/trip-planner/references/sources.md"
+API_SOURCE = re.compile(r"//api\.|/api/")   # a booking back end, not a public page
+HARVESTED = {"onex": "api.betterez.com/inventory/trips", "megabus-on-east": "ca.megabus.com/journey-planner/api",
+             "megabus-on-west": "ca.megabus.com/journey-planner/api"}
+
+
+class HarvestedTimetableProvenance(unittest.TestCase):
+    """architecture-product-5, data-integrity-3: the Onex and Megabus timetables were built by automated
+    searches of the operators' booking systems, while the README said timetables were copied from public pages,
+    architecture.md said "Official APIs or a link", NOTICE said every manual feed was hand-entered from public
+    pages and sources.md had no row for any of them. The owner keeps the data; the docs now say how it was built."""
+
+    def test_only_the_three_coach_timetables_came_from_booking_systems(self):
+        with open(ONTARIO_JSON, encoding="utf-8") as fh:
+            feeds = json.load(fh)["feeds"]
+        found = []
+        for f in feeds:
+            src = f.get("source") or []
+            src = src if isinstance(src, list) else [src]
+            if f.get("manual") and any(API_SOURCE.search(u) for u in src if u):
+                found.append(f["id"])
+        self.assertEqual(sorted(found), sorted(HARVESTED))   # a new harvested feed needs its own sources.md row
+
+    def test_sources_lists_each_with_the_system_it_was_built_from(self):
+        text = read(SOURCES_MD)
+        for fid, endpoint in HARVESTED.items():
+            row = next((ln for ln in text.splitlines() if ln.startswith("| `%s`" % fid)), "")
+            self.assertIn(endpoint, row, fid)
+        self.assertIn("not confirmed to allow", text)
+        self.assertIn("owner", text)
+
+    def test_docs_say_how_those_timetables_were_gathered(self):
+        for rel in ("README.md", "docs/architecture.md", "docs/build-decisions.md",
+                    "plugins/trip-planner/skills/trip-planner/NOTICE"):
+            text = read(rel)
+            for word in ("Onex", "Megabus", "booking system"):
+                self.assertIn(word, text, rel)
+        for rel in ("README.md", "docs/architecture.md", "docs/build-decisions.md"):
+            self.assertIn("not confirmed to allow", read(rel), rel)
+        self.assertNotIn("copied from operators' public pages are facts", read("README.md"))
+        self.assertNotRegex(read("plugins/trip-planner/skills/trip-planner/NOTICE"),
+                            r"manual in ontario\.json are\s+hand-entered from the operators' public pages")
+
+
 if __name__ == "__main__":
     unittest.main()

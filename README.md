@@ -261,7 +261,7 @@ The full list, with what is deferred on purpose, is in [`references/driving.md`]
 | [`references/sources.md`](plugins/trip-planner/skills/trip-planner/references/sources.md) | Which dataset or service for each job, with usage rules. |
 | [`references/adding-a-region.md`](plugins/trip-planner/skills/trip-planner/references/adding-a-region.md) | Supporting a new city, for transit and for driving. |
 | [`docs/architecture.md`](docs/architecture.md) | Where the AI is and is not, the components, the stack, the engineering properties. |
-| [`docs/build-decisions.md`](docs/build-decisions.md) | Eight non-obvious choices and the real trips that forced them. |
+| [`docs/build-decisions.md`](docs/build-decisions.md) | Ten non-obvious choices and the real trips that forced them. |
 | [`CHANGELOG.md`](CHANGELOG.md) | Each release, what changed and how it was reviewed. |
 
 Development:
@@ -325,7 +325,7 @@ The plan's numbers come from deterministic scripts. The model asks what's missin
 - **Coordinates of curated parking lots, 407 interchanges, border crossings and fuel-market towns:** © OpenStreetMap contributors, available under the [Open Database Licence 1.0](https://www.openstreetmap.org/copyright). These fields stay under the ODbL.
 - **Transit coverage grids** (`gtha.json`, `ontario.json`) are derived from each agency's open GTFS feed. [`NOTICE`](plugins/trip-planner/skills/trip-planner/NOTICE) lists every feed with its agency's licence and attribution statement, and the feeds whose licence was not found.
 - **Climate normals:** weather data by [Open-Meteo.com](https://open-meteo.com/) (CC BY 4.0), with modified Copernicus Climate Change Service information 2026. **USD/CAD rate:** Bank of Canada, unchanged.
-- **Fares, timetables and prices** copied from operators' public pages are facts; each keeps its source URL in the data file.
+- **Fares, timetables and prices** are facts; each keeps its source URL in the data file. Most were typed in by hand from operators' public pages. Three coach timetables were built instead by automated searches of the operators' booking systems in October 2026: Onex (`onex`, through the Betterez booking API its site uses) and Megabus (`megabus-on-east`, `megabus-on-west`, through the Megabus journey API). The operators' terms were not confirmed to allow this; the owner keeps these timetables by decision. [`sources.md`](plugins/trip-planner/skills/trip-planner/references/sources.md) records how each was built.
 - **Data fetched while planning** (Ontario fuel prices under the Open Government Licence – Ontario, Toronto and other city open data, OpenStreetMap services, Open-Meteo forecasts) is cached only on your machine and keeps its own licence. A drive's `SOURCES` line prints the attribution statement of each city whose parking lots it shows.
 - **Privacy: which hosts get your locations.**
   - Geocoders (Nominatim, Photon) get the address you type. Reverse lookups of a `lat,lon` place (its label, town or country) send at most 3 decimals (about 100 m) at street level or coarser; set `TRIP_HOME` and a drive labels your home with no lookup.

@@ -1383,7 +1383,8 @@ def _price_core(rule, arrive, stay_min, holidays=None):
                 continue
         per_day[d] = per_day.get(d, 0.0) + c
     # rolling maximums: each block of roll_min minutes from the first charged minute costs at most the maximum
-    # (14 h at $4/h with an any-4-hour $12 maximum: $12 + $12 + $12 + $8)
+    # (14 h at $4/h with an any-4-hour $12 maximum: $12 + $12 + $12 + $8); free hours inside a block use up its
+    # time, as a garage clock bills (gem-G3, kept by the owner 2026-10-20)
     for (cap, roll, h, per), ivs in rolling.items():
         t0 = min(x[0] for x in ivs)
         blocks = {}

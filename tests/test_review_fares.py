@@ -247,7 +247,8 @@ class RefundedFareGivesNoWindow(unittest.TestCase):
         self.assertIn("free from GO Transit", g[3]["note"])                     # was "Brampton Transit transfer"
 
     def test_one_go_tap_still_credits_every_local_fare_before_it(self):
-        # unchanged (how many fares one GO tap credits is an open owner decision): MiWay and YRT both credited back
+        # gem-G2A, kept as is by the owner on 2026-10-20 (PRESTO's real behaviour unconfirmed): MiWay and YRT
+        # are both credited back
         g = [self.group("MiWay", "08:00", 3.5), self.group("York Region Transit", "08:30", 4.25),
              self.group("GO Transit", "09:00", 9.05)]
         th.apply_transfers(g, GTHA["transfer_rules"], "card", dt.date(2026, 10, 13))

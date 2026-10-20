@@ -30,6 +30,14 @@ the free public services below are best-effort and rate-limited.
 | Australia (Victoria) | https://data.ptv.vic.gov.au/downloads/gtfs.zip | No | NSW needs a free key. |
 | Statistics Canada transit network database | statcan.gc.ca catalogue 23260003 | No | Static GTFS (stops, routes, trips, stop times) for about 150 Canadian agencies in one product (edition 2025001, released 2025-01-31). Too old for current times; useful to find agencies and stop locations. |
 
+**Hand-entered Ontario timetables** (`manual` feeds in `regions/ontario.json`, for operators with no public GTFS) were typed in from the operators' public pages, each listed in the feed's `source`, except the three coach timetables below. Those were built on 2026-10-10 by automated searches of the operator's booking system. The operators' terms were not confirmed to allow this; the owner keeps these timetables by decision (2026-10-12). The skill never calls these systems at run time.
+
+| Feed | Operator | Booking system queried | Notes |
+|---|---|---|---|
+| `onex` | Onex (ONEXBUS) | Betterez booking API, `https://api.betterez.com/inventory/trips` with the key Onex's cart page (onexbus.betterez.com) uses; `inventory/routes` and `inventory/stations` for the schedule setup and stops | 2,688 searches: every date 2026-10-11 to 10-26 and every ordered stop pair on each route, plus 236 spot searches to 2027-04-30 |
+| `megabus-on-east` | Megabus Canada (Coach Canada) 2711/2720/2730 | Megabus journey API, `https://ca.megabus.com/journey-planner/api/journeys` | every city pair among the modelled stops, every date 2026-10-12 to 10-25, stitched into trips |
+| `megabus-on-west` | Megabus (Badder Bus) 2740 | Megabus journey API, `https://ca.megabus.com/journey-planner/api/journeys`, plus its `travel-dates` and `stops` calls | every date 2026-10-11 to 10-26 both ways, spot-checked on 14 later dates to 2027-01-05 |
+
 ## 2. Routing and second opinions
 
 | Source | URL | Key | Notes |

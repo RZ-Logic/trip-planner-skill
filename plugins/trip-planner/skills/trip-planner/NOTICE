@@ -12,7 +12,8 @@ TRANSIT COVERAGE GRIDS
 ======================
 references/regions/gtha.json and references/regions/ontario.json: each GTFS feed's coverage grid, box and
 stop- and route-derived data come from that feed's timetable. The feeds marked manual in ontario.json are
-hand-entered from the operators' public pages and are not listed here.
+hand-entered and are not listed here: most from the operators' public pages; onex, megabus-on-east and
+megabus-on-west were built from the Onex and Megabus booking systems (see references/sources.md).
 
 Metrolinx (GO Transit and UP Express), regime 1 of 2
   Covers: gtha.json feeds go, upx; ontario.json feed go

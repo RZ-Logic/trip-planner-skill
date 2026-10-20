@@ -2606,6 +2606,7 @@ def apply_transfers(groups, rules, payment, day=None):
                 continue
             label = hit.get("label") or "transfer"
             if hit.get("action") == "refund_from":
+                # no break: every earlier paid local fare in the window is credited (gem-G2A, owner kept 2026-10-20)
                 if p["charged"] or p["charged"] is None:
                     p["charged"], p["note"] = 0.0, "free (%s)" % label
                     p["refunded"] = True

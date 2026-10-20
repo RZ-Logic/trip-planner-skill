@@ -2543,8 +2543,12 @@ def _plan(args):
     rec_r = rec["route"]
 
     # ---- parking at the recommended arrival, for the time the car is actually parked
+    def parked_min(a, b):
+        return dc.elapsed_s(a, b, tzname, region) / 60.0   # elapsed time: the clock may change while parked
+
     lot_arr, lot_end, cap, slot = lot_leave(rec_r)
-    parked = (lot_end - lot_arr).total_seconds() / 60.0
+    parked = parked_min(lot_arr, lot_end)
+
     def _key(at, minutes):
         return floor_min(at), int(round(minutes))
 
@@ -2556,7 +2560,7 @@ def _plan(args):
     skipped = []
     for _ in range(4):   # each lot has its own walk, which moves the time parked: search until the pick holds
         lot_arr, lot_end, cap, slot = lot_leave(rec_r)
-        parked = (lot_end - lot_arr).total_seconds() / 60.0
+        parked = parked_min(lot_arr, lot_end)
         key = _key(lot_arr, parked)
         if parking is None or pk is None or _same(key, parking_key):
             break
@@ -2577,11 +2581,11 @@ def _plan(args):
             best = cand
             search_min, walk_min = lot_minutes(cand)
             a2, e2, _c, _s = lot_leave(rec_r)
-            ok = _key(a2, (e2 - a2).total_seconds() / 60.0)
+            ok = _key(a2, parked_min(a2, e2))
             if _same(ok, key) or not any(_same(k, ok) for k in results):
                 pick = cand
                 break
-            skipped.append((cand, (e2 - a2).total_seconds() / 60.0))
+            skipped.append((cand, parked_min(a2, e2)))
         best, search_min, walk_min = prev
         if pick is None:
             lots_now = targets(parking.get("options"))
@@ -2605,7 +2609,7 @@ def _plan(args):
     warnings.extend(tr_notes)
     res["trade_off"] = {k: v for k, v in tr.items()}
     lot_arr, lot_end, cap, slot = lot_leave(rec_r)
-    parked = (lot_end - lot_arr).total_seconds() / 60.0
+    parked = parked_min(lot_arr, lot_end)
     if parking is not None and best is not None and (parking.get("options") or [None])[0] is not best:
         opts_now = [x for x in parking.get("options") or [] if x is not best]
         parking = dict(parking, options=[best] + [x for x in opts_now if all(x is not y for y, _m in skipped)]

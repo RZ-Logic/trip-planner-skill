@@ -640,5 +640,31 @@ class InterchangeChain(unittest.TestCase):
             self.assertIn(pair, bad, "%s to %s now passes: remove it from KNOWN_SOURCE_CONFLICTS" % pair)
 
 
+class DstParkedTime(unittest.TestCase):
+    """Follow-up to drive-core-7: the car's parked time is elapsed time, so a stay across the fall-back night is
+    priced for as long as the car is really parked (the end clock already follows daylight saving)."""
+
+    def _stay(self, depart):
+        pk = tdp.fake_parking(12.0)
+        inner, seen = pk.find_parking, []
+
+        def find_parking(lat, lon, arrive, stay_min, opts, warnings):
+            seen.append(stay_min)
+            return inner(lat, lon, arrive, stay_min, opts, warnings)
+        pk.find_parking = find_parking
+        with tdp.Env(), mock.patch.dict(sys.modules, {"parking": pk}), tdp.at_now(dt.datetime(2026, 10, 24, 12, 0)):
+            res = dp.plan(tdp.args_for(*(tdp.BASE + ["--dest", "%f,%f" % tdp.MARKHAM, "--depart", depart,
+                                                     "--stay-hours", "4", "--park-and-ride", "off"])))
+        return res, seen
+
+    def test_parked_minutes_across_fall_back(self):
+        plain, _seen = self._stay("2026-10-24 22:30")   # a week without a clock change
+        res, seen = self._stay("2026-10-31 22:30")      # clocks go back at 02:00 on 2026-11-01
+        self.assertEqual(res["parking_stay_min"], plain["parking_stay_min"])
+        self.assertGreater(res["parking_stay_min"], 240)
+        self.assertAlmostEqual(seen[-1], res["parking_stay_min"], delta=1)   # the lot is priced for that time
+        self.assertEqual(res["parking_until"].hour, plain["parking_until"].hour - 1)       # the wall clock jumps
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -1,6 +1,6 @@
 {
   "name": "trip-planner",
-  "version": "0.9.8",
+  "version": "0.9.9",
   "description": "Plan Uber/Lyft + transit trips by checking every transit hub in ride range, and drives: tolls vs time, leave-by, parking priced for the stay, EV charging",
   "author": { "name": "Rizwan Ahmed" },
   "license": "code MIT; data see NOTICE",

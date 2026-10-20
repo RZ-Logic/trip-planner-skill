@@ -4,10 +4,14 @@ Releases of the trip-planner skill. Before shipping, each release was reviewed b
 agents (separate sessions with no part in the build) or an outside GPT review; agent findings were
 re-checked by a verifier before anything was fixed. Counts are given where they were recorded.
 
-## Unreleased
+## 0.9.9 (2026-10-20)
 
 **Review:** a ten-area review of 0.9.8 (reviewers, then one adversarial verifier per area) produced 110
-verified findings. They are fixed in batches below, test first; IDs in brackets refer to that review.
+verified findings, fixed in seven batches below, test first; IDs in brackets refer to that review. A second
+review of the fixes (7 reviewers, 3 verifiers that reproduced every finding) confirmed 31 more problems, all
+fixed. Six owner decisions were settled. Still partly open: data-integrity-12 (one 407 km-post conflict),
+parking-10 (Blue Mountain P2 hours not published) and ten bundled coverage grids with no licence found
+(listed in NOTICE). Tests: 850 at 0.9.8, 1241 now, on Python 3.8 and 3.14.
 
 ### Batch 1: critical and high
 

@@ -37,7 +37,7 @@ import urllib.parse
 import urllib.request
 import zipfile
 
-VERSION = "0.9.8"
+VERSION = "0.9.9"
 USER_AGENT = "trip-planner-skill/%s (open-source agent skill; github.com/RZ-Logic)" % VERSION
 INF = 10 ** 9
 HERE = os.path.dirname(os.path.abspath(__file__))

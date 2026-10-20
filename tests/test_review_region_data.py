@@ -28,6 +28,7 @@ from contextlib import redirect_stderr, redirect_stdout
 from unittest import mock
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+SKILL_DIR = os.path.join(ROOT, "plugins", "trip-planner", "skills", "trip-planner")
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from test_engine import pin_clock, th  # noqa: E402  (test_engine inserts the scripts path)
 
@@ -42,6 +43,12 @@ def setUpModule():
 
 def tearDownModule():
     _CLOCK.stop()
+
+
+def read(rel):
+    """A repo-relative text file."""
+    with open(os.path.join(ROOT, rel), encoding="utf-8") as fh:
+        return fh.read()
 
 
 def ok_network(hosts, timeout=6):
@@ -329,6 +336,37 @@ class ResidualAssumedTimetables(unittest.TestCase):
             elif f["id"] not in NO_PROJECTED_TIMES:
                 missing.append(f["id"])
         self.assertEqual(missing, [])
+
+
+ONTARIO_MD = "plugins/trip-planner/skills/trip-planner/references/regions/ontario.md"
+
+
+class NotesMatchData(unittest.TestCase):
+    """data-integrity-13: ontario.md said Simcoe County LINX runs nothing on holidays, while its file runs Route 4
+    on its Sunday trips and only Christmas is added as no service; and the rural taxi default was labelled 'from
+    published flat rates' though every listed rural taxi publishes none."""
+
+    def test_holiday_section_names_only_feeds_that_stop_on_every_holiday(self):
+        md = read(ONTARIO_MD)
+        sec = md[md.index("## 4. Holidays"):]
+        sec = sec[:sec.index("\n## ")]
+        m = re.search(r";\s*([^;.]+?)\s+run nothing", sec)
+        named = [x.strip() for x in re.split(r",| and ", m.group(1)) if x.strip()]
+        stop_all = {f["id"] for f in ONTARIO["feeds"] if not f.get("manual") and f.get("holiday_service") == "none"
+                    and len(f.get("holiday_dates") or []) >= 5}   # every statutory holiday, not only Christmas
+        mapped = set()
+        for item in named:
+            ids = [f["id"] for f in ONTARIO["feeds"] if f["name"].lower().startswith(item.lower())]
+            self.assertEqual(len(ids), 1, (item, ids))
+            self.assertIn(ids[0], stop_all, item)
+            mapped.add(ids[0])
+        self.assertEqual(mapped, stop_all)
+
+    def test_rural_taxi_default_is_labelled_as_an_assumption(self):
+        label = ONTARIO["taxi_pricing_default"]["label"].lower()
+        self.assertNotIn("published", label.replace("publish no", ""))
+        self.assertIn("assumed", label)
+        self.assertIn("assumed local taxi rate", read(ONTARIO_MD))
 
 
 if __name__ == "__main__":

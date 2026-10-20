@@ -57,8 +57,8 @@ is more than six months old.
 - **No rate card, ride-hail sparse or absent:** Huron (Goderich, Bayfield), Bruce (Tobermory, Lion's Head,
   Sauble), Perth (Stratford), Muskoka (an Uber pilot since 2026-08-24, few drivers), Leeds and Grenville
   (Gananoque), Prince Edward County (uses the Uride app), Peterborough, Norfolk (Port Dover). The script
-  prices these with the London card, or a local taxi estimate (about $1.90/km) where Uber does not
-  operate, and says so. The destination's ride area in `ontario.json` lists local taxis with phone numbers.
+  prices these with the London card, or an assumed local taxi rate (about $1.90/km; the taxis here
+  publish no rates) where Uber does not operate, and says so. The destination's ride area in `ontario.json` lists local taxis with phone numbers.
 - **Getting back** is the hard part in sparse areas: book the return ride ahead (Uber Reserve or a taxi)
   before leaving the gateway town.
 
@@ -67,7 +67,8 @@ is more than six months old.
 Statutory holidays to 2027-12 are listed in `ontario.json` (`holidays`); later years use the Ontario ESA rule
 (`trip_hubs.esa_holidays`) for ride and drive traffic and station parking prices, not for the feed corrections
 below. Feeds that do not mark them are corrected per feed (`holiday_service`): London Transit runs a
-Sunday-like schedule; Sarnia, Stratford, Orillia and Simcoe County LINX run nothing. GO, Barrie, Owen Sound,
+Sunday-like schedule; Sarnia, Stratford and Orillia run nothing. Simcoe County LINX's file marks holidays
+itself (only Route 4 runs, on its Sunday trips), and Christmas Day is added as no service. GO, Barrie, Owen Sound,
 Kingston, Belleville, Quinte, Niagara, Midland and North Bay files already mark holidays. VIA and Ontario
 Northland run their normal timetables. Rural services in the hand-entered timetables list their own holiday
 dates (`except`).

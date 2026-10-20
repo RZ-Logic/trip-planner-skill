@@ -2213,13 +2213,16 @@ def _plan(args):
             shared["stations"] += [s for s in got if s.get("id") not in ids]
             shared["polys"].append(poly)
 
-    def energy_for(r):
+    def energy_for(r, temp_c=None):
+        """Fuel or energy for route r at temp_c (default: the outbound weather). The charging plan (an EV with
+        ev_charging) always uses the outbound weather: the drive back plans its own in make_return."""
+        tc = wx.get("temp_c") if temp_c is None else temp_c
         if not ev:
             cls = car_block.get("class") if car_block.get("how") == "class default" else args.car_class
             l100, basis = consumption(args.vehicle, cls, r.get("hwy_share"),
-                                      wx.get("temp_c"), car_block.get("l_per_100km"), car_block.get("figures"))
+                                      tc, car_block.get("l_per_100km"), car_block.get("figures"))
             cost = fuel_cost(r, l100, price)
-            cf = cold_factor(wx.get("temp_c"))
+            cf = cold_factor(tc)
             return {"kind": "fuel", "l100": l100, "basis": basis, "cost": cost, "extra_s": 0.0,
                     "text": "fuel ~%s (%.0f km at %.1f L/100 km%s, $%.3f/L %s)" % (
                         dc.money(cost), r.get("km", 0.0), l100,
@@ -2248,7 +2251,7 @@ def _plan(args):
         ea_ = car_block.get("ev_args") or {}
         nr = ea_.get("nrcan")
         k100 = (ea_.get("kwh_per_100km") or (nr and (nr["city"] + nr["hwy"]) / 2.0) or dflt) * \
-            cold_factor(wx.get("temp_c"))
+            cold_factor(tc)
         kwh = r.get("km", 0.0) * k100 / 100.0
         return {"kind": "ev", "charging": None, "cost": kwh * home_rate, "extra_s": 0.0, "kwh": kwh, "kwh100": k100,
                 "text": "energy ~%s (%.1f kWh/100 km x %.0f km at $%.2f/kWh home rate)" % (
@@ -2358,11 +2361,14 @@ def _plan(args):
             o_back = dict(opts, weather=wb["mult"])
         else:
             wb = wx
+        t_back = wb.get("temp_c") if wb.get("temp_c") is not None else wx.get("temp_c")
         back = dr.reverse_for_return(r, back_at, o_back)
         back["depart"] = back.get("depart") or back_at
         back["weather"] = {k: wb.get(k) for k in ("mult", "temp_c", "text", "kind")}
         en = energy[id(r)]
         back["energy_cost"], back["charge_s"], back["charging"] = en["cost"], 0.0, None
+        if not ev or evc is None:   # fuel, or an EV priced at the home rate: at the drive back's temperature
+            back["energy_cost"] = energy_for(back, t_back)["cost"]
         ch = en.get("charging")
         if ev and evc is not None and ch:
             rp = ch.get("return_plan")
@@ -2374,7 +2380,7 @@ def _plan(args):
                 eo = ev_opts(bpoly, False, o)
                 eo["hwy_share"] = back.get("hwy_share", r.get("hwy_share"))
                 rp = evc.plan_charging(bpoly, back.get("km", r.get("km", 0.0)), back_at, car, soc0,
-                                       wb.get("temp_c") if wb.get("temp_c") is not None else wx.get("temp_c"), bw, eo)
+                                       t_back, bw, eo)
                 keep_stations(rp, bpoly)
                 rp = {k: v for k, v in rp.items() if not k.startswith("_")}
                 warnings.extend("drive back: %s" % w for w in bw)
@@ -2386,7 +2392,11 @@ def _plan(args):
                 if rp.get("feasible") is False:
                     back["charging_infeasible"] = True
             else:   # no charging needed on the way back: the energy is recharged at home
-                back["energy_cost"] = (ch.get("kwh_used") or en.get("kwh") or 0.0) * home_rate
+                kwh_b = ch.get("kwh_used") or en.get("kwh") or 0.0
+                tf, t_out = getattr(evc, "temp_factor", None), ch.get("temp_c")
+                if tf is not None and t_back is not None and t_out is not None:
+                    kwh_b *= tf(t_back) / tf(t_out)   # the drive back at its own temperature
+                back["energy_cost"] = kwh_b * home_rate
         st = route_stops(back, back.get("charging"), border_min)
         if st and hasattr(dr, "set_stops"):   # before the arrival additions below: retime resets arrive
             dr.set_stops(back, st)

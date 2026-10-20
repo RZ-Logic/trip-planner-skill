@@ -348,5 +348,47 @@ class PriceClauseTest(unittest.TestCase):
         self.assertEqual((p["model"], p["rate"], p["first"]), ("per_hour", 24.0, 5.0))
 
 
+# --------------------------------------------------------------------------- Batch 7
+
+class ReturnTemperatureTest(unittest.TestCase):
+    """ext-13: with --weather auto the drive back's fuel, and an EV's home-rate energy when the drive back needs no
+    charging, are priced at the drive back's own forecast temperature (15 C out, -10 C back here)."""
+
+    def plan(self, dest, *extra, ev_mod=None):
+        temps = []
+
+        def weather_points(points, tzname, warnings, today=None):
+            temps.append(15.0 if not temps else -10.0)
+            return {"mult": 1.0, "temp_c": temps[-1], "text": "t", "kind": "clear", "source": "test",
+                    "forecast": True, "days_out": 0}
+        mods = {"ev_charging": ev_mod} if ev_mod is not None else {}
+        with tdp.Env(), mock.patch.dict(sys.modules, mods), mock.patch.object(dp, "weather_points", weather_points):
+            res = dp.plan(tdp.args_for(
+                "--origin", "%f,%f" % tdp.MILTON, "--dest", "%f,%f" % dest, "--weather", "auto", "--incidents",
+                "off", "--depart", "2026-10-16 08:00", "--park-and-ride", "off", "--round-trip", "--stay-hours", "3",
+                "--transponder", *extra))
+        self.assertGreaterEqual(len(temps), 2, temps)
+        return res
+
+    def test_fuel_back_uses_back_temperature(self):
+        res = self.plan(tdp.GRAND_BEND)
+        f = dp.cold_factor(-10) / dp.cold_factor(15)
+        self.assertGreater(f, 1.0)
+        for row in res["routes"]:
+            with self.subTest(route=row["letter"]):
+                self.assertEqual(row["return"]["weather"]["temp_c"], -10.0)
+                self.assertAlmostEqual(row["return"]["energy_cost"], row["energy"]["cost"] * f, places=2)
+
+    def test_ev_home_energy_back_uses_back_temperature(self):
+        res = self.plan(tdp.MARKHAM, "--vehicle", "ev", "--ev-model", "ioniq5", "--soc", "90",
+                        ev_mod=real_ev(lambda km: []))
+        home_rate = dp.costs()["electricity"]["home_rate"]
+        f = ev.temp_factor(-10) / ev.temp_factor(15)
+        self.assertGreater(f, 1.0)
+        rec = [row for row in res["routes"] if row["letter"] == res["recommended"]][0]
+        self.assertIsNone(rec["return"]["charging"])
+        self.assertAlmostEqual(rec["return"]["energy_cost"], res["charging"]["kwh_used"] * home_rate * f, places=2)
+
+
 if __name__ == "__main__":
     unittest.main()

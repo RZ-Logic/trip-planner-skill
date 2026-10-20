@@ -144,6 +144,23 @@ verified findings. They are fixed in batches below, test first; IDs in brackets 
   unverified, old or unknown price on the top lot; they use the cheapest walkable lot with a checked price
   when that costs more, and say why. [docs-contract-verifier-1]
 
+### Batch 6: test strength and engineering
+
+- **Stronger tests.** New tests pin calendar_dates.txt added service (including Peterborough's
+  Thanksgiving services), the GO fare path (batch 2), 407 money with and without a transponder and the
+  round-trip return toll, rain and snow in the leave-by time, plan()'s booking and arrival margins, and
+  the parking minimum charge (the old test passed without it) and overnight windows begun the evening
+  before. Each was shown failing under a mutant of the code it guards. [tests-ci-eng-1, tests-ci-eng-3,
+  tests-ci-eng-4, tests-ci-eng-5, tests-ci-eng-7]
+- **Holidays.** One Ontario ESA holiday rule is shared by trip_hubs, drive_common and tolls; hub plans
+  treat statutory holidays after the region lists end (from 2028) as holidays, for ride and car traffic
+  and TTC commuter lots. [tests-ci-eng-6]
+- **Malformed rows.** A malformed stop_times row (HH:MM, a line cut short) is skipped and counted in one
+  warning instead of dropping the whole feed. [tests-ci-eng-10]
+- **Network guard and pacing.** The CI network guard switches off proxy settings, so a local proxy can no
+  longer carry a test's request out. Both planners share one per-host pacing clock, so Nominatim stays at
+  one request per second. [tests-ci-eng-8, tests-ci-eng-9]
+
 ## 0.9.8 (2026-10-12)
 
 **Review:** a code, test and security review by Sonnet and Opus agents raised 80 findings. Verifiers

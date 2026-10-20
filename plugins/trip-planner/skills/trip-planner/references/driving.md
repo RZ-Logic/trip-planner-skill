@@ -101,7 +101,9 @@ Addresses work like `trip_hubs.py` (the same `ADDRESS NOT PRECISE` rule). Pass `
    their own way). Also a Google Maps link with the departure or arrival time (desktop only,
    undocumented URL form), and the walk from the lot.
 10. `WARNINGS`: every source that failed or was estimated. Disclose them.
-11. `SOURCES`: data dates. Quote the fuel survey week and the parking sources.
+11. `SOURCES`: data dates and credits. Quote the fuel survey week and the parking sources, and keep the
+    OpenStreetMap credit (Valhalla or OSRM routes, Nominatim and Photon places) and the Open-Meteo
+    credit (CC BY 4.0) when you quote the drive.
 
 ## How the numbers are made
 

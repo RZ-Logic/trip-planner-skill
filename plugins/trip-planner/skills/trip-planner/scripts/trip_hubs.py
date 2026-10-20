@@ -3227,7 +3227,8 @@ def plan(args):
         known = {u for f in feeds for u in f[2]}
         for h in found:
             if not any(u in known for u in h["urls"]):
-                feeds.append((unique_id(h["id"]), feed_label(h), h["urls"], True, {"bbox": h.get("bbox")}))
+                feeds.append((unique_id(h["id"]), feed_label(h), h["urls"], True,
+                              {"bbox": h.get("bbox"), "license": h.get("license")}))
     elif region and not args.no_discover:
         # ends the region files do not serve: no transit near the destination, or an end in another country
         # than the region files' (Toronto to Buffalo): find feeds there
@@ -3251,7 +3252,8 @@ def plan(args):
             added = []
             for h in found[:DISCOVER_DEST_MAX]:
                 if not any(u in known for u in h["urls"]):
-                    feeds.append((unique_id(h["id"]), feed_label(h), h["urls"], False, {"bbox": h.get("bbox")}))
+                    feeds.append((unique_id(h["id"]), feed_label(h), h["urls"], False,
+                                  {"bbox": h.get("bbox"), "license": h.get("license")}))
                     added.append(feed_label(h))
             warnings.append(("the %s is in %s, outside the region files' country (%s); " % (end, foreign, rc)
                              if foreign else "no region file has transit near the destination; ")
@@ -3323,6 +3325,7 @@ def plan(args):
     net = Network()
     net.warnings = warnings
     loaded, skipped_far, capped, failed = [], [], [], []
+    licences = []   # (label, catalog licence URL) of each discovered feed that loaded, for the SOURCES line
     failed_urls = {}   # label -> urls of a feed that failed, to tell blocked feed hosts from broken feeds
 
     def load_one(fid, label, urls, opts=None):
@@ -3337,6 +3340,9 @@ def plan(args):
             load_feed(net, fid, label, path, day, t0, t_end, opts.get("holidays"), tzname, region,
                       opts.get("exclude_routes"), opts.get("board_buffer_s", 0), opts.get("provenance"))
             loaded.append(label)
+            lic = (opts.get("license") or "").strip()
+            if re.match(r"https?://", lic, re.I):   # a web page only, printed like a feed URL
+                licences.append((safe_text(label), safe_text(safe_url(lic))))
             log("loaded %s in %.1fs (%d connections so far)" % (label, time.time() - t, len(net.conns)))
             return True
         except Exception as e:  # noqa: BLE001
@@ -3373,7 +3379,7 @@ def plan(args):
             if len(discovery["promoted"]) >= 2 or not need:
                 break
             if any(in_bbox(a, b, h["bbox"]) for _n, a, b in need):
-                if load_one(unique_id(h["id"]), feed_label(h), h["urls"]):
+                if load_one(unique_id(h["id"]), feed_label(h), h["urls"], {"license": h.get("license")}):
                     discovery["promoted"].append(h)
         if discovery["promoted"]:
             warnings.append("local feeds had no stops near the %s, so large feeds were loaded: %s."
@@ -4424,7 +4430,7 @@ def plan(args):
         "hubs_routed": None if routed is None else {"osrm": routed[0], "estimate": routed[1]},
         "all_options": sorted(options, key=rank) if args.all else None,
         "crosscheck": crosscheck,
-        "attribution": osm_attribution(args, infos, osrm_hosts, overpass_used),
+        "attribution": osm_attribution(args, infos, osrm_hosts, overpass_used, licences),
     })
     if car:
         common.update({"access": "car", "parking_summary": parking_summary,
@@ -4435,8 +4441,9 @@ def plan(args):
     return common
 
 
-def osm_attribution(args, infos, osrm_hosts, overpass_used):
-    """The OpenStreetMap credit and the OSM-based services this run used, or None when it used none."""
+def osm_attribution(args, infos, osrm_hosts, overpass_used, licences=()):
+    """The OpenStreetMap credit and the OSM-based services this run used, then the catalog licence URL of each
+    discovered feed it loaded; None when there is neither."""
     used = []
     if not (LATLON_RE.match(args.origin) and LATLON_RE.match(args.dest)):
         used.append("geocoding: Nominatim/Photon")
@@ -4446,7 +4453,10 @@ def osm_attribution(args, infos, osrm_hosts, overpass_used):
         used.append("driving times: OSRM (%s)" % ", ".join(sorted(osrm_hosts)))
     if overpass_used:
         used.append("station parking: Overpass")
-    return ("%s; %s" % (OSM_CREDIT, "; ".join(used))) if used else None
+    parts = ([OSM_CREDIT] + used) if used else []
+    if licences:
+        parts.append("feed licences: " + "; ".join("%s: %s" % lc for lc in licences))
+    return "; ".join(parts) or None
 
 
 # --------------------------------------------------------------------------- output

@@ -112,7 +112,8 @@ Read the output in this order:
 8. `SECOND OPINION`: Transitous's best trip from the origin and each top hub, `agrees` (within 3
    minutes) or the difference. Compare routes before recommending against it, and keep its link to
    https://transitous.org/sources/ when you quote it.
-9. `SOURCES`: the OpenStreetMap credit for geocoding, driving times and station parking.
+9. `SOURCES`: the OpenStreetMap credit for geocoding, driving times and station parking, and the
+   licence page of each discovered feed that loaded.
 
 The plan uses the region's pickup wait (printed on `RIDE COST MODEL`; none with `--access car`; from a
 place the region file marks as having no ride-hail, the first ride is a local taxi with a 30 minute wait
@@ -246,6 +247,8 @@ python3 ${CLAUDE_SKILL_DIR}/scripts/drive_plan.py --origin "ORIGIN" --dest "DEST
 - **`LINKS`** navigate to the chosen lot (avoid-tolls version for the toll-free route, a via point for a
   route Google would not pick by itself; Waze and Apple Maps may not follow it); give the one for the
   route you recommend.
+- **`SOURCES`**: keep it at the end of the answer; it carries the OpenStreetMap credit for routing and
+  geocoding and Open-Meteo's CC BY 4.0 credit for the forecast.
 - **Disclose every `WARNING`**: failed sources, cached replies used because a service did not answer,
   unverified prices, data from other years.
 - **`NETWORK BLOCKED`**: ask the user to allow the listed domains (`--check-network`). With addresses

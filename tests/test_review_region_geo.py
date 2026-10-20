@@ -30,6 +30,9 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from test_engine import pin_clock, th  # noqa: E402  (test_engine adds the scripts folder)
 from test_regressions import add_files  # noqa: E402
 from test_v098_hubs import feed, ok_network, osrm_reply, run  # noqa: E402  (functions only: never import TestCase classes)
+import test_drive_plan as tdp  # noqa: E402  (module only: its TestCase classes stay out of this file's namespace)
+import drive_common as dc  # noqa: E402
+import drive_plan as dp  # noqa: E402
 
 DAY = dt.date(2026, 10, 15)   # Thursday
 BASE = ["--region", "none", "--no-discover", "--routing", "estimate"]
@@ -436,6 +439,60 @@ class OsmAttribution(unittest.TestCase):
         self.assertIn("OpenStreetMap contributors", res["attribution"])
         self.assertIn("geocoding: Nominatim/Photon", res["attribution"])
         self.assertNotIn("OSRM", res["attribution"])
+
+
+# --------------------------------------------------------------------------------------------- security-tos-6
+class DriveAttribution(unittest.TestCase):
+    """Drive plans credit OpenStreetMap for Valhalla/OSRM routes and Nominatim labels, and Open-Meteo with its
+    CC BY 4.0 licence; transit plans list the licence URL of each discovered feed they loaded."""
+    AGENCY = DiscoveryDownloads.AGENCY
+    bus = DiscoveryDownloads.bus
+    discover = DiscoveryDownloads.discover
+
+    def drive(self, label):
+        def wp(points, tz, warnings, today=None):
+            return {"mult": 1.0, "temp_c": 12, "text": "clear", "kind": "clear", "forecast": True}
+        rev = {"label": label, "country": "CA", "state": "ontario"} if label else {}
+        with tdp.Env(), tdp.at_now(tdp.NOW), mock.patch.object(dp, "weather_points", side_effect=wp),                 mock.patch.object(dp, "reverse_address", return_value=rev),                 mock.patch.object(dp, "reverse_country", return_value="CA"),                 mock.patch.dict(os.environ, {"TRIP_HOME": ""}):
+            res = dp.plan(tdp.args_for("--origin", "%f,%f" % tdp.MILTON, "--dest", "%f,%f" % tdp.MARKHAM,
+                                       "--depart", "2026-10-12 09:00", "--incidents", "off", "--park-and-ride", "off"))
+            return res, dp.render(res)
+
+    def test_routing_source_credits_openstreetmap_for_free_engines(self):
+        for engine in ("valhalla", "osrm"):
+            self.assertIn("OpenStreetMap contributors", dp.routing_source(engine))
+            self.assertIn("ODbL", dp.routing_source(engine))
+        self.assertEqual(dp.routing_source("tomtom"), "routing: TomTom")
+
+    def test_drive_sources_credit_openstreetmap_and_open_meteo(self):
+        res, txt = self.drive("Santa Maria Blvd, Milton")
+        src = res["sources"]
+        self.assertTrue(any(s.startswith("routing: Valhalla") and "OpenStreetMap contributors" in s for s in src), src)
+        self.assertTrue(any(s.startswith("geocoding: Nominatim") and "OpenStreetMap" in s for s in src), src)
+        wx = [s for s in src if s.startswith("weather: ")]
+        self.assertEqual(len(wx), 1, src)
+        self.assertIn("CC BY 4.0", wx[0])
+        self.assertIn("open-meteo.com", wx[0].lower())
+        self.assertIn("CC BY 4.0", txt)
+
+    def test_no_label_lookup_no_geocoding_credit(self):
+        res, _txt = self.drive(None)   # both ends lat,lon and the label lookup gave nothing
+        self.assertFalse(any(s.startswith("geocoding") for s in res["sources"]), res["sources"])
+
+    def test_discovered_feed_licence_is_listed(self):
+        a = self.bus((43.5005, -79.8000), (43.7995, -79.4000))
+        b = self.bus((43.5006, -79.8001), (43.7994, -79.4001))
+        box = (43.4, 43.9, -79.9, -79.3)
+        rows = [dict(catalog_row("mdb-1", "Good Transit", "https://files.example/a.zip", box),
+                     **{"urls.license": "https://example.org/licence?token=abc"}),
+                dict(catalog_row("mdb-2", "Other Transit", "https://files.example/b.zip", box),
+                     **{"urls.license": "file:///etc/passwd"})]
+        res, _fetched = self.discover(rows, {rows[0]["urls.latest"]: a, rows[1]["urls.latest"]: b},
+                                      "43.5000,-79.8000", "43.8000,-79.4000")
+        self.assertIn("feed licences: Good Transit: https://example.org/licence?token=REDACTED", res["attribution"])
+        self.assertNotIn("abc", res["attribution"])
+        self.assertNotIn("file:", res["attribution"])
+        self.assertNotIn("Other Transit", res["attribution"])   # no web licence URL: nothing to list
 
 
 if __name__ == "__main__":

@@ -33,6 +33,11 @@ DEFAULT_TZ = "America/Toronto"
 DIRS = {"E": "eastbound", "W": "westbound"}
 LABELS = {"fastest": "Fastest", "toll-free": "Toll-free", "without 407": "Without 407", "alternative": "Alternative"}
 ENGINES = {"tomtom": "TomTom", "valhalla": "Valhalla", "osrm": "OSRM"}
+OSM_CREDIT = "(c) OpenStreetMap contributors, ODbL"   # the free routing engines and geocoders run on OSM data
+# Open-Meteo's API data are CC BY 4.0 and its licence page asks for a credit linking to Open-Meteo.com
+# (https://open-meteo.com/en/licence, read 2026-10-20)
+WEATHER_SOURCE = ("weather: Open-Meteo forecast, weather data by Open-Meteo.com "
+                  "(CC BY 4.0, https://open-meteo.com/en/licence)")
 CONF_ORDER = {"official": 0, "curated": 1, "osm": 2, "stale": 3}
 EV_FLAGS = ("ev_model", "battery_kwh", "soc", "max_dc_kw", "nacs_adapter", "kwh_per_100km")
 ROUTING_HOSTS = ["valhalla1.openstreetmap.de", "router.project-osrm.org", "routing.openstreetmap.de"]
@@ -2189,7 +2194,7 @@ def _plan(args):
     else:
         wx = weather_points(route_samples(fast, o, d, depart), tzname, warnings, today=now.date())
         if wx.get("forecast"):
-            sources.append("weather: Open-Meteo forecast")
+            sources.append(WEATHER_SOURCE)
     if args.temp_c is not None:
         wx["temp_c"] = args.temp_c
     res["weather"] = wx
@@ -2778,8 +2783,11 @@ def _plan(args):
         sources.append("parking: %s" % "; ".join(parking["sources"]))
     if review_source(parking):
         sources.append(review_source(parking))
-    eng = ENGINES.get(fast.get("engine"), fast.get("engine") or "?")
-    sources.append("routing: %s" % eng)
+    sources.append(routing_source(fast.get("engine")))
+    # an address was geocoded (Nominatim, Photon when it found the house) or a lat,lon end got a Nominatim label
+    typed = not (th.LATLON_RE.match(args.origin or "") and th.LATLON_RE.match(args.dest or ""))
+    if typed or any((i or {}).get("label") for i in (o_info, d_info)):
+        sources.append("geocoding: %s, %s" % ("Nominatim/Photon" if typed else "Nominatim", OSM_CREDIT))
     if ch and ch.get("source"):
         sources.append("charging: %s" % ch["source"])
     rch_back = res.get("charging_return") or {}
@@ -3054,6 +3062,14 @@ def attach_reviews(parking, dest, best, warnings, today=None):
                           "with_rates": sum(1 for p in places if p.get("mentions")), "matched": matched,
                           "added": [x["name"] for x in added]}
     return parking
+
+
+def routing_source(engine):
+    """SOURCES entry for the routing engine, with the OpenStreetMap credit the free engines need."""
+    name = ENGINES.get(engine, engine or "?")
+    if engine in ("valhalla", "osrm"):
+        return "routing: %s, map data %s" % (name, OSM_CREDIT)
+    return "routing: %s" % name
 
 
 def review_source(parking):

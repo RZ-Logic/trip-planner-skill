@@ -252,5 +252,19 @@ class MoneyTestStrength(unittest.TestCase):          # tests-ci-eng-7
         self.assertEqual(pk.price_rule({"hourly": 3.0, "periods": [{"days": [1], "hours": ["18:00", "06:00"]}]}, wed02, 180)[0], 9.0)
 
 
+class TwelveHourTimes(unittest.TestCase):            # parking-11
+    def test_no_ampm_end_before_start_is_afternoon(self):
+        self.assertEqual(pk.parse_hours("8:00", "6:00"), (480, 1080))       # HEAD: (480, 360), 22 h window
+        self.assertEqual(price("Mon-Sat 8:00-6:00 $2/hr", WED10.replace(hour=20), 120), 0.0)   # HEAD: 4.0
+        self.assertEqual(price("Mon-Sat 8:00-6:00 $2/hr", WED10, 120), 4.0)
+
+    def test_24_hour_times_still_wrap(self):
+        self.assertEqual(pk.parse_hours("18:00", "06:00"), (1080, 360))
+        self.assertEqual(pk.parse_hours("00:00", "06:00"), (0, 360))
+        self.assertEqual(pk.parse_hours("9:00", "5:00 pm"), (540, 1020))
+        self.assertEqual(pk.parse_hours("10:00", "10:00"), (600, 600))     # equal times keep the 24 h reading
+        self.assertEqual(pk.parse_hours("8:00", "midnight"), (480, 1440))
+
+
 if __name__ == "__main__":
     unittest.main()

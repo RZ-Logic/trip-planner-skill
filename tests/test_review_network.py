@@ -551,5 +551,29 @@ class JsonCache(unittest.TestCase):
         self.assertFalse(os.path.exists(dc._cache_path(vehicles.PACKAGE_API, None)))
 
 
+class SafeTextInvisible(unittest.TestCase):
+    """security-tos-3: safe_text removes invisible characters (tag characters, zero-width marks, LRM/RLM/ALM, BOM,
+    soft hyphen, private use, variation selectors 17-256), so text an agent reads matches what a person sees;
+    line and paragraph separators become spaces like the controls."""
+
+    def test_invisible_characters_removed(self):
+        s = "Main​ Lot\U000e0041\U000e0042 X﻿‎‏؜\xad\U000e0101"
+        self.assertEqual(th.safe_text(s), "Main Lot X")
+        self.assertEqual(th.safe_text("a b"), "a b")
+
+    def test_visible_text_unchanged(self):
+        for s in ("Grand Bend Sobeys", "Montréal Trudeau", "東京駅", "café ☕️",
+                  "Ελληνικά", "Café à l'Étoile"):
+            self.assertEqual(th.safe_text(s), s)
+
+    def test_controls_and_bidi_still_spaced(self):
+        self.assertEqual(th.safe_text("a\x1bb‮c"), "a b c")
+        self.assertIsNone(th.safe_text(None))
+        self.assertEqual(th.safe_text(12), "12")
+
+    def test_drive_output_strips_tag_characters(self):
+        self.assertEqual(dp.plain_text(["Lot\U000e0041 A"]), "Lot A")
+
+
 if __name__ == "__main__":
     unittest.main()

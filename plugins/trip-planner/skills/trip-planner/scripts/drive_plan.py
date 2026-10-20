@@ -3240,7 +3240,8 @@ def parking_lines(res, day):
 
 def plain_text(lines):
     """The text output: names and text from feeds, maps, APIs and reviews (lot and charger names, closure and 511
-    text, review snippets) can hold control or bidi-override characters, which print as spaces."""
+    text, review snippets) can hold control or bidi-override characters, which print as spaces, and invisible
+    characters, which are dropped (th.safe_text)."""
     return "\n".join(th.safe_text(x) for x in lines)
 
 

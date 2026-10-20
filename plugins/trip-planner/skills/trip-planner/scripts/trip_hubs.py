@@ -150,17 +150,25 @@ def log(msg):
     print(msg, file=sys.stderr, flush=True)
 
 
-# C0 and C1 control characters (terminal escape sequences, bell) and the bidirectional override, embedding
-# and isolate marks that can reorder how a line reads.
-_UNSAFE_CHARS = re.compile("[\x00-\x1f\x7f-\x9f\u202a-\u202e\u2066-\u2069]")
+# C0 and C1 control characters (terminal escape sequences, bell), the line and paragraph separators, and the
+# bidirectional override, embedding and isolate marks that can reorder how a line reads.
+_UNSAFE_CHARS = re.compile("[\x00-\x1f\x7f-\x9f\u2028\u2029\u202a-\u202e\u2066-\u2069]")
+# other invisible characters: format characters (zero-width marks, LRM/RLM/ALM, BOM, soft hyphen), private use
+# and surrogate code points; plane 14 (tag characters, variation selectors 17-256) is removed as a block
+_HIDDEN_CATEGORIES = ("Cf", "Co", "Cs")
 
 
 def safe_text(s):
-    """Text from a feed, map, API or review, safe to print: control and bidi-override characters become
-    spaces, so the data cannot move the cursor, recolour the terminal or reorder a line. None stays None."""
+    """Text from a feed, map, API or review, safe to print: control, separator and bidi-override characters
+    become spaces, so the data cannot move the cursor, recolour the terminal or reorder a line, and other
+    invisible characters are removed, so the text an agent reads is the text a person sees. None stays None."""
     if s is None:
         return None
-    return _UNSAFE_CHARS.sub(" ", s if isinstance(s, str) else str(s))
+    s = _UNSAFE_CHARS.sub(" ", s if isinstance(s, str) else str(s))
+    if s.isascii():
+        return s
+    return "".join(ch for ch in s if not ("\U000e0000" <= ch <= "\U000e0fff"
+                                          or unicodedata.category(ch) in _HIDDEN_CATEGORIES))
 
 
 def safe_url(url):

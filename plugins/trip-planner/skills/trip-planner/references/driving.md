@@ -401,8 +401,8 @@ Other environment variables:
 | `TRIP_PLANNER_QUIET=1` | no progress lines on stderr; WARNINGS in the output are unchanged |
 | `TRIP_HOME` | `lat,lon` or `lat,lon;label`: an origin or destination within 50 m of it is labelled (default "home") with no geocoder lookup. Other place labels are looked up with 4-decimal coordinates |
 
-Text output shows control and bidi-override characters from feeds, OpenStreetMap, NLR and reviews as
-spaces; `--json` keeps the raw values.
+Text output shows control, line-separator and bidi-override characters from feeds, OpenStreetMap, NLR and
+reviews as spaces and drops invisible ones (zero-width marks, tag characters, BOM); `--json` keeps the raw values.
 
 ## Hosts it calls (for a network allow-list)
 

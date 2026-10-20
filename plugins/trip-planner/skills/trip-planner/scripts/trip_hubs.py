@@ -67,6 +67,7 @@ FINAL_RIDE_DROP_POINTS = 5   # stops near the destination tried as the place to 
 FINAL_RIDE_WALK_M = 600      # a final ride can be picked up this far from where you get off
 LONG_HOP_M = 10000           # a vehicle covering this much between two stops is a coach or train
 STATION_RADIUS_FACTOR = 1.3  # rail stations count as hubs this much past the ride radius
+REGION_STALE_DAYS = 183      # ontario.md: re-check seasons, holidays and fares when a region file is over six months old
 
 MOBILITYDB_CSV_URLS = [
     "https://files.mobilitydatabase.org/feeds_v2.csv",
@@ -923,6 +924,7 @@ def merge_regions(home, extra, d_lat=None, d_lon=None, pricing_from=()):
     if not extra:
         view = dict(home)
         view["notes_files"] = [home["notes_file"]] if home.get("notes_file") else []
+        view["verified_by_file"] = [(home["id"], home.get("verified"))]
         view.setdefault("final_ride_pricing", home.get("ride_pricing"))
         for key in ("ride_pricing_areas", "ride_pricing_outside", "taxi_pricing_default"):
             if not view.get(key):
@@ -931,6 +933,7 @@ def merge_regions(home, extra, d_lat=None, d_lon=None, pricing_from=()):
     view = dict(home)
     view["id"] = "+".join(r["id"] for r in [home] + extra)
     view["notes_files"] = [r["notes_file"] for r in [home] + extra if r.get("notes_file")]
+    view["verified_by_file"] = [(r["id"], r.get("verified")) for r in [home] + extra]
     seen = {f["id"] for f in home.get("feeds", [])}
     feeds = list(home.get("feeds", []))
     for r in extra:
@@ -1044,6 +1047,25 @@ def manual_feed_zip(feed):
             z.writestr(name, text)
     os.replace(tmp, path)
     return path
+
+
+def feed_provenance(f):
+    """Hand-entered timetable flags for load_feed from a region file's feed (None for a published GTFS feed):
+    services marked "assumed", dates in "assumed_dates" and dates after "observed_until" use projected times."""
+    if not f.get("manual"):
+        return None
+    services = f["manual"].get("services") or {}
+    until = f.get("observed_until")
+    return {"assumed_services": {sid for sid, sv in services.items() if sv.get("assumed")},
+            "assumed_dates": {parse_date(x.replace("-", "")) for x in f.get("assumed_dates") or []},
+            "observed_until": parse_date(until.replace("-", "")) if until else None,
+            "note": f.get("assumed_note") or ""}
+
+
+def _assumed_on(prov, sid, d):
+    """True when a hand-entered timetable's times for service sid on service day d are projected, not published."""
+    after = prov["observed_until"]
+    return sid in prov["assumed_services"] or d in prov["assumed_dates"] or (after is not None and d > after)
 
 
 FEED_ID_RE = re.compile(r"^([A-Za-z0-9_.-]+)=(.+)$")
@@ -1379,6 +1401,8 @@ class Network:
         self.request = {}  # (trip_idx, row_k) -> "b" (boarding) / "a" (alighting) on request only
         self.idle_stops = {}  # feed label -> stop coordinates, for feeds with no service on the date
         self.feed_stops = {}  # feed label -> coordinates of every stop in the file, served in the window or not
+        self.assumed_trips = set()  # trip indexes whose times are projected (hand-entered, assumed), not published
+        self.assumed_notes = {}  # feed label -> the region file's assumed_note
         self.warnings = []
         self.timezones = set()
 
@@ -1498,10 +1522,11 @@ def holiday_substitute(gz, d, mode):
 
 
 def load_feed(net, fid, label, path, day, t0, t_end, holidays=None, local_tz=None, region=None,
-              exclude_routes=None, board_buffer_s=0):
+              exclude_routes=None, board_buffer_s=0, provenance=None):
     """Add a feed's connections between t0 and t_end (seconds after midnight of `day`, local time).
     holidays: {date: mode} for holidays the file does not mark. local_tz: the trip's zone; a feed that keeps
-    another clock (FlixBus publishes UTC) is shifted to it. exclude_routes: route ids or names to drop."""
+    another clock (FlixBus publishes UTC) is shifted to it. exclude_routes: route ids or names to drop.
+    provenance: feed_provenance() of a hand-entered feed, to mark trips whose times are projected."""
     gz = GtfsZip(path)
     tz, agencies, first_agency = None, {}, None
     if gz.has("agency.txt"):
@@ -1588,7 +1613,7 @@ def load_feed(net, fid, label, path, day, t0, t_end, holidays=None, local_tz=Non
     info = {"id": fid, "name": label, "path": os.path.basename(path),   # the file name only, not the home folder
             "service_from": span[0].isoformat() if span[0] else None,
             "service_to": span[1].isoformat() if span[1] else None,
-            "active_services_on_date": len(act[day])}
+            "active_services_on_date": len(act[day]), "hand_entered": provenance is not None}
     net.feeds.append(info)
     if not act[day] and not substituted:
         net.warnings.append("%s has NO service on %s (file covers %s to %s). Its trips are missing from this answer."
@@ -1597,7 +1622,7 @@ def load_feed(net, fid, label, path, day, t0, t_end, holidays=None, local_tz=Non
     if fares:
         net.fares[label] = fares
 
-    trip_off, trip_meta = {}, {}
+    trip_off, trip_meta, trip_sid = {}, {}, {}
     idx, rows = gz.table("trips.txt")
     for r in rows:
         if not r:
@@ -1610,6 +1635,7 @@ def load_feed(net, fid, label, path, day, t0, t_end, holidays=None, local_tz=Non
             tid = col(r, idx, "trip_id")
             trip_off[tid] = offs
             trip_meta[tid] = (col(r, idx, "route_id"), safe_text(col(r, idx, "trip_headsign")))
+            trip_sid[tid] = sid
 
     # headway-based trips: stop_times holds one template run, repeated every headway_secs. exact_times other than 1
     # (0 or empty) means 'every N min' with no timetable: the vehicle can come any time within the headway
@@ -1741,6 +1767,8 @@ def load_feed(net, fid, label, path, day, t0, t_end, holidays=None, local_tz=Non
                         net.trip_buffer.append(int(max(board_buffer_s, hw)))
                         if hw > board_buffer_s:
                             net.trip_headway[ti] = hw
+                        if provenance and _assumed_on(provenance, trip_sid[tid], days[offsets.index(o)]):
+                            net.assumed_trips.add(ti)
                     if r0[6] and r0[6] != head:   # stop_headsign: what the sign says at this stop
                         net.stop_heads[(ti, k)] = safe_text(r0[6])
                     flag = ("b" if r0[7] in ("2", "3") else "") + ("a" if r1[8] in ("2", "3") else "")
@@ -1753,6 +1781,9 @@ def load_feed(net, fid, label, path, day, t0, t_end, holidays=None, local_tz=Non
                             "were read as after midnight; check them with the operator." % (label, wrapped_n))
     if bad_order:
         net.warnings.append("%s: %d trips with times running backwards were skipped." % (label, bad_order))
+    if provenance is not None:
+        info["assumed_on_date"] = any(net.trips[ti][0] == label for ti in net.assumed_trips)
+        net.assumed_notes[label] = provenance["note"]
 
     # transfers.txt: forbidden transfers and minimum transfer times
     if gz.has("transfers.txt"):
@@ -2143,6 +2174,8 @@ class ProfileScan:
                 legs[-1]["request_board"] = True
             if "a" in net.request.get((ti, conns[r][7]), ""):
                 legs[-1]["request_alight"] = True
+            if ti in net.assumed_trips:
+                legs[-1]["assumed"] = True
             info = self.alight.get(r)
             if info is None:
                 break
@@ -2889,6 +2922,16 @@ def plan(args):
     region = merge_regions(home, extra, d_lat, d_lon,
                            pricing_regions(regions, o_lat, o_lon, o_cc) if args.region != "none" else ())
     tzname = (region or {}).get("timezone")
+    today = utc_now().date()
+    for rid, ver in (region or {}).get("verified_by_file") or []:
+        try:
+            age = (today - dt.date.fromisoformat(ver)).days
+        except (TypeError, ValueError):
+            continue
+        if age > REGION_STALE_DAYS:
+            warnings.append("region file %s.json was last checked %s, %d months ago: its fares, hand-entered "
+                            "timetables, transfer rules and holidays may have changed. Confirm with the operators."
+                            % (rid, ver, age // 30))
     rc = (region or {}).get("country")
     o_foreign = bool(rc and o_cc and o_cc != rc)   # an end in another country than the region file pricing the trip
     d_foreign = bool(rc and d_cc and d_cc != rc)
@@ -2920,10 +2963,12 @@ def plan(args):
             if f.get("coverage") and not coverage_near(f["coverage"], near):
                 map_skipped.append(f.get("name", f["id"]))   # stop map: nothing near either end, no download
                 continue
+            provenance = None
             if f.get("manual"):   # hand-entered timetable of an operator with no public GTFS
                 try:
                     urls = [manual_feed_zip(f)]
-                except (KeyError, ValueError, TypeError, OSError) as e:
+                    provenance = feed_provenance(f)
+                except (KeyError, ValueError, TypeError, OSError, AttributeError) as e:
                     warnings.append("hand-entered timetable %s is malformed and was skipped: %s" % (f["id"], e))
                     continue
             else:
@@ -2933,7 +2978,8 @@ def plan(args):
                 dest_feeds += 1
             feeds.append((f["id"], f.get("name", f["id"]), urls, False,
                           {"holidays": holiday_modes(region, f), "exclude_routes": set(f.get("exclude_routes") or []),
-                           "board_buffer_s": int(float(f.get("board_buffer_min") or 0) * 60)}))
+                           "board_buffer_s": int(float(f.get("board_buffer_min") or 0) * 60),
+                           "provenance": provenance}))
     if map_skipped:
         log("not downloaded (no stops near either end, per the region's stop map): %s" % ", ".join(map_skipped))
     for spec in args.feed or []:
@@ -3086,7 +3132,7 @@ def plan(args):
                 return False
             t = time.time()
             load_feed(net, fid, label, path, day, t0, t_end, opts.get("holidays"), tzname, region,
-                      opts.get("exclude_routes"), opts.get("board_buffer_s", 0))
+                      opts.get("exclude_routes"), opts.get("board_buffer_s", 0), opts.get("provenance"))
             loaded.append(label)
             log("loaded %s in %.1fs (%d connections so far)" % (label, time.time() - t, len(net.conns)))
             return True
@@ -4156,6 +4202,19 @@ def plan(args):
             warnings.append("Transitous finds a better connection for: %s. Compare its route in SECOND OPINION; "
                             "it may use a route or walk this data lacks." % ", ".join(flagged))
 
+    # hand-entered times the region file marks as projected: one WARNING per feed used by a shown option
+    shown = pareto + runners + finish + ([transit_only] if transit_only else [])
+    assumed_feeds = []
+    for o in shown:
+        for lg in o.get("legs") or []:
+            if lg.get("assumed") and lg["feed"] not in assumed_feeds:
+                assumed_feeds.append(lg["feed"])
+    for label in assumed_feeds:
+        note = net.assumed_notes.get(label)
+        warnings.append("%s: the times used on %s are assumed%s, not from a published timetable. Confirm them on "
+                        "the operator's site before relying on them." % (label, day.isoformat(),
+                                                                         " (%s)" % note if note else ""))
+
     common.update({
         "mode": "arrive_by" if arrive_by else "depart",
         "depart": ("arrive by " + deadline.strftime("%a %Y-%m-%d %H:%M")) if arrive_by
@@ -4216,6 +4275,8 @@ def legs_text(legs):
                 notes.append("request stop: call ahead or flag the driver to board")
             if lg.get("request_alight"):
                 notes.append("request stop: tell the driver you are getting off")
+            if lg.get("assumed"):
+                notes.append("timetable assumed, not published: confirm")
             if lg.get("headway_min"):   # no timetable: from when to be at the stop, and the latest arrival
                 start = lg.get("be_there_by", lg["depart"])
                 when = "every %d min from %s, arrive by %s" % (lg["headway_min"], fmt_t(start), fmt_t(lg["arrive"]))
@@ -4319,7 +4380,9 @@ def render(res):
     out.append("WHEN  %s (%s)   region: %s   %s radius: %s km   search window %s h   fares at %s rates"
                % (res["depart"], res.get("timezone") or "local time", res["region"] or "none",
                   "drive" if car else "ride", res["radius_km"], res.get("window_h", "?"), res.get("payment", "card")))
-    out.append("FEEDS  " + "; ".join("%s (%s..%s)" % (f["name"], f["service_from"], f["service_to"]) for f in res["feeds"]))
+    out.append("FEEDS  " + "; ".join("%s (%s..%s%s)" % (f["name"], f["service_from"], f["service_to"],
+                                                       ", hand-entered" if f.get("hand_entered") else "")
+                                     for f in res["feeds"]))
     p = res["pricing"]
     uplift = p.get("uplift", 1.0)
     if car:
@@ -4666,14 +4729,19 @@ def print_timetable(regions, fid):
     print("%s (%s)%s" % (f.get("name", fid), m.get("agency", ""), "  phone " + m["phone"] if m.get("phone") else ""))
     if f.get("notes"):
         print("NOTES  " + f["notes"])
+    if f.get("observed_until"):
+        print("OBSERVED  times observed to %s; later dates are assumed" % f["observed_until"])
+    if f.get("assumed_dates"):
+        print("ASSUMED  projected times on " + ", ".join(f["assumed_dates"]))
     if f.get("board_buffer_min"):
         print("BOARD  be at the stop %s min before departure" % f["board_buffer_min"])
     for sid, sv in sorted(m["services"].items()):
         days = "".join(d for d, on in zip(["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"], sv.get("days", "1111111"))
                        if on == "1")
-        print("SERVICE %s: %s, %s to %s%s%s" % (sid, days, sv["start"], sv["end"],
-                                               "; not on " + ", ".join(sv["except"]) if sv.get("except") else "",
-                                               "; also " + ", ".join(sv["extra"]) if sv.get("extra") else ""))
+        print("SERVICE %s: %s, %s to %s%s%s%s" % (sid, days, sv["start"], sv["end"],
+                                                 "; not on " + ", ".join(sv["except"]) if sv.get("except") else "",
+                                                 "; also " + ", ".join(sv["extra"]) if sv.get("extra") else "",
+                                                 "; assumed, not published" if sv.get("assumed") else ""))
     for r in m["routes"]:
         print("\nROUTE %s %s" % (r.get("route", ""), r.get("name", "")))
         for t in r["trips"]:

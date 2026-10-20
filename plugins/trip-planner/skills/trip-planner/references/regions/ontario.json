@@ -1071,6 +1071,7 @@
         "https://huronshoresareatransit.ca/rates/"
       ],
       "verified": "2026-10-10",
+      "assumed_note": "2027 Beach Bus season assumed from 2026",
       "manual": {
         "agency": "Huron Shores Area Transit",
         "url": "https://huronshoresareatransit.ca/",
@@ -1092,6 +1093,7 @@
             "extra": []
           },
           "hsat-beach-2027": {
+            "assumed": true,
             "days": "0000011",
             "start": "2027-06-26",
             "end": "2027-09-05",
@@ -4906,6 +4908,8 @@
         "https://ca.megabus.com/journey-planner/api/journeys?originId=435&destinationId=438&departureDate=2026-10-14&totalPassengers=1"
       ],
       "verified": "2026-10-10",
+      "observed_until": "2027-01-05",
+      "assumed_note": "trips sampled 2026-10-12 to 10-25; the Toronto-Montreal timetable changes 2027-01-06",
       "manual": {
         "agency": "Megabus (Coach Canada)",
         "url": "https://ca.megabus.com/",
@@ -9357,6 +9361,7 @@
         "https://www.niagaraparks.com/wego"
       ],
       "verified": "2026-10-10",
+      "assumed_note": "spring, summer and fall 2027 projected from the 2026 schedule",
       "manual": {
         "agency": "WEGO (Niagara Parks)",
         "url": "https://www.niagaraparks.com/wego",
@@ -9371,6 +9376,7 @@
             "extra": []
           },
           "spring2027": {
+            "assumed": true,
             "days": "1111111",
             "start": "2027-04-04",
             "end": "2027-05-14",
@@ -9378,6 +9384,7 @@
             "extra": []
           },
           "summer2027": {
+            "assumed": true,
             "days": "1111111",
             "start": "2027-05-15",
             "end": "2027-10-03",
@@ -9385,6 +9392,7 @@
             "extra": []
           },
           "fall2027": {
+            "assumed": true,
             "days": "1111111",
             "start": "2027-10-04",
             "end": "2027-10-31",

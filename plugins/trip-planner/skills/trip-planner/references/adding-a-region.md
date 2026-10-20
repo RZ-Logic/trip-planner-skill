@@ -115,6 +115,12 @@ Rules:
   "extra": [dates]}}, "routes": [{"route", "name", "type", "trips": [{"service", "headsign", "stops":
   [[name, lat, lon, "HH:MM"], ...]}]}]}`. The script builds a small GTFS file from it. Add `verified`,
   `source` and `notes` (season, booking, anything assumed). Leave out request-only stops.
+  Flag projected times so the planner marks the leg "timetable assumed" and adds a WARNING:
+  `"assumed": true` on a service means every date of it uses projected times; feed-level
+  `"observed_until": "YYYY-MM-DD"` means dates after it use times assumed from the observed schedule;
+  `"assumed_dates": [dates]` lists single dates with projected times (holiday patterns); `"assumed_note"`
+  is the short reason the WARNING quotes. A region file's top-level `verified` date also warns once it is
+  over six months old.
 - `ride_pricing_areas`: ordered `[{"name", "boxes": [bbox, ...], "pricing": {rate card}}]`; the first area
   holding the pickup prices the ride, and `out_of_area_per_km` applies when the ride ends outside its
   boxes. `ride_pricing_outside`: the card for pickups in no area. `taxi_pricing_default`: `{base,

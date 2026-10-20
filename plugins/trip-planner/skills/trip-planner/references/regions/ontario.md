@@ -24,8 +24,9 @@ is more than six months old.
   Megabus east, Wolfe Island ferry, Port Hope, Brockville and Peterborough Transit, WEGO 604, Ride Norfolk).
 - Long trips get a search window sized to the drive (up to 9 h). Plans that cannot reach the door by
   transit show under **FINISH WITH A RIDE**: transit to a drop point, then Uber or a local taxi.
-- Hand-entered timetables carry a `verified` date and a `notes` line in `ontario.json`. When a WARNING
-  or the notes say "assumed from 2026", confirm on the operator's site before relying on it.
+- Hand-entered timetables carry a `verified` date and a `notes` line in `ontario.json`, and the FEEDS
+  line marks them `hand-entered`. A leg marked "timetable assumed" and its WARNING mean the times are
+  projected from an earlier schedule: confirm on the operator's site before relying on them.
 
 ## 2. Intercity services
 

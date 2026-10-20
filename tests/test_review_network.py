@@ -575,5 +575,74 @@ class SafeTextInvisible(unittest.TestCase):
         self.assertEqual(dp.plain_text(["Lot\U000e0041 A"]), "Lot A")
 
 
+BUILDING = [{"lat": "43.6", "lon": "-79.4", "addresstype": "building", "display_name": "1 Front St W, Toronto"}]
+
+
+class GeocodeCache(unittest.TestCase):
+    """security-tos-7: forward and reverse geocoding are cached on disk for 30 days (Nominatim's usage policy asks
+    clients to cache), keyed on the whitespace-normalised query; errors and empty results are asked again."""
+
+    def setUp(self):
+        fresh_cache(self)
+        for p in (mock.patch("time.sleep"), mock.patch.dict(th._LAST_CALL, clear=True)):
+            p.start()
+            self.addCleanup(p.stop)
+
+    def replies(self, **by_host):
+        """th.http_get answering from a queue per host ('nominatim', 'photon'); an exception in a queue is raised."""
+        calls = {k: 0 for k in by_host}
+
+        def get(url, **k):
+            host = next(h for h in by_host if h in url)
+            calls[host] += 1
+            r = by_host[host].pop(0)
+            if isinstance(r, Exception):
+                raise r
+            return json.dumps(r).encode()
+        return mock.patch.object(th, "http_get", side_effect=get), calls
+
+    def test_same_address_geocoded_once(self):
+        with mock.patch.object(th, "http_get", return_value=json.dumps(BUILDING).encode()) as hg:
+            for _ in range(3):
+                lat, lon, _name = th.resolve_place("1 Front St W, Toronto", "origin", [])
+                self.assertEqual((lat, lon), (43.6, -79.4))
+        self.assertEqual(hg.call_count, 1)
+        self.assertTrue(os.listdir(os.path.join(th.cache_dir(), "geocode")))
+
+    def test_whitespace_variants_share_the_cache(self):
+        with mock.patch.object(th, "http_get", return_value=json.dumps(BUILDING).encode()) as hg:
+            th.resolve_place("1 Front St W, Toronto", "origin", [])
+            th.resolve_place("1 Front St W,  Toronto ", "origin", [])
+        self.assertEqual(hg.call_count, 1)
+
+    def test_failures_and_empty_results_not_cached(self):
+        refused = urllib.error.URLError(ConnectionRefusedError())
+        patch, calls = self.replies(nominatim=[refused, [], BUILDING], photon=[refused, {"features": []}])
+        with patch:
+            for _ in range(2):
+                with self.assertRaises(SystemExit):
+                    th.resolve_place("1 Front St W, Toronto", "origin", [])
+            self.assertEqual(th.resolve_place("1 Front St W, Toronto", "origin", [])[:2], (43.6, -79.4))
+        self.assertEqual(calls, {"nominatim": 3, "photon": 2})
+
+    def test_photon_reply_cached(self):
+        street = [{"lat": "43.6", "lon": "-79.4", "addresstype": "road", "display_name": "Front St W, Toronto"}]
+        house = {"features": [{"geometry": {"coordinates": [-79.401, 43.601]},
+                               "properties": {"type": "house", "housenumber": "1", "street": "Front St W",
+                                              "city": "Toronto"}}]}
+        patch, calls = self.replies(nominatim=[street], photon=[house])
+        with patch:
+            for _ in range(2):
+                self.assertEqual(th.resolve_place("1 Front St W, Toronto", "origin", [])[:2], (43.601, -79.401))
+        self.assertEqual(calls, {"nominatim": 1, "photon": 1})
+
+    def test_reverse_place_info_cached(self):
+        reply = {"address": {"town": "Milton", "country_code": "ca", "state": "Ontario"}}
+        with mock.patch.object(th, "http_get", return_value=json.dumps(reply).encode()) as hg:
+            for _ in range(2):
+                self.assertEqual(th.reverse_place_info(43.5, -79.8, [])["country"], "CA")
+        self.assertEqual(hg.call_count, 1)
+
+
 if __name__ == "__main__":
     unittest.main()

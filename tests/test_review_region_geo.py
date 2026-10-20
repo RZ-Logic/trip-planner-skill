@@ -285,6 +285,11 @@ class PhotonFallback(unittest.TestCase):
     STREET = {"lat": "43.51", "lon": "-79.88", "addresstype": "road", "category": "highway",
               "display_name": "Santa Maria Boulevard, Milton, Ontario, Canada"}
 
+    def setUp(self):   # geocoder replies are cached on disk (security-tos-7): each test asks with its own replies
+        p = mock.patch.dict(os.environ, {"TRIP_PLANNER_CACHE": tempfile.mkdtemp()})
+        p.start()
+        self.addCleanup(p.stop)
+
     def geocode(self, nominatim, lat, lon, city, state, country, strict):
         photon = {"features": [{"geometry": {"coordinates": [lon, lat]},
                                 "properties": {"type": "house", "housenumber": "805", "street": "Santa Maria Boulevard",

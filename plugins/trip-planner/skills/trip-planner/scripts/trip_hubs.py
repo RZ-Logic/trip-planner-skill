@@ -268,6 +268,32 @@ def cache_dir():
     return d
 
 
+GEOCODE_CACHE_H = 720.0   # 30 days, as drive_plan's reverse lookups (costs.json geocode.cache_h)
+
+
+def cached_json(url, timeout, min_interval, keep=bool, max_age_h=GEOCODE_CACHE_H):
+    """http_get + json.loads with a disk cache under cache_dir()/geocode (Nominatim's usage policy asks clients to
+    cache). Only replies `keep(data)` accepts are stored: an empty result or an error is asked again next time."""
+    path = os.path.join(cache_dir(), "geocode", hashlib.sha1(url.encode("utf-8")).hexdigest()[:24] + ".json")
+    try:
+        if time.time() - os.path.getmtime(path) < max_age_h * 3600:
+            with open(path, encoding="utf-8") as fh:
+                return json.load(fh)
+    except (OSError, ValueError):
+        pass
+    data = json.loads(http_get(url, timeout=timeout, min_interval=min_interval))
+    if keep(data):
+        try:
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            tmp = "%s.%d.tmp" % (path, os.getpid())
+            with open(tmp, "w", encoding="utf-8") as fh:
+                json.dump(data, fh)
+            os.replace(tmp, path)
+        except OSError:
+            pass
+    return data
+
+
 def gmaps_link(a, b, mode):
     return "https://www.google.com/maps/dir/?api=1&" + urllib.parse.urlencode(
         {"origin": "%.6f,%.6f" % a, "destination": "%.6f,%.6f" % b, "travelmode": mode})
@@ -498,7 +524,7 @@ def reverse_place_info(lat, lon, warnings):
         # town level (zoom 10) needs no more than ~100 m of precision: do not send the exact door
         url = "https://nominatim.openstreetmap.org/reverse?" + urllib.parse.urlencode(
             {"lat": "%.3f" % lat, "lon": "%.3f" % lon, "format": "jsonv2", "zoom": 10})
-        addr = json.loads(http_get(url, timeout=20, min_interval=1.1)).get("address") or {}
+        addr = cached_json(url, 20, 1.1, keep=lambda d: bool(d.get("address"))).get("address") or {}
     except Exception as e:  # noqa: BLE001
         warnings.append("reverse geocoding failed (%s)" % e)
         return info
@@ -580,10 +606,11 @@ PHOTON_MAX_FROM_STREET_M = 5000   # tuning: a Photon house farther than this fro
 
 def _geocode(text, label, warnings, strict=True):
     nom, blocked, tls, causes = None, [], [], []
+    query = " ".join(text.split())   # one cache entry for spacing variants of the same address
     try:
         url = "https://nominatim.openstreetmap.org/search?" + urllib.parse.urlencode(
-            {"q": text, "format": "jsonv2", "limit": 1})
-        data = json.loads(http_get(url, timeout=20, min_interval=1.1))  # policy: max 1 request/second
+            {"q": query, "format": "jsonv2", "limit": 1})
+        data = cached_json(url, 20, 1.1)  # policy: max 1 request/second, cache results
         if data:
             nom = data[0]
     except Exception as e:  # noqa: BLE001
@@ -596,11 +623,11 @@ def _geocode(text, label, warnings, strict=True):
     if nom and (nom.get("addresstype") in PRECISE_GEOCODE or nom.get("category") in PRECISE_GEOCODE):
         return float(nom["lat"]), float(nom["lon"]), nom.get("display_name", text)
     try:
-        q = {"q": text, "limit": 1}
+        q = {"q": query, "limit": 1}
         if nom:   # bias toward the street Nominatim found (3 decimals: the street, not a door)
             q.update(lat="%.3f" % float(nom["lat"]), lon="%.3f" % float(nom["lon"]))
         url = "https://photon.komoot.io/api/?" + urllib.parse.urlencode(q)
-        feats = json.loads(http_get(url, timeout=20, min_interval=1.0)).get("features") or []
+        feats = cached_json(url, 20, 1.0, keep=lambda d: bool(d.get("features"))).get("features") or []
         if feats and feats[0]["properties"].get("type") in ("house", "building", "amenity"):
             lon, lat = feats[0]["geometry"]["coordinates"]
             p = feats[0]["properties"]

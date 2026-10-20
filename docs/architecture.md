@@ -71,7 +71,7 @@ Adapted from the *"Where is the AI?"* table in [FinAgent OS](https://github.com/
 | Timetables | Agency GTFS feeds, [MobilityDatabase](https://mobilitydatabase.org) catalog | Public, machine-readable, the same data every transit app uses. Region files pin mirrors and correct known feed quirks. |
 | Transit routing | Own profile connection scan, Python stdlib | One backward scan answers every hub at once. A router queried per hub would need hundreds of calls. |
 | Second opinion | [Transitous](https://transitous.org) (MOTIS) | An independent router to cross-check the top hubs. |
-| Geocoding | Nominatim, Photon | Free OpenStreetMap geocoders at 1 request per second, with a strict rule for house numbers. |
+| Geocoding | Nominatim, Photon | Free OpenStreetMap geocoders at 1 request per second, cached 30 days, with a strict rule for house numbers. |
 | Drive times | OSRM, Valhalla (FOSSGIS); TomTom with a key | Keyless by default; Valhalla's `exclude_tolls` gives a true toll-free route; TomTom adds live and historic traffic. |
 | Tolls | 407 ETR published rate chart, computed locally | The official calculator needs reCAPTCHA, so it is never called. |
 | Fuel | NRCan Fuel Consumption Ratings, Ontario weekly fuel price survey | Official ratings per model, official weekly prices per market. |

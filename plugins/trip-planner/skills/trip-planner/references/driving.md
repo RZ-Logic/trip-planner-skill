@@ -397,7 +397,7 @@ Other environment variables:
 | Variable | Effect |
 |---|---|
 | `TRIP_PLANNER_CONFIG` | where the saved car lives (see `--save-car`) |
-| `TRIP_PLANNER_CACHE` | the cache folder (default `~/.cache/trip-planner`); if it cannot be created, replies are simply not cached |
+| `TRIP_PLANNER_CACHE` | the cache folder (default `~/.cache/trip-planner`); if it cannot be created, replies are simply not cached. Geocoder results are kept 30 days |
 | `TRIP_PLANNER_QUIET=1` | no progress lines on stderr; WARNINGS in the output are unchanged |
 | `TRIP_HOME` | `lat,lon` or `lat,lon;label`: an origin or destination within 50 m of it is labelled (default "home") with no geocoder lookup. Other place labels are looked up with 4-decimal coordinates |
 

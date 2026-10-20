@@ -489,9 +489,17 @@ class ClaudeAiSandboxRegressions(unittest.TestCase):
 
     def test_house_number_matched_only_to_the_street_stops_the_plan(self):
         street = [{"lat": "43.51", "lon": "-79.82", "addresstype": "road", "display_name": "Santa Maria Boulevard, Milton"}]
-        replies = iter([json.dumps(street).encode(), json.dumps({"features": []}).encode()] * 2)
-        saved = th.http_get
-        th.http_get = lambda *a, **k: next(replies)
+        # the second _geocode reads Nominatim's street from the geocode cache; the empty Photon reply is asked again
+        replies = iter([json.dumps(street).encode(), json.dumps({"features": []}).encode(),
+                        json.dumps({"features": []}).encode()])
+        asked = []
+
+        def http_get(url, *a, **k):
+            asked.append(url)
+            return next(replies)
+        saved, saved_cache = th.http_get, os.environ.get("TRIP_PLANNER_CACHE")
+        th.http_get = http_get
+        os.environ["TRIP_PLANNER_CACHE"] = tempfile.mkdtemp()   # a geocode cache of this test's own
         try:
             with self.assertRaises(SystemExit) as ctx:
                 th._geocode("805 Santa Maria Blvd, Milton, ON", "origin", [], strict=True)
@@ -502,6 +510,12 @@ class ClaudeAiSandboxRegressions(unittest.TestCase):
             self.assertTrue(w and "street level" in w[0])
         finally:
             th.http_get = saved
+            if saved_cache is None:
+                os.environ.pop("TRIP_PLANNER_CACHE", None)
+            else:
+                os.environ["TRIP_PLANNER_CACHE"] = saved_cache
+        self.assertEqual(sum("nominatim" in u for u in asked), 1)
+        self.assertEqual(sum("photon" in u for u in asked), 2)
 
     def test_shared_platforms_are_optional_when_a_mirror_exists(self):
         regions = th.load_regions()

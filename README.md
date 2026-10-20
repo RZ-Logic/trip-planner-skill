@@ -134,7 +134,7 @@ The trade-off prices the default case, no transponder: the $13.05 toll, the $5 a
 ## ⚡ What It Does
 
 **Ride + transit** ([`trip_hubs.py`](plugins/trip-planner/skills/trip-planner/scripts/trip_hubs.py))
-- Checks every transit stop within ride range in one backward pass over the GTFS timetables. A Milton trip compares 1,384 stops in 594 hubs in under a second.
+- Checks every transit stop within ride range in one backward pass over the GTFS timetables. The Milton example above compares 1,495 stops in 635 hubs. The scan's own time is shown in its progress line on stderr; the full run, with downloads and routing, takes longer.
 - Prices each option: the ride from regional Uber rate cards, then fares with free and credited transfers.
 - Gives the latest time to book, a backup departure and check links.
 - Plans forward or to a deadline. Getaways use intercity rail and coach, hand-entered rural timetables and a taxi at either end where ride-hail is sparse or absent.

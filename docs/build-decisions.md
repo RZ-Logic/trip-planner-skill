@@ -4,7 +4,7 @@ Eight non-obvious choices, the alternatives rejected, and the real trips that fo
 
 ## 1. A backward profile scan, not a router queried per hub
 
-The obvious build calls a journey planner from every candidate hub. Around Milton that is 594 hubs, which means 594 rate-limited calls per question to a free service. Instead the skill downloads the GTFS feeds once and runs a single profile connection scan backwards from the destination. Every stop gets its full "leave at t, arrive at f(t)" function, and each hub's best connection is a lookup. Transitous is still queried, but only to cross-check the top three.
+The obvious build calls a journey planner from every candidate hub. Around Milton that is 635 hubs (the README example), which means 635 rate-limited calls per question to a free service. Instead the skill downloads the GTFS feeds once and runs a single profile connection scan backwards from the destination. Every stop gets its full "leave at t, arrive at f(t)" function, and each hub's best connection is a lookup. Transitous is still queried, but only to cross-check the top three.
 
 ## 2. Driving joined the same skill instead of becoming a second one
 

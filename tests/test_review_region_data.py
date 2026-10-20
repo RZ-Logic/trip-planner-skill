@@ -1,7 +1,7 @@
 """Regression tests for the review's region data findings: the Ontario region's curated fares and timetables
 (distance- and zone-based rural fares shown as approximate, route-level prices; hand-entered and projected
 timetables flagged at run time, region files past their recheck age), the region notes against the data, and
-the docs, manifests and zip against the code (flags, labels, versions, paths, zip contents).
+the docs, manifests and zip against the code (flags, labels, versions, paths, zip contents, coverage numbers).
 
 Offline: the bundled region files and docs, synthetic legs, plan runs with every network call mocked, a fixed clock.
 Run: python -m unittest tests.test_review_region_data -v
@@ -411,7 +411,8 @@ def load_build_zip():
 
 class DocContract(unittest.TestCase):
     """docs-contract-9: nothing checked the docs, manifests or zip against the code, so a renamed flag or label,
-    a version bump in one file, or a stray file in the zip went unnoticed."""
+    a version bump in one file, or a stray file in the zip went unnoticed. docs-contract-7: README's coverage
+    claim used numbers from another run than its own example and timed only the scan."""
 
     def test_every_flag_in_the_docs_exists(self):
         known = set()
@@ -484,6 +485,22 @@ class DocContract(unittest.TestCase):
         with mock.patch.object(mod, "SKILL", tmp):
             arcs = [arc for _full, arc in mod.zip_entries()]
         self.assertEqual(arcs, ["trip-planner/SKILL.md", "trip-planner/scripts/a.py"])
+
+    def test_coverage_claim_uses_the_example_numbers_and_names_the_scan(self):
+        readme = read("README.md")
+        m = re.search(r"COVERAGE\s+(\d+) stops in range grouped into (\d+) hubs", readme)
+        stops, hubs = int(m.group(1)), int(m.group(2))
+        line = next(ln for ln in readme.splitlines() if "one backward pass" in ln)
+        self.assertIn("{:,} stops in {:,} hubs".format(stops, hubs), line)
+        # no timing for the example that the repo cannot show: the scan's time is the one trip_hubs logs itself
+        self.assertNotIn("under a second", line)
+        self.assertIn("scan's own time is shown in its progress line", line)
+        src = read_abs(os.path.join(SCRIPTS_DIR, "trip_hubs.py"))
+        self.assertIn('log("scanned %d connections over %d stops in %.1fs"', src)
+        self.assertIn("full run", line)
+        bd = read("docs/build-decisions.md")
+        self.assertIn("that is %d hubs" % hubs, bd)
+        self.assertIn("%d rate-limited calls" % hubs, bd)
 
 
 if __name__ == "__main__":

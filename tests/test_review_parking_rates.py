@@ -275,5 +275,13 @@ class WindowRateBeforeOtherRate(unittest.TestCase):  # follow-up of parking-1
             self.assertTrue(any("second rate" in n for n in notes), text)
 
 
+class FirstHourThenTimedRate(unittest.TestCase):     # follow-up of parking-9
+    def test_after_a_time_stays_a_window(self):
+        rule, _ = pk.parse_rate_text("$2 first hour, $1/hr after 6pm")
+        self.assertEqual(rule.get("paid_hours"), ["18:00", "24:00"])        # before: None (no window, $1/h all day)
+        self.assertEqual((rule.get("hourly"), rule.get("first_hour")), (1.0, 2.0))
+        self.assertEqual(price("$5 1st hour, $3/hr after", WED10, 180), 11.0)   # "after" with no time is still read
+
+
 if __name__ == "__main__":
     unittest.main()

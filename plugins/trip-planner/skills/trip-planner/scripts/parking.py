@@ -209,11 +209,11 @@ UNIT_RE = re.compile(r"\s*(?:/|per|an?|for|each)?\s*(?P<n>\d+(?:\.\d+)?|1/2|half
 LIMIT_RE = re.compile(r"(?P<n>\d+(?:\.\d+)?)\s*-?\s*(?P<u>hr|hrs|hour|hours|h|min|mins|minute|minutes)\.?\s*(?:parking\s*)?"
                       r"(?:limit|max(?:imum)?)\b|(?:limit|max(?:imum)?\s*stay)\s*(?:of\s*)?(?P<n2>\d+)\s*(?P<u2>h|hr|hrs|hours?|min)"
                       r"|\bmax(?:imum)?\.?\s*(?:of\s*)?(?P<n3>\d+(?:\.\d+)?)\s*(?P<u3>hours?|hrs?|h|min(?:ute)?s?)\b", re.I)
-# "$5 first hour, $2 each additional hour", "$5 1st hour, $3/hr after"
+# "$5 first hour, $2 each additional hour", "$5 1st hour, $3/hr after" (in "$1/hr after 6pm" the "after" starts a window)
 FIRST_HOUR_RE = re.compile(r"(?P<pre>US\s*\$|CA?\$|C\$|\$)\s*(?P<a>\d+(?:\.\d+)?)\s*(?:for\s+)?(?:the\s+)?(?:first|1st)\s+(?:hour|hr|h)\b"
                            r"[\s,;.]*(?:then\s+)?(?:\$\s*)?(?P<b>\d+(?:\.\d+)?)\s*(?:(?:/|per|for)?\s*(?:each\s+)?"
                            r"(?:additional|addt?'?l|extra|subsequent)\s*(?:hour|hr|h)\b"
-                           r"|(?:/|per)\s*(?:hour|hr|h)\b(?:\s*(?:after|thereafter)\b)?)", re.I)
+                           r"|(?:/|per)\s*(?:hour|hr|h)\b(?:\s*(?:after|thereafter)\b(?!\s*(?:\d|midnight|noon)))?)", re.I)
 # "first hour free", "2 hours free" (not "2 hours free parking limit"), "free for the first 2 hours"
 FREE_FIRST_RE = re.compile(r"first\s+(?P<n>\d+|one|two|half)?\s*(?P<u>hours?|hrs?|h|min(?:ute)?s?)\s*(?:is\s+|are\s+)?free"
                            r"|\b(?P<n2>\d+|one|two|half)\s*(?P<u2>hours?|hrs?|h|min(?:ute)?s?)\s+free\b(?!\s*(?:parking\s*)?(?:limit|max))"

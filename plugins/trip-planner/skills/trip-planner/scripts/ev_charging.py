@@ -158,6 +158,10 @@ def _deg(t):
 
 _NUM = r"\$\s*(\d+(?:\.\d+)?)"
 _FEE_WORDS = r"(?:connection|session|plug-?in|start(?:ing)?)\s*fee"
+_DC_RE = re.compile(r"dc\s*fast|dcfc|\bdc\b|level 3|\bl3\b|fast charg")
+_L2_RE = re.compile(r"level 2|\bl2\b")
+_IDLE_RE = re.compile(r"idle|overstay|over-stay|parking|congestion")   # never the charging rate
+_LATER_RE = re.compile(r"grace|after\s+\d+\s*min")   # a rate that starts later: not the rate when another is listed
 
 
 def parse_price(text):
@@ -166,13 +170,25 @@ def parse_price(text):
         return None
     t = text.lower().replace("\u00a0", " ")
     segs = [x for x in re.split(r"[;\n]|\.\s", t) if x.strip()]
-    dcs = [x for x in segs if re.search(r"dc\s*fast|dcfc|\bdc\b|level 3|\bl3\b|fast charg", x)]
-    if dcs:
+    # each clause (a segment split also on commas and 'and') belongs to the last charging level named in its segment
+    dcs, l2s, rest = [], [], []
+    for seg in segs:
+        tier = None
+        for cl in re.split(r",|\band\b", seg):
+            if not cl.strip():
+                continue
+            d = _DC_RE.search(cl)
+            if d:
+                tier = "dc"
+                if _L2_RE.search(cl) and "$" in cl[d.start():]:   # 'Level 2 $1/hr DC fast $15/hr': the DC part
+                    cl = cl[d.start():]
+            elif _L2_RE.search(cl):
+                tier = "l2"
+            (dcs if tier == "dc" else l2s if tier == "l2" else rest).append(cl.strip())
+    if any("$" in x or "free" in x for x in dcs):   # DC clauses with no price: the price is for every level
         t = "; ".join(dcs)
-        if "dc fast" in t and "$" in t[t.index("dc fast"):]:
-            t = t[t.index("dc fast"):]
-    elif len(segs) > 1:
-        t = "; ".join(x for x in segs if not re.search(r"level 2|\bl2\b", x)) or t
+    elif l2s and rest:
+        t = "; ".join(rest)
     if (re.match(r"\s*free\b", t) and "$" not in t) or t.strip() in ("$0", "$0.00", "no charge"):
         return {"model": "free", "rate": 0.0, "fee": 0.0, "first": None, "pairs": []}
     fee = re.search(_NUM + r"\s*" + _FEE_WORDS, t) or re.search(_FEE_WORDS + r"\s*(?:of|is|:)?\s*" + _NUM, t)
@@ -182,10 +198,14 @@ def parse_price(text):
         out["first"] = float(first.group(1))
     elif re.search(r"free\s*(?:for\s*)?(?:the\s*)?first hour", t):
         out["first"] = 0.0
-    pairs = re.findall(_NUM + r"\s*(?:per|/)\s*min(?:ute)?\s*(?:@|at)\s*(\d+)\s*kw", t)
+    rates = [x for x in re.split(r"[;,\n]|\.\s", t) if not _IDLE_RE.search(x)]   # time rates: never an idle fee
+    tr = "; ".join(x for x in rates if not _LATER_RE.search(x))
+    if not re.search(_NUM + r"\s*(?:per|/)\s*(?:min(?:ute)?|hour|hr|h)\b", tr):
+        tr = "; ".join(rates)
+    pairs = re.findall(_NUM + r"\s*(?:per|/)\s*min(?:ute)?\s*(?:@|at)\s*(\d+)\s*kw", tr)
     kwh = re.search(_NUM + r"\s*(?:per|/)\s*kwh", t)
-    pmin = re.search(_NUM + r"\s*(?:per|/)\s*min(?:ute)?\b", t)
-    hours = re.findall(_NUM + r"\s*(?:per|/)\s*(?:hour|hr|h)\b", t)
+    pmin = re.search(_NUM + r"\s*(?:per|/)\s*min(?:ute)?\b", tr)
+    hours = re.findall(_NUM + r"\s*(?:per|/)\s*(?:hour|hr|h)\b", tr)
     flat = re.search(_NUM + r"\s*(?:flat|per session|/\s*session|a session|per charge)", t)
     if flat and not fee:
         out["fee"] = float(flat.group(1))

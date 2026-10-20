@@ -324,5 +324,29 @@ class StartChargeTest(tcp.CarCase):
         self.assertIn("1 stop(s) planned from 55%, but no reachable", self.head(text))
 
 
+class PriceClauseTest(unittest.TestCase):
+    """ev-vehicles-7: a listed price with Level 2 and DC rates in one comma or 'and' list gives the DC rate, and an
+    idle or overstay fee is never read as the charging rate."""
+
+    def test_dc_clause_and_idle_fees(self):
+        for text, want in (("$0.25 per kWh for Level 2, $0.45 per kWh for DC fast", ("per_kwh", 0.45)),
+                           ("DC Fast $15/hr, Level 2 $1/hr", ("per_hour", 15.0)),
+                           ("$20.00/hr; $0.40/min idle fee after 10 minutes", ("per_hour", 20.0)),
+                           ("$0.45 per kWh for DC fast and $0.25 per kWh for Level 2", ("per_kwh", 0.45)),
+                           ("$0.45/kWh DCFC, $1.50/hr Level 2", ("per_kwh", 0.45)),
+                           # guards: both levels in one clause, and a later rate that is the only one listed
+                           ("$0.25/kWh Level 2 DC fast $0.45/kWh", ("per_kwh", 0.45)),
+                           ("$0.45 per kWh for DC fast, $0.40/min idle fee after 10 min", ("per_kwh", 0.45)),
+                           ("$2/hr after 15 min grace period", ("per_hour", 2.0))):
+            with self.subTest(text=text):
+                p = ev.parse_price(text)
+                self.assertEqual((p["model"], p["rate"]), want)
+        self.assertAlmostEqual(ev._price_cost(ev.parse_price("DC Fast $15/hr, Level 2 $1/hr"), 30, 25, 100), 6.25)
+
+    def test_rates_after_the_first_hour_are_kept(self):
+        p = ev.parse_price("DC Fast: $5 per hour for first hour, $24 per hour after")
+        self.assertEqual((p["model"], p["rate"], p["first"]), ("per_hour", 24.0, 5.0))
+
+
 if __name__ == "__main__":
     unittest.main()

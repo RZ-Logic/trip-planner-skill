@@ -121,6 +121,29 @@ class FeedClockTests(unittest.TestCase):
                         self.assertEqual(sorted(c[0] for c in net.conns), [expect], day)
                         self.assertEqual([c[1] for c in net.conns], [expect + 1800], day)
 
+    ARGS8 = ["--origin", "43.4990,-79.8000", "--dest", "43.5500,-79.8000", "--depart", "2026-10-15 21:30",
+             "--min-saving", "0", "--radius-km", "5", "--origin-walk-m", "300", "--max-hours", "6"]
+
+    def utc_feed(self):   # a coach at 02:00 UTC = 22:00 EDT, arriving 22:40
+        return feed([("FX", "ALL", "c1", "C")],
+                    [("c1", "02:00:00", "02:00:00", "A", 1, 0, 0), ("c1", "02:40:00", "02:40:00", "C", 2, 0, 0)],
+                    {"agency.txt": UTC_AGENCY}, calendar=ALL_DAYS)
+
+    def test_utc_feed_does_not_set_the_trip_clock(self):
+        loc = feed([("1", "ALL", "t1", "C")],
+                   [("t1", "21:40:00", "21:40:00", "A", 1, 0, 0), ("t1", "22:10:00", "22:10:00", "C", 2, 0, 0)],
+                   calendar=ALL_DAYS)   # make_feed's agency keeps America/Toronto time
+        res = run(self.ARGS8 + ["--feed", "fx=" + self.utc_feed(), "--feed", "loc=" + loc] + BASE)
+        self.assertEqual(res["timezone"], "America/Toronto")
+        self.assertEqual(res["pricing"]["currency"], "CAD")
+        self.assertEqual(res["transit_only"]["arrive"], hms(22, 10))
+
+    def test_only_utc_feeds_warn_that_times_are_utc(self):
+        res = run(self.ARGS8 + ["--feed", "fx=" + self.utc_feed()] + BASE)
+        self.assertEqual(res["timezone"], "UTC")
+        self.assertTrue([w for w in res["warnings"] if "UTC" in w and "--region" in w], res["warnings"])
+
+
 class HeadwayTests(unittest.TestCase):
     """hubs-engine-7: 'every N min' service (frequencies.txt exact_times 0 or empty) is not a timed departure."""
 

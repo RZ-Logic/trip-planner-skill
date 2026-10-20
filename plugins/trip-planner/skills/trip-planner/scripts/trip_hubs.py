@@ -433,6 +433,12 @@ def same_clock(tz_a, tz_b):
     return bool(a and b and a == b)
 
 
+def clockless_zone(tz):
+    """UTC, GMT and Etc/* name no place: never the trip's local clock while a feed names a real zone."""
+    t = (tz or "").strip()
+    return t.upper() in ("UTC", "GMT", "UCT", "UNIVERSAL", "ZULU", "GMT0", "GREENWICH") or t.startswith("Etc/")
+
+
 # --------------------------------------------------------------------------- geocoding
 
 LATLON_RE = re.compile(r"^\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*$")
@@ -2858,17 +2864,26 @@ def plan(args):
             msg += " Run --discover, then pass feeds with --feed id=URL."
         raise SystemExit(msg)
 
-    # ---- time zone: region file first, else the first feed's agency_timezone
+    # ---- time zone: region file first, else the first feed's agency_timezone that names a place (not UTC)
     bad_urls = {}   # url -> error, so a failing download is not repeated in this run
     if not tzname:
+        utc_like = None
         for fid, url in [(f[0], f[2][0]) for f in feeds] + [(h["id"], h["urls"][0]) for h in promo]:
             try:
                 tzname = feed_timezone(fetch_url(fid, url, args.max_age_hours, args.refresh))
             except Exception as e:  # noqa: BLE001
                 bad_urls[url] = e
                 tzname = None
+            if tzname and clockless_zone(tzname):   # FlixBus publishes UTC: look for a feed with a local clock
+                utc_like, tzname = utc_like or tzname, None
             if tzname:
                 break
+        if not tzname and utc_like:
+            tzname = utc_like
+            warnings.append("every feed for this trip keeps %s time and no region file covers it, so the times you "
+                            "give and the times shown are %s, not local time, and rides are priced with a generic "
+                            "card. Use --region with a region file for the area, or convert the times."
+                            % (utc_like, utc_like))
         if not tzname and not region:
             warnings.append("could not read the trip's time zone from any feed; times use this computer's clock.")
 

@@ -294,5 +294,55 @@ class FinishDropPoints(unittest.TestCase):
         self.assertTrue(any("2 drop points across the border" in w for w in res["warnings"]), res["warnings"])
 
 
+# ------------------------------------------------------------------------------------- tests-ci-eng-5 (batch 6)
+class TimeMarginsPinned(unittest.TestCase):
+    """Each test pins one margin in plan()'s booking and arrival maths (a mutant that drops it fails)."""
+    FIXED = ["--traffic-factor", "1.0", "--safety-min", "3", "--pickup-wait-min", "6"]
+
+    def test_arrive_by_keeps_the_safety_margin_before_the_deadline(self):
+        p = feed(HUB_STOPS, [("X", "WK", "x1", "C"), ("X", "WK", "x2", "C")],
+                 [("x1", "10:50:00", "10:50:00", "H", 1, 0, 0), ("x1", "11:26:00", "11:26:00", "C", 2, 0, 0),
+                  ("x2", "11:00:00", "11:00:00", "H", 1, 0, 0), ("x2", "11:29:00", "11:29:00", "C", 2, 0, 0)])
+        res = run(HUB_ARGS + ["--arrive-by", "2026-10-15 11:30", "--feed", "t=" + p] + self.FIXED + BASE)
+        o = option(res, "Hub H")
+        self.assertEqual((o["board"], o["arrive"]), (hms(10, 50), hms(11, 26)))   # not the 11:29 arrival
+        self.assertEqual(o["book_by"], hms(10, 50) - (360 + int(FREE_S) + th.PLATFORM_S + 180))
+        self.assertEqual(res["ride_all"]["arrive"], hms(11, 27))
+
+    def test_walk_between_the_stops_of_one_hub_is_in_the_lead(self):
+        stops = HUB_STOPS + [("H2", "Hub H north", 43.491350, -79.8000)]      # 150 m north: one hub
+        p = feed(stops, [("X", "WK", "x1", "C"), ("X", "WK", "x0", "C")],
+                 [("x1", "10:50:00", "10:50:00", "H2", 1, 0, 0), ("x1", "11:20:00", "11:20:00", "C", 2, 0, 0),
+                  ("x0", "11:10:00", "11:10:00", "H", 1, 0, 0), ("x0", "11:45:00", "11:45:00", "C", 2, 0, 0)])
+        res = run(HUB_ARGS + ["--arrive-by", "2026-10-15 11:30", "--feed", "t=" + p] + self.FIXED + BASE)
+        o = option(res, "Hub H north")
+        walk = th.walk_s(th.haversine_m(43.4900, -79.8000, 43.491350, -79.8000))
+        self.assertEqual(o["book_by"], hms(10, 50) - (360 + int(FREE_S) + th.PLATFORM_S + walk + 180))
+
+    def test_ride_all_arrival_includes_the_pickup_wait(self):
+        res = run(HUB_ARGS + ["--depart", "2026-10-15 10:00", "--feed", "t=" + train_at("10:50:00", "11:20:00"),
+                              "--traffic-factor", "1.0", "--pickup-wait-min", "7"] + BASE)
+        ra = res["ride_all"]
+        self.assertAlmostEqual(ra["arrive"], hms(10, 0) + 7 * 60 + ra["ride_s"])
+
+    def test_no_uber_final_ride_waits_for_a_taxi(self):
+        region = {"id": "test", "name": "Test", "timezone": "America/Toronto", "feeds": [],
+                  "bbox": {"min_lat": 43.0, "max_lat": 44.5, "min_lon": -80.5, "max_lon": -79.0},
+                  "ride_areas": [{"name": "Test Town", "lat": 43.99, "lon": -79.80, "radius_km": 15, "uber": "no"}]}
+        stops = [("O", "Origin stop", 43.3010, -79.8000), ("T", "Town stop", 43.9000, -79.8000)]
+        p = feed(stops, [("K", "WK", "k1", "T")],
+                 [("k1", "06:30:00", "06:30:00", "O", 1, 0, 0), ("k1", "08:30:00", "08:30:00", "T", 2, 0, 0)])
+        res = run(["--origin", "43.3000,-79.8000", "--dest", "43.9900,-79.8000", "--depart", "2026-10-15 06:00",
+                   "--feed", "t=" + p, "--min-saving", "0", "--traffic-factor", "1.0", "--pickup-wait-min", "6",
+                   "--no-discover", "--routing", "estimate"], regions=[region])
+        fin = res["finish_with_ride"][0]
+        self.assertEqual(fin["arrive"], hms(8, 30) + th.PLATFORM_S + 30 * 60 + fin["legs"][-1]["seconds"])
+
+    def test_arrival_after_midnight_shows_the_next_day(self):
+        out = run(HUB_ARGS + ["--depart", "2026-10-15 23:00", "--feed", "t=" + train_at("23:50:00", "24:40:00"),
+                              "--traffic-factor", "1.0"] + BASE, as_json=False)
+        self.assertIn("ARRIVE 00:40 (+1d)", out)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -92,8 +92,9 @@ Rules:
   `(before transfer discounts)`.
 - Feeds priced from their own GTFS fare table follow its `transfers` (empty = unlimited; 0, 1 or 2
   changes per fare) and `transfer_duration` (seconds from the first boarding; values under 30 minutes
-  are taken as a unit error and ignored). A `transfers` value the script cannot read charges every leg
-  and prints `(before transfer discounts)`.
+  are taken as a unit error and ignored). A change is covered only onto a route that fare's
+  `fare_rules` rows name (or any route, when a row leaves `route_id` empty). A `transfers` value the
+  script cannot read charges every leg and prints `(before transfer discounts)`.
 - Mark a broken feed with `"skip": true` and a `notes` explanation; the script warns when it matters.
 
 ### Keys for long trips and rural areas (see `ontario.json`)

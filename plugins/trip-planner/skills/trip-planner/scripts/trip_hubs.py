@@ -1594,8 +1594,9 @@ def transfer_terms(a):
 
 def gtfs_group_fare(model, glegs, zone):
     """One feed's consecutive legs priced from its GTFS fare table: one fare per run of up to transfers + 1
-    legs boarded within transfer_duration of the run's first boarding, each run priced from its first
-    leg's route and its first to last zone. Returns (price tuple or None, understood)."""
+    legs boarded within transfer_duration of the run's first boarding, on routes that fare's rules cover,
+    each run priced from its first leg's route and its first to last zone. Returns (price tuple or None,
+    understood)."""
     total, ok, i = None, True, 0
     while i < len(glegs):
         first = glegs[i]
@@ -1604,9 +1605,13 @@ def gtfs_group_fare(model, glegs, zone):
             return None, ok
         allow, secs, understood = transfer_terms(a)
         ok = ok and understood
+        # a fare carries a transfer only onto the routes its fare_rules name ('' = any route)
+        fids = {k for k, v in model["attrs"].items() if v is a}
+        covered = {rid for rules in model["rules"].values() for fid, rid in rules if fid in fids}
         j = i + 1
         while (j < len(glegs) and (allow is None or j - i <= allow)
-               and (secs is None or glegs[j]["depart"] - first["depart"] <= secs)):
+               and (secs is None or glegs[j]["depart"] - first["depart"] <= secs)
+               and (not model["rules"] or "" in covered or glegs[j]["route_id"] in covered)):
             j += 1
         if j - i > 1:
             a = fare_lookup(model, first["route_id"], zone[first["from_idx"]], zone[glegs[j - 1]["to_idx"]]) or a

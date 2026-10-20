@@ -143,6 +143,32 @@ class GtfsTransferAllowance(unittest.TestCase):
         self.assertIn("(before transfer discounts)", th.fare_text(o, "USD", False, rules_on=True))   # was absent
 
 
+# ------------------------------------------------------------------------ review follow-up (hubs-pricing-io-3)
+# mdb-620 (Valparaiso) shape: V-Line 1.00 with one transfer within 3600 s, ChicaGO Dash 9.00 with none, each
+# fare_rules row limited to its own route
+ROUTE_FARES = ("fare_id,price,currency_type,payment_method,transfers,transfer_duration\n"
+               "V,1.00,USD,0,1,3600\nD,9.00,USD,0,0,\n")
+ROUTE_RULES = "fare_id,route_id\nV,VL\nD,DASH\n"
+
+
+class GtfsTransferOnlyOntoCoveredRoutes(unittest.TestCase):
+    def fare(self, attrs, rules, *routes):
+        net = fake_net("vl", fare_model(attrs, rules), [""])
+        legs = [leg("vl", "V-Line", r, 36000 + 1800 * k, 0, 0) for k, r in enumerate(routes)]
+        return th.journey_fare(net, legs)[0]
+
+    def test_change_onto_a_route_the_fare_does_not_cover_pays_that_route(self):
+        self.assertEqual(self.fare(ROUTE_FARES, ROUTE_RULES, "VL", "DASH"), 10.0)          # was 1.00
+        self.assertEqual(self.fare(ROUTE_FARES, ROUTE_RULES, "VL", "DASH", "VL"), 11.0)    # was 2.00
+
+    def test_change_onto_a_route_the_fare_covers_is_free(self):
+        self.assertEqual(self.fare(ROUTE_FARES, ROUTE_RULES, "VL", "VL"), 1.0)
+
+    def test_fare_rule_for_any_route_covers_every_route(self):
+        attrs = "fare_id,price,currency_type,payment_method,transfers,transfer_duration\nF,3.00,USD,0,1,3600\n"
+        self.assertEqual(self.fare(attrs, "fare_id,route_id\nF,\n", "1", "2"), 3.0)
+
+
 # ---------------------------------------------------------------------------------------------------- ext-4
 NIAGARA = "Niagara Region Transit (incl. WEGO)"
 # the Niagara feed's own fare table (cached 2026-10): fare 1 local 3.50, fare 2 WEGO 17.00, both unlimited transfers

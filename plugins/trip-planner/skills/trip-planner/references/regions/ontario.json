@@ -5550,6 +5550,8 @@
       ],
       "verified": "2026-10-10",
       "board_buffer_min": 10,
+      "observed_until": "2027-01-05",
+      "assumed_note": "spot-checked to the 2027-01-05 booking horizon; later service assumed",
       "manual": {
         "agency": "Megabus (Badder Bus)",
         "url": "https://ca.megabus.com/",
@@ -6632,6 +6634,8 @@
       "notes": "Year-round loop from Port Hope Town Hall to Cobourg (Northumberland Mall, Hospital, Walmart) every 30 min, Mon-Fri 07:00-19:30 and Sat 09:00-15:30 departures, no Sunday; it does not serve downtown Cobourg or VIA. No service on statutory holidays; reduced 08:00-16:00 on Easter Monday, Civic Holiday and Sept 30 (2027 dates assumed from 2026), Remembrance Day 2026-11-11 08:00-16:00 with no 10:30-11:30 trips, Dec 24 and Dec 31 07:00-12:00. Return time to Town Hall is inferred from the 30-minute round trip. Routes A and B are skipped (stops only on a map).",
       "source": ["https://www.porthope.ca/en/living-here/transit.aspx", "https://www.cobourg.ca/transit"],
       "verified": "2026-10-10",
+      "assumed_dates": ["2027-03-29", "2027-08-02", "2027-09-30"],
+      "assumed_note": "2027 reduced-service holiday times assumed from 2026",
       "manual": {
         "agency": "Port Hope Transit",
         "url": "https://www.porthope.ca/en/living-here/transit.aspx",
@@ -10470,6 +10474,8 @@
         "https://files.mobilitydatabase.org/tld-5874/latest.zip"
       ],
       "verified": "2026-10-10",
+      "assumed_dates": ["2026-11-11", "2026-12-24", "2027-09-30"],
+      "assumed_note": "service on Remembrance Day, Dec 24 and Sep 30 assumed to run",
       "manual": {
         "agency": "Ride Norfolk",
         "url": "https://www.norfolkcounty.ca/home-property-and-neighbourhood/public-transit-ride-norfolk/",

@@ -21,6 +21,7 @@ import datetime as dt
 import io
 import json
 import os
+import re
 import sys
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
@@ -270,6 +271,64 @@ class HandEnteredTimetableData(unittest.TestCase):
                         "--depart", "2026-10-15 18:30"])   # the 17:30 Guelph run: Durham 19:07, Chatsworth 19:32
         self.assertNotIn("check", res["transit_only"]["legs"][0])
         self.assertFalse([w for w in res["warnings"] if "check with the operator" in w], res["warnings"])
+
+
+PORT_HOPE = ["--origin", "43.94915,-78.29352", "--dest", "43.96958,-78.19966"]   # Town Hall to Northumberland Mall
+
+# manual feeds whose notes say "assumed" but carry no projected-times flag, each with the reason
+NO_PROJECTED_TIMES = {
+    "collingwood-blink": "published times; only the season end is assumed (the region age warning covers it)",
+    "grey-transit-route-5": "the assumed holiday is a no-service day",
+    "huntsville-transit": "the assumed items drop trips or add no-service days",
+    "corridor-11": "the assumed holiday is a no-service day",
+    "bracebridge-transit": "the assumed holiday is a no-service day",
+}
+
+
+class ResidualAssumedTimetables(unittest.TestCase):
+    """data-integrity-5: hand-entered timetables whose notes say a part is assumed (Megabus west after its
+    2027-01-05 booking horizon, Port Hope's 2027 reduced-service holidays, Ride Norfolk on Remembrance Day,
+    Dec 24 and Sep 30) loaded with no flag, so their projected times were planned as fact with no WARNING."""
+
+    def test_residual_assumed_service_days_are_flagged(self):
+        feeds = {f["id"]: f for f in ONTARIO["feeds"]}
+        for fid, day, expect in (("megabus-on-west", dt.date(2027, 1, 5), False),
+                                 ("megabus-on-west", dt.date(2027, 2, 2), True),
+                                 ("port-hope-transit", dt.date(2027, 8, 2), True),
+                                 ("port-hope-transit", dt.date(2027, 8, 3), False),
+                                 ("ride-norfolk-brantford", dt.date(2026, 11, 11), True),
+                                 ("ride-norfolk-brantford", dt.date(2026, 11, 12), False)):
+            f = feeds[fid]
+            net = th.Network()
+            net.warnings = []
+            # 06:00-22:00 keeps the next service day's early trips (Megabus 2027-01-06 06:00) out of the window
+            th.load_feed(net, fid, f["name"], th.manual_feed_zip(f), day, 6 * 3600, 22 * 3600,
+                         provenance=th.feed_provenance(f))
+            self.assertTrue(net.trips, (fid, day))
+            self.assertEqual(bool(net.assumed_trips), expect, (fid, day))
+
+    def test_port_hope_civic_holiday_run_warns(self):
+        region = one_feed_region("port-hope-transit")
+        res = run_plan(region, PORT_HOPE + ["--depart", "2027-08-02 09:00"])
+        self.assertTrue(res["transit_only"]["legs"])
+        ws = [w for w in assumed_warnings(res) if w.startswith("Port Hope") and "2027-08-02" in w]
+        self.assertEqual(len(ws), 1, res["warnings"])
+        res = run_plan(region, PORT_HOPE + ["--depart", "2027-08-03 09:00"])
+        self.assertTrue(res["transit_only"]["legs"])
+        self.assertEqual(assumed_warnings(res), [])
+
+    def test_every_manual_feed_whose_notes_say_assumed_is_flagged_or_explained(self):
+        missing = []
+        for f in ONTARIO["feeds"]:
+            if not f.get("manual") or not re.search(r"assum", f.get("notes", ""), re.I):
+                continue
+            prov = th.feed_provenance(f)
+            flagged = prov["assumed_services"] or prov["assumed_dates"] or prov["observed_until"]
+            if flagged:
+                self.assertTrue(prov["note"], f["id"])   # the WARNING says what is assumed
+            elif f["id"] not in NO_PROJECTED_TIMES:
+                missing.append(f["id"])
+        self.assertEqual(missing, [])
 
 
 if __name__ == "__main__":

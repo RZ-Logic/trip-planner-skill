@@ -19,8 +19,8 @@ import tolls
 th = dc.th
 log = th.log
 
-VALHALLA_URL = "https://valhalla1.openstreetmap.de/route"
-OSRM_URLS = ["https://router.project-osrm.org", "https://routing.openstreetmap.de/routed-car"]
+# Valhalla and OSRM servers: th.valhalla_base() and th.osrm_bases() (TRIP_PLANNER_VALHALLA_URL, TRIP_PLANNER_OSRM_URL,
+# else the keyless non-commercial demo servers)
 TOMTOM_URL = "https://api.tomtom.com/routing/1/calculateRoute/%s/json"
 ENGINE_NAMES = {"tomtom": "TomTom", "valhalla": "Valhalla", "osrm": "OSRM"}
 MAX_POLY = 2000
@@ -279,7 +279,7 @@ def _valhalla_fetch(o, d, exclude_tolls, alternates, avoid_tolls_soft=False, thr
         req["costing_options"] = {"auto": {"use_tolls": 0.0}}
     elif exclude_tolls:
         req["costing_options"] = {"auto": {"exclude_tolls": True}}
-    url = VALHALLA_URL + "?json=" + urllib.parse.quote(json.dumps(req, separators=(",", ":")))
+    url = th.valhalla_base() + "/route?json=" + urllib.parse.quote(json.dumps(req, separators=(",", ":")))
     data = dc.fetch_json(url, timeout=40, min_interval=1.0, max_age_h=KEYLESS_CACHE_H)
     if not isinstance(data, dict) or "trip" not in data:
         raise RuntimeError((data or {}).get("error") or "no route")
@@ -461,7 +461,7 @@ def _osrm_route(route):
 
 def _osrm(o, d, depart, opts, warnings, arrive_at=None):
     data, last = None, None
-    for base in OSRM_URLS:
+    for base in th.osrm_bases():
         url = "%s/route/v1/driving/%.6f,%.6f;%.6f,%.6f?overview=false&steps=true&geometries=geojson&alternatives=3" % (
             base, o[1], o[0], d[1], d[0])
         try:

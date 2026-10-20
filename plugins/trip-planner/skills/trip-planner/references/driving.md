@@ -418,6 +418,8 @@ Other environment variables:
 | `TRIP_PLANNER_CONFIG` | where the saved car lives (see `--save-car`) |
 | `TRIP_PLANNER_CACHE` | the cache folder (default `~/.cache/trip-planner`); if it cannot be created, replies are simply not cached. Geocoder results are kept 30 days |
 | `TRIP_PLANNER_QUIET=1` | no progress lines on stderr; WARNINGS in the output are unchanged |
+| `TRIP_PLANNER_VALHALLA_URL` | your Valhalla server's base URL (the script adds `/route`), in place of valhalla1.openstreetmap.de; see "Your own routing servers" |
+| `TRIP_PLANNER_OSRM_URL` | one or more OSRM base URLs, comma-separated and tried in order, in place of the two demo servers, for `drive_plan.py`, park and ride and `trip_hubs.py` (its `--osrm-url` default) |
 | `TRIP_HOME` | `lat,lon` or `lat,lon;label`: an origin or destination within 50 m of it is labelled (default "home") with no geocoder lookup. Other place labels are looked up at street level (zoom 16) with 3-decimal coordinates, so no house number is requested |
 
 Text output shows control, line-separator and bidi-override characters from feeds, OpenStreetMap, NLR and
@@ -425,12 +427,36 @@ reviews as spaces and drops invisible ones (zero-width spaces, tag characters, B
 non-joiner that Persian and Indic names and emoji need are kept); `--json` keeps the raw values.
 OpenStreetMap names and operators (lots, park and ride lots, chargers) are cut to 80 characters in both.
 
+### Your own routing servers
+
+The keyless defaults are donated demo servers. The OSRM demo server policy restricts them to reasonable,
+non-commercial use at 1 request per second, and the free Open-Meteo API is non-commercial only (terms
+quoted in `sources.md`, section 3). Personal use at the scripts' pace fits. For commercial or hosted use,
+set the two variables above to servers you run or pay for:
+
+- `TRIP_PLANNER_VALHALLA_URL`: one http(s) base URL, for example `http://localhost:8002`. Valhalla's
+  [Docker guide](https://github.com/valhalla/valhalla/blob/master/docker/README.md) runs the
+  `ghcr.io/valhalla/valhalla-scripted` image with port 8002 published and builds tiles from OSM `.pbf`
+  files (`tile_urls`, or files in `custom_files`).
+- `TRIP_PLANNER_OSRM_URL`: one or more http(s) base URLs, comma-separated, for example
+  `http://localhost:5000`. The [OSRM README](https://github.com/Project-OSRM/osrm-backend) runs the
+  `ghcr.io/project-osrm/osrm-backend` image: `osrm-extract`, `osrm-partition` and `osrm-customize` on a
+  `.pbf` extract, then `osrm-routed` serves on port 5000. With one URL set, nothing falls back to the demo
+  servers.
+- A paid router: with `TOMTOM_API_KEY`, `drive_plan.py` routes with TomTom first. Valhalla and OSRM are
+  then used only when TomTom fails, and park and ride and `trip_hubs.py` still use OSRM for ride times.
+
+A value that is not an http(s) base URL, or that carries a `user:password@` part, a query or a
+fragment, stops the run with a one-line error that does not repeat it. `--check-network`,
+`NETWORK BLOCKED` and the `SOURCES` line name only the configured hosts, never a path. Plain `http://`
+servers are checked over http. The Open-Meteo host is not configurable yet.
+
 ## Hosts it calls (for a network allow-list)
 
 | Job | Hosts |
 |---|---|
 | Geocoding | nominatim.openstreetmap.org, photon.komoot.io |
-| Routing | valhalla1.openstreetmap.de, router.project-osrm.org, routing.openstreetmap.de; api.tomtom.com with a key |
+| Routing | valhalla1.openstreetmap.de, router.project-osrm.org, routing.openstreetmap.de (or the hosts in `TRIP_PLANNER_VALHALLA_URL` and `TRIP_PLANNER_OSRM_URL`); api.tomtom.com with a key |
 | Fuel price | www.ontario.ca (redirects to prod-energy-fuel-prices.s3.amazonaws.com) |
 | Car lookup (model years not in the bundled index; sent with the skill's own User-Agent, and on refusal the bundled index is used with a WARNING) | open.canada.ca, opencanada.blob.core.windows.net |
 | Weather | api.open-meteo.com |

@@ -5,8 +5,9 @@ drive_common.fetch caching and pacing, the CI network guard). Every HTTP call is
 Run: PYTHONPATH=tools/ci TRIP_PLANNER_NO_NETWORK=1 python -m unittest tests.test_review_network -v
 """
 import os as _os
-for _k in ("TOMTOM_API_KEY", "NLR_API_KEY", "ON511_API_KEY", "GOOGLE_PLACES_API_KEY"):
-    _os.environ.pop(_k, None)   # offline tests never use the developer's real API keys
+for _k in ("TOMTOM_API_KEY", "NLR_API_KEY", "ON511_API_KEY", "GOOGLE_PLACES_API_KEY",
+           "TRIP_PLANNER_VALHALLA_URL", "TRIP_PLANNER_OSRM_URL"):
+    _os.environ.pop(_k, None)   # offline tests never use the developer's real API keys or routers
 import atexit as _atexit
 import shutil as _shutil
 import tempfile as _tempfile
@@ -896,3 +897,177 @@ class OfflineCheckWithoutCacheFolder(unittest.TestCase):
         with mock.patch.dict(os.environ, {"TRIP_PLANNER_CACHE": os.path.join(blocker, "cache")}):
             why = th.offline_blocker(ns, [])
         self.assertIn("is not stored here", why)
+
+
+class ConfigurableRouters(unittest.TestCase):
+    """architecture-product-1, security-tos-1, drive-core-6: TRIP_PLANNER_VALHALLA_URL and TRIP_PLANNER_OSRM_URL
+    replace the keyless demo routers everywhere they are used, and every network message names the configured
+    hosts (never more than the host). Unset, today's defaults stay."""
+    ENV = {"TRIP_PLANNER_VALHALLA_URL": "http://valhalla.example:8002/",
+           "TRIP_PLANNER_OSRM_URL": "http://osrm-a.example:5000, https://osrm-b.example/osrm/"}
+    CONFIGURED = ["valhalla.example:8002", "osrm-a.example:5000", "osrm-b.example"]
+    DEFAULTS = ["valhalla1.openstreetmap.de", "router.project-osrm.org", "routing.openstreetmap.de"]
+
+    def setUp(self):
+        import drive_route
+        self.dr = drive_route
+
+    def env(self, values=None):
+        p = mock.patch.dict(os.environ, values or self.ENV)
+        p.start()
+        self.addCleanup(p.stop)
+
+    def urls_asked(self, fn, *a):
+        asked = []
+
+        def fake(url, **kw):
+            asked.append(url)
+            raise OSError("down")
+        with mock.patch.object(dc, "fetch_json", side_effect=fake):
+            with self.assertRaises(Exception):
+                fn(*a)
+        return asked
+
+    def test_unset_keeps_todays_defaults(self):
+        self.assertEqual(th.valhalla_base(), "https://valhalla1.openstreetmap.de")
+        self.assertEqual(th.osrm_bases(), ["https://router.project-osrm.org",
+                                           "https://routing.openstreetmap.de/routed-car"])
+        self.assertEqual(dp.routing_hosts(), self.DEFAULTS)
+        self.assertEqual(th.build_parser().parse_args([]).osrm_url, "https://router.project-osrm.org")
+        asked = self.urls_asked(self.dr._valhalla_fetch, (43.5, -79.8), (43.6, -79.7), False, 0)
+        self.assertTrue(asked[0].startswith("https://valhalla1.openstreetmap.de/route?json="), asked)
+        asked = self.urls_asked(self.dr._osrm, (43.5, -79.8), (43.6, -79.7), dt_(8), {}, [])
+        self.assertEqual([u.split("/route/")[0] for u in asked], ["https://router.project-osrm.org",
+                                                                   "https://routing.openstreetmap.de/routed-car"])
+        with mock.patch.object(dp.th, "check_network", side_effect=ok_network):
+            rc, out = run_main(["--check-network"], dp.main)
+        for h in self.DEFAULTS:
+            self.assertIn(h, out)
+
+    def test_drive_route_uses_the_configured_valhalla_and_osrm(self):
+        self.env()
+        asked = self.urls_asked(self.dr._valhalla_fetch, (43.5, -79.8), (43.6, -79.7), False, 0)
+        self.assertTrue(asked[0].startswith("http://valhalla.example:8002/route?json="), asked)
+        asked = self.urls_asked(self.dr._osrm, (43.5, -79.8), (43.6, -79.7), dt_(8), {}, [])
+        self.assertEqual([u.split("/route/")[0] for u in asked], ["http://osrm-a.example:5000",
+                                                                   "https://osrm-b.example/osrm"])
+
+    def test_valhalla_url_given_with_route_is_not_doubled(self):
+        self.env({"TRIP_PLANNER_VALHALLA_URL": "https://valhalla.example/route"})
+        asked = self.urls_asked(self.dr._valhalla_fetch, (43.5, -79.8), (43.6, -79.7), False, 0)
+        self.assertTrue(asked[0].startswith("https://valhalla.example/route?json="), asked)
+
+    def test_park_and_ride_passes_the_configured_osrm_url(self):
+        self.env()
+        ns, _argv = dp.hub_args((43.5, -79.8), (43.65, -79.38), dt_(8), False, 0.17, 4.0, [])
+        self.assertEqual(ns.osrm_url, "http://osrm-a.example:5000")
+        w = []
+        older = mock.Mock(wraps=th, spec=[a for a in dir(th) if a != "build_parser"])
+        with mock.patch.object(dp, "th", older):
+            ns, _argv = dp.hub_args((43.5, -79.8), (43.65, -79.38), dt_(8), False, 0.17, 4.0, w)
+        self.assertTrue(w, "the older-trip_hubs path was not taken")
+        self.assertEqual(ns.osrm_url, "http://osrm-a.example:5000")   # the older-trip_hubs fallback too
+
+    def test_check_network_lists_the_configured_hosts_only(self):
+        self.env()
+        with mock.patch.object(dp.th, "check_network", side_effect=ok_network) as cn:
+            rc, out = run_main(["--check-network"], dp.main)
+        for h in self.CONFIGURED:
+            self.assertIn(h, out)
+            self.assertIn(h, cn.call_args[0][0])
+        for h in self.DEFAULTS:
+            self.assertNotIn(h, out)
+        self.assertNotIn("/osrm", out)   # the host only, never the path
+
+    def test_network_blocked_names_the_configured_hosts(self):
+        self.env()
+
+        def blocked(hs, timeout=6):
+            return {h: "blocked: timed out (x)" for h in hs}
+        with mock.patch.object(dp.th, "check_network", side_effect=blocked) as cn:
+            note = dp.blocked_note([])
+        self.assertEqual(cn.call_args[0][0], self.CONFIGURED)
+        self.assertTrue(note.startswith("NETWORK BLOCKED"), note)
+        for h in self.CONFIGURED:
+            self.assertIn(h, note)
+        for h in self.DEFAULTS:
+            self.assertNotIn(h, note)
+        self.assertNotIn("/osrm", note)
+
+    def test_trip_hubs_follows_the_osrm_variable(self):
+        self.env()
+        args = th.build_parser().parse_args(["--origin", "43.5,-79.8"] + TRIP)
+        self.assertEqual(args.osrm_url, "http://osrm-a.example:5000")
+        self.assertEqual(th.osrm_chain(args.osrm_url), ["http://osrm-a.example:5000", "https://osrm-b.example/osrm"])
+        args.routing, args.region = "auto", "none"
+        hosts, _note = th.trip_domains(args, [])
+        self.assertIn("osrm-a.example:5000", hosts)
+        self.assertIn("osrm-b.example", hosts)
+        need = th.needed_domains([])
+        self.assertIn("osrm-a.example:5000", need)
+        for h in self.DEFAULTS + ["/osrm"]:
+            self.assertNotIn(h, " ".join(hosts + need))
+        w = []
+        with mock.patch.object(th, "check_network", side_effect=ok_network) as cn:
+            th.preflight(args, [], w)
+        self.assertIn("osrm-a.example:5000", cn.call_args[0][0])
+        self.assertNotIn("router.project-osrm.org", cn.call_args[0][0])
+
+    def test_trip_hubs_asks_the_configured_osrm_bases(self):
+        self.env()
+        asked = []
+
+        def fake(url, timeout=60, min_interval=0.0):
+            asked.append(url.split("/table/")[0])
+            raise OSError("down")
+        args = th.build_parser().parse_args(["--origin", "43.5,-79.8"] + TRIP)
+        with mock.patch.object(th, "http_get", side_effect=fake):
+            for base in th.osrm_chain(args.osrm_url):
+                with self.assertRaises(OSError):
+                    th.osrm_table(base, (43.5, -79.8), [(43.6, -79.7)])
+        self.assertEqual(asked, ["http://osrm-a.example:5000", "https://osrm-b.example/osrm"])
+
+    def test_one_server_means_no_demo_fallback(self):
+        self.env({"TRIP_PLANNER_OSRM_URL": "http://localhost:5000"})
+        self.assertEqual(th.osrm_chain(th.build_parser().parse_args([]).osrm_url), ["http://localhost:5000"])
+        self.assertEqual(th.osrm_bases(), ["http://localhost:5000"])
+
+    def test_explicit_osrm_url_keeps_the_fallback_it_had(self):
+        self.assertEqual(th.osrm_chain("https://mine.example"),
+                         ["https://mine.example", "https://routing.openstreetmap.de/routed-car"])
+
+    def test_plain_http_router_is_checked_over_http(self):
+        self.env({"TRIP_PLANNER_OSRM_URL": "http://localhost:5000"})
+        seen = []
+
+        def fake_open(req, timeout=6):
+            seen.append(req.full_url)
+            return mock.Mock()
+        hosts = [th.url_host(b) for b in th.osrm_bases()]
+        with mock.patch.object(th.urllib.request, "urlopen", side_effect=fake_open):
+            status = th.check_network(hosts)
+        self.assertEqual(hosts, ["localhost:5000"])
+        self.assertEqual(seen, ["http://localhost:5000/"])
+        self.assertEqual(status, {"localhost:5000": "ok"})
+
+    def test_a_value_that_is_not_a_url_is_refused_in_one_line(self):
+        for name, value in (("TRIP_PLANNER_OSRM_URL", "router.local:5000"),
+                            ("TRIP_PLANNER_OSRM_URL", "http://ok.example, ftp://secretbox.example"),
+                            ("TRIP_PLANNER_OSRM_URL", "https://user:secretbox@osrm.example"),
+                            ("TRIP_PLANNER_OSRM_URL", "https://osrm.example/?key=secretbox"),
+                            ("TRIP_PLANNER_VALHALLA_URL", "file:///etc/passwd"),
+                            ("TRIP_PLANNER_VALHALLA_URL", "https://a.example,https://b.example")):
+            with mock.patch.dict(os.environ, {name: value}):
+                with self.assertRaises(SystemExit) as cm:
+                    th.routing_hosts()
+                msg = str(cm.exception.code)
+                self.assertIn(name, msg)
+                self.assertNotIn("\n", msg)
+                self.assertNotIn("secretbox", msg)
+                self.assertNotIn("passwd", msg)
+                with mock.patch.object(dp, "plan", side_effect=AssertionError("planned with a bad router URL")):
+                    rc, out = run_main(["--origin", "43.5,-79.8", "--dest", "43.6,-79.7"], dp.main)
+                self.assertIn(name, str(rc))
+        with mock.patch.dict(os.environ, {"TRIP_PLANNER_OSRM_URL": "not a url"}):
+            rc, out = run_main(["--origin", "43.5,-79.8"] + TRIP)
+        self.assertIn("TRIP_PLANNER_OSRM_URL", str(rc))

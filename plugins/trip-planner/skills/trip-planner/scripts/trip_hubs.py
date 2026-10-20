@@ -50,6 +50,10 @@ CLUSTER_M = 200        # stops closer than this are one hub
 OSRM_BATCH = 200       # destinations per OSRM table request (URL stays under ~5 KB)
 OSRM_MAX_REQUESTS = 5
 OSRM_FALLBACK = "https://routing.openstreetmap.de/routed-car"
+# keyless demo routers, used unless TRIP_PLANNER_OSRM_URL / TRIP_PLANNER_VALHALLA_URL name others: both allow only
+# reasonable non-commercial use at 1 request per second (references/sources.md, Usage terms)
+OSRM_DEFAULTS = ("https://router.project-osrm.org", OSRM_FALLBACK)
+VALHALLA_DEFAULT = "https://valhalla1.openstreetmap.de"
 DISCOVER_MAX_FEEDS = 40   # feeds with stops near the trip; feeds without nearby stops do not count
 DISCOVER_MAX_DOWNLOADS = 60   # tuning: discovered feeds downloaded per run, loaded or not
 DISCOVER_MAX_AREA = 30.0   # square degrees; bigger bboxes are national/intercity feeds
@@ -720,6 +724,84 @@ def _geocode(text, label, warnings, strict=True):
     raise SystemExit("could not find %s %r with the geocoders. Pass coordinates as 'lat,lon'." % (label, text))
 
 
+_HTTP_HOSTS = set()   # hosts of plain-http router URLs (a self-hosted router), which check_network asks over http
+
+
+def url_host(url):
+    """host[:port] of a URL with any user:password@ part dropped: all that messages and network checks name."""
+    p = urllib.parse.urlsplit(url or "")
+    host = p.netloc.rpartition("@")[2]
+    if p.scheme == "http" and host:
+        _HTTP_HOSTS.add(host)
+    return host
+
+
+def _router_urls(name, defaults, many=True):
+    """Base URLs from environment variable `name` (comma-separated when `many`), else `defaults`. A value that is
+    not an http(s) base URL, or carries a user:password@ part, a query or a fragment (urllib would quote them in
+    errors), stops the run with a one-line error that never repeats the value."""
+    raw = os.environ.get(name, "").strip()
+    if not raw:
+        return list(defaults)
+    out = []
+    for part in [x.strip() for x in raw.split(",") if x.strip()]:
+        try:
+            p = urllib.parse.urlsplit(part)
+            ok = (p.scheme in ("http", "https") and bool(p.hostname) and "@" not in p.netloc
+                  and not p.query and not p.fragment and "?" not in part and "#" not in part)
+        except ValueError:
+            ok = False
+        if not ok:
+            out = []
+            break
+        out.append(part.rstrip("/"))
+    if not out or (len(out) > 1 and not many):
+        raise SystemExit("%s must be %s with no user:password@, query or fragment, such as http://localhost:%s; "
+                         "unset it to use the default servers"
+                         % (name, "one or more http(s) base URLs separated by commas" if many else "one http(s) base "
+                            "URL", "5000" if many else "8002"))
+    return out
+
+
+def osrm_bases():
+    """OSRM base URLs in the order tried: TRIP_PLANNER_OSRM_URL, else the two keyless demo servers."""
+    return _router_urls("TRIP_PLANNER_OSRM_URL", OSRM_DEFAULTS)
+
+
+def valhalla_base():
+    """Valhalla base URL (drive_route adds /route): TRIP_PLANNER_VALHALLA_URL, else the FOSSGIS server."""
+    base = _router_urls("TRIP_PLANNER_VALHALLA_URL", (VALHALLA_DEFAULT,), many=False)[0]
+    return base[:-len("/route")] if base.endswith("/route") else base
+
+
+def osrm_chain(first):
+    """OSRM bases to try for a run whose --osrm-url is `first`: it, then the configured ones after the first (with
+    the variable unset, the FOSSGIS fallback; with one server set, that server alone)."""
+    return [first] + [b for b in osrm_bases()[1:] if b != first]
+
+
+def osrm_hosts():
+    return list(dict.fromkeys(url_host(b) for b in osrm_bases()))
+
+
+def routing_hosts():
+    """The routing hosts for the network checks and NETWORK BLOCKED: Valhalla's, then the OSRM ones."""
+    return list(dict.fromkeys([url_host(valhalla_base())] + osrm_hosts()))
+
+
+_DEFAULT_OSRM_HOSTS = [url_host(u) for u in OSRM_DEFAULTS]
+
+
+def service_domains():
+    """SERVICE_DOMAINS with the configured OSRM hosts in place of the demo servers."""
+    out = []
+    for h in SERVICE_DOMAINS:
+        for x in (osrm_hosts() if h in _DEFAULT_OSRM_HOSTS else [h]):
+            if x not in out:
+                out.append(x)
+    return out
+
+
 HOUSE_NUMBER_RE = re.compile(r"^\s*\d+[A-Za-z]?(\s*-\s*\d+[A-Za-z]?)?\s+\S")
 SERVICE_DOMAINS = ["nominatim.openstreetmap.org", "photon.komoot.io", "router.project-osrm.org",
                    "routing.openstreetmap.de", "api.transitous.org", "files.mobilitydatabase.org"]
@@ -727,7 +809,7 @@ SERVICE_DOMAINS = ["nominatim.openstreetmap.org", "photon.komoot.io", "router.pr
 
 def needed_domains(regions):
     """Every host the script may contact: the free services plus each region feed host."""
-    hosts = list(SERVICE_DOMAINS)
+    hosts = service_domains()
     for reg in regions:
         for f in reg.get("feeds", []):
             if f.get("skip"):
@@ -836,7 +918,7 @@ def trip_domains(args, regions, countries=(None, None)):
     if not coords:
         hosts += ["nominatim.openstreetmap.org", "photon.komoot.io"]
     if args.routing != "estimate":
-        hosts += ["router.project-osrm.org", "routing.openstreetmap.de"]
+        hosts += [url_host(b) for b in osrm_chain(getattr(args, "osrm_url", None) or osrm_bases()[0])]
     if args.crosscheck:
         hosts.append("api.transitous.org")
     if getattr(args, "access", "ride") == "car":
@@ -909,7 +991,8 @@ def check_network(hosts, timeout=6):
     for h in hosts:
         check_cancelled()
         try:
-            req = urllib.request.Request("https://%s/" % h, method="HEAD", headers={"User-Agent": USER_AGENT})
+            req = urllib.request.Request("%s://%s/" % ("http" if h in _HTTP_HOSTS else "https", h), method="HEAD",
+                                         headers={"User-Agent": USER_AGENT})
             urllib.request.urlopen(req, timeout=timeout).close()
             out[h] = "ok"
         except Exception as e:  # noqa: BLE001
@@ -934,7 +1017,8 @@ def preflight(args, regions, warnings):
                   and LATLON_RE.match(args.origin) and LATLON_RE.match(args.dest or ""))
     if local_only:
         return {}
-    status = check_network(["files.mobilitydatabase.org", "nominatim.openstreetmap.org", "router.project-osrm.org"])
+    status = check_network(["files.mobilitydatabase.org", "nominatim.openstreetmap.org",
+                            url_host(getattr(args, "osrm_url", None) or osrm_bases()[0])])
     blocked = [h for h, s in status.items() if s != "ok"]
     tls = [h for h in blocked if status[h].startswith("tls failed")]
     if len(blocked) == len(status):
@@ -3210,7 +3294,7 @@ def plan(args):
         raise SystemExit("the origin and destination are the same place (%.0f m apart), so there is no trip to plan. "
                          "Check the two addresses." % haversine_m(o_lat, o_lon, d_lat, d_lon))
     infos = {}   # town-level reverse geocoding, once per point and run: country checks, discovery, border checks
-    osrm_hosts, overpass_used = set(), False   # OpenStreetMap-based services that answered, for the SOURCES line
+    osrm_used, overpass_used = set(), False   # OpenStreetMap-based services that answered, for the SOURCES line
 
     def place_info(lat, lon):
         k = ("%.3f" % lat, "%.3f" % lon)
@@ -3746,12 +3830,12 @@ def plan(args):
             km, sec = heuristic_ride(e["straight_m"])
             e.update(ride_km=km, ride_free_s=sec, osrm=False)
         if pick and args.routing in ("auto", "osrm"):
-            for base in [args.osrm_url, OSRM_FALLBACK]:
+            for base in osrm_chain(args.osrm_url):
                 try:
                     res = osrm_table(base, (d_lat, d_lon), [(e["lat"], e["lon"]) for e in pick], to_origin=True)
                 except Exception:  # noqa: BLE001
                     continue
-                osrm_hosts.add(urllib.parse.urlsplit(base).netloc)
+                osrm_used.add(url_host(base))
                 for e, r in zip(pick, res):
                     if r:
                         e.update(ride_free_s=r[0], ride_km=r[1] / 1000.0, osrm=True)
@@ -3890,7 +3974,7 @@ def plan(args):
         refine = refine[:OSRM_BATCH * OSRM_MAX_REQUESTS - 1]
         pts = [(d_lat, d_lon)] + [(c["lat"], c["lon"]) for c in refine]
         res, err = None, None
-        for base in [args.osrm_url, OSRM_FALLBACK]:
+        for base in osrm_chain(args.osrm_url):
             try:
                 res = osrm_table(base, (o_lat, o_lon), pts)
                 break
@@ -3903,7 +3987,7 @@ def plan(args):
             warnings.append(msg)
         else:
             osrm_ok = True
-            osrm_hosts.add(urllib.parse.urlsplit(base).netloc)
+            osrm_used.add(url_host(base))
             if res[0]:
                 ride_all.update(ride_s=res[0][0] * f_all, ride_km=res[0][1] / 1000.0, source=osrm_label(f_all),
                                 free_s=res[0][0])
@@ -4545,7 +4629,7 @@ def plan(args):
         "hubs_routed": None if routed is None else {"osrm": routed[0], "estimate": routed[1]},
         "all_options": sorted(options, key=rank) if args.all else None,
         "crosscheck": crosscheck,
-        "attribution": osm_attribution(args, infos, osrm_hosts, overpass_used, licences),
+        "attribution": osm_attribution(args, infos, osrm_used, overpass_used, licences),
     })
     if car:
         common.update({"access": "car", "parking_summary": parking_summary,
@@ -5132,7 +5216,8 @@ def build_parser():
                     "short of the destination plus a ride for the rest (auto: trips of %d km or more, or when no "
                     "stop is near the destination)" % (FINAL_RIDE_MIN_M / 1000))
     ap.add_argument("--routing", choices=["auto", "osrm", "estimate"], default="auto")
-    ap.add_argument("--osrm-url", default="https://router.project-osrm.org")
+    ap.add_argument("--osrm-url", default=osrm_bases()[0], help="OSRM server for ride times (default: the first of "
+                    "TRIP_PLANNER_OSRM_URL, else the non-commercial demo server router.project-osrm.org)")
     ap.add_argument("--traffic-factor", type=float, help="multiplier on OSRM free-flow times (default by time of day "
                     "and area: typical traffic for a ride, the planning allowance for --access car)")
     ap.add_argument("--min-saving", type=float, help="hide hubs whose ride + fare (car mode: the drive) saves less "

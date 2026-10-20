@@ -202,7 +202,7 @@ None is needed. Keys come from environment variables only. TomTom and Ontario 51
 
 **Where keys work.** Keys reach the scripts only when the scripts run on your own computer. Chat apps (claude.ai, ChatGPT, Gemini, Microsoft Copilot) run code in the provider's sandbox, which cannot see your environment variables and has limited or no network access. There the skill runs without keys, and where the sandbox cannot reach the data hosts, the agent falls back to the bundled data and the manual method. To get everything (live traffic, highway incidents, more charger lookups, review rates), use a coding agent that runs on your machine: Claude Code, Codex, Gemini CLI, Cursor or GitHub Copilot in VS Code. Never upload `.env` to a chat or paste a key into one.
 
-**Setting them.** [`.env.example`](.env.example) lists the four variables. Copy it to `.env` (git ignores that file) and fill in the keys you have. The scripts read the environment, not the file, so load it in one of these ways. After a permanent setting, restart Claude Code or Codex; after a session-only load, start `claude` or `codex` from that same terminal.
+**Setting them.** [`.env.example`](.env.example) lists the four keys, plus the two optional routing server settings (`TRIP_PLANNER_VALHALLA_URL`, `TRIP_PLANNER_OSRM_URL`; see Limitations). Copy it to `.env` (git ignores that file) and fill in the keys you have. The scripts read the environment, not the file, so load it in one of these ways. After a permanent setting, restart Claude Code or Codex; after a session-only load, start `claude` or `codex` from that same terminal.
 
 ```powershell
 # Windows, permanent for your user (one line per key)
@@ -241,6 +241,12 @@ On Windows, Python trusts only root certificates Windows has already downloaded.
 - **Ontario-first driving data.** Outside Ontario you get routes, OpenStreetMap parking and weather, plus `--fuel-price`.
 - **Untested keys.** Ontario 511, Google Places and a personal NLR key are tested only against replies shaped like their documentation. TomTom has run live.
 - **The Transitous second opinion is light-use only.** Transitous is open-source, non-commercial and best effort, and asks to be contacted before routing at volume, so `--crosscheck` is optional and off by default.
+- **The free routers and the weather API are for non-commercial use.** Unless you set your own servers, drive and ride times come from donated demo servers:
+  - The OSRM demo servers (router.project-osrm.org and routing.openstreetmap.de): the [OSRM demo server policy](https://github.com/Project-OSRM/osrm-backend/wiki/Demo-server) says their use "is restricted to reasonable, non-commercial use-cases" and asks for no more than 1 request per second.
+  - FOSSGIS's Valhalla server (valhalla1.openstreetmap.de): its page states no terms. The FOSSGIS [routing page](https://routing.openstreetmap.de/about.html) sums up its usage policy as attribution, a valid User-Agent, one request per second at most, and no scraping or heavy use. The full [FOSSGIS policy](https://www.fossgis.de/arbeitsgruppen/osm-server/nutzungsbedingungen/) (German) could not be read when checked.
+  - The Open-Meteo forecast: its [terms](https://open-meteo.com/en/terms) allow the free API for non-commercial purposes only, under 10,000 calls a day.
+
+  Personal use fits these terms: the scripts send each router at most 1 request per second, and ask Open-Meteo once per route for every point on it (cached for an hour). Commercial or hosted use, such as a paid product or a service run for other people, needs your own router or a paid one. Set `TRIP_PLANNER_VALHALLA_URL` and `TRIP_PLANNER_OSRM_URL` to point the scripts at it (see [`references/driving.md`](plugins/trip-planner/skills/trip-planner/references/driving.md#your-own-routing-servers)). It also needs Open-Meteo's paid API, which the scripts do not support yet.
 
 The full list, with what is deferred on purpose, is in [`references/driving.md`](plugins/trip-planner/skills/trip-planner/references/driving.md) and [`docs/architecture.md`](docs/architecture.md).
 

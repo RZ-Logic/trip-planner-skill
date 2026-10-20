@@ -40,7 +40,7 @@ WEATHER_SOURCE = ("weather: Open-Meteo forecast, weather data by Open-Meteo.com 
                   "(CC BY 4.0, https://open-meteo.com/en/licence)")
 CONF_ORDER = {"official": 0, "curated": 1, "osm": 2, "stale": 3}
 EV_FLAGS = ("ev_model", "battery_kwh", "soc", "max_dc_kw", "nacs_adapter", "kwh_per_100km")
-ROUTING_HOSTS = ["valhalla1.openstreetmap.de", "router.project-osrm.org", "routing.openstreetmap.de"]
+ROUTING_HOSTS = ["valhalla1.openstreetmap.de", "router.project-osrm.org", "routing.openstreetmap.de"]   # defaults
 DRIVE_HOSTS = ["nominatim.openstreetmap.org", "photon.komoot.io"] + ROUTING_HOSTS + [
     "www.ontario.ca", "prod-energy-fuel-prices.s3.amazonaws.com", "api.open-meteo.com", "overpass-api.de",
     "developer.nlr.gov", "secure.toronto.ca", "ckan0.cf.opendata.inter.prod-toronto.ca",
@@ -48,9 +48,19 @@ DRIVE_HOSTS = ["nominatim.openstreetmap.org", "photon.komoot.io"] + ROUTING_HOST
 GEOCODE_HOSTS = ["nominatim.openstreetmap.org", "photon.komoot.io"]
 
 
+def routing_hosts():
+    """The routing hosts in use: TRIP_PLANNER_VALHALLA_URL and TRIP_PLANNER_OSRM_URL when set, else ROUTING_HOSTS."""
+    return th.routing_hosts()
+
+
 def drive_hosts():
-    """Hosts the driving planner calls: the core list, then the city parking layers (each used only near its city)."""
-    hosts = list(DRIVE_HOSTS)
+    """Hosts the driving planner calls: the core list (with the configured routers in place of the default ones),
+    then the city parking layers (each used only near its city)."""
+    hosts = []
+    for h in DRIVE_HOSTS:
+        for x in (routing_hosts() if h in ROUTING_HOSTS else [h]):
+            if x not in hosts:
+                hosts.append(x)
     try:
         for layer in dc.load_data("parking").get("city_layers") or []:
             h = urllib.parse.urlsplit(layer.get("url", "")).netloc
@@ -64,9 +74,10 @@ def drive_hosts():
 def blocked_note(warnings):
     """NETWORK BLOCKED text when the routing hosts cannot be reached at all (a sandbox), TLS FAILED text when this
     Python could not verify their certificates, else None."""
-    status = th.check_network(ROUTING_HOSTS, timeout=6)
-    blocked = [h for h in ROUTING_HOSTS if status[h] != "ok"]
-    if len(blocked) < len(ROUTING_HOSTS):
+    hosts = routing_hosts()
+    status = th.check_network(hosts, timeout=6)
+    blocked = [h for h in hosts if status[h] != "ok"]
+    if len(blocked) < len(hosts):
         return None
     tls = [h for h in blocked if status[h].startswith("tls failed")]
     if tls and len(tls) == len(blocked):   # certificates, not the allow-list
@@ -1753,7 +1764,8 @@ def hub_args(o, d, when, arrive_by, cost_per_km, stay_h, warnings, traffic_facto
     if hasattr(th, "build_parser"):
         return th.build_parser().parse_args(argv), argv
     warnings.append("trip_hubs.build_parser is missing (older trip_hubs), so park and ride uses built-in defaults")
-    ns = dict(TH_DEFAULTS, origin=ll(o), dest=ll(d), car_cost_per_km=cost_per_km, stay_hours=stay_h)
+    ns = dict(TH_DEFAULTS, origin=ll(o), dest=ll(d), car_cost_per_km=cost_per_km, stay_hours=stay_h,
+              osrm_url=getattr(th, "osrm_bases", lambda: [TH_DEFAULTS["osrm_url"]])()[0])
     ns["arrive_by" if arrive_by else "depart"] = when.strftime("%Y-%m-%d %H:%M")
     if traffic_factor:
         ns["traffic_factor"] = round(traffic_factor, 2)
@@ -3609,6 +3621,7 @@ def main(argv=None):
             pass
     ap = build_parser()
     args = ap.parse_args(argv)
+    routing_hosts()   # a TRIP_PLANNER_VALHALLA_URL or TRIP_PLANNER_OSRM_URL that is not a URL stops here, in one line
     if args.check_network:
         hosts = drive_hosts()
         status = th.check_network(hosts)

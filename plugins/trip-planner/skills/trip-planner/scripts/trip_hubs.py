@@ -3911,7 +3911,8 @@ def plan(args):
         def to_dt(sec):
             return base + dt.timedelta(seconds=int(sec))
 
-        when = deadline if arrive_by else depart
+        when = deadline if arrive_by else depart   # lo_ok / hi_ok stay around this (the time zone sanity check)
+        goal = to_dt(target) if arrive_by else None   # the plan arrives with safety_s spare: ask Transitous the same
         lo_ok = when - dt.timedelta(hours=args.max_hours + 1) if arrive_by else when - dt.timedelta(minutes=30)
         hi_ok = when + dt.timedelta(minutes=30) if arrive_by else when + dt.timedelta(hours=args.max_hours + 1)
         crosscheck = {"source": "Transitous (transitous.org, non-commercial, best effort)", "transit_only": None,
@@ -3927,6 +3928,8 @@ def plan(args):
             return inside
 
         def pick(its, by):   # arrive-by: the latest departure; otherwise the earliest arrival
+            if by:   # a trip arriving inside the safety margin is the excluded stretch, not a better connection
+                its = [i for i in its if i["arrive_dt"] <= goal]
             if not its:
                 return None
             return max(its, key=lambda i: i["depart_dt"]) if by else min(its, key=lambda i: i["arrive_dt"])
@@ -3949,7 +3952,9 @@ def plan(args):
                     "Transitous arrives %.0f min later" % diff)
 
         try:
-            b = pick(ask((o_lat, o_lon), when, arrive_by), arrive_by)
+            # depart mode: our transit only leaves after the walk plus safety_s; Transitous adds its own walk
+            b = pick(ask((o_lat, o_lon), goal if arrive_by else depart + dt.timedelta(seconds=safety_s), arrive_by),
+                     arrive_by)
             ours_b = transit_only["legs"][0]["depart"] if transit_only and transit_only["legs"] else None
             v = verdict(b, ours_b, transit_only["arrive"]) if transit_only else (
                 "no itinerary found" if b is None else "Transitous found one; this data did not")
@@ -3958,7 +3963,7 @@ def plan(args):
             warnings.append("Transitous cross-check (transit only) failed: %s" % e)
         for o in (pareto + runners)[:3]:
             try:
-                at = when if arrive_by else to_dt(o["board"]) - dt.timedelta(minutes=2)
+                at = goal if arrive_by else to_dt(o["board"]) - dt.timedelta(minutes=2)
                 b = pick(ask((o["hub_lat"], o["hub_lon"]), at, arrive_by), arrive_by)
                 crosscheck["hubs"].append({"hub": o["hub"], "transitous": summary(b),
                                            "ours": {"board": fmt_t(o["board"]), "arrive": fmt_t(o["arrive"])},

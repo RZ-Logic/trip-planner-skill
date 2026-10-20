@@ -17,10 +17,12 @@ _os.environ["TRIP_PLANNER_CONFIG"] = _os.path.join(_TMP, "config", "car.json")
 _os.environ["TRIP_PLANNER_CACHE"] = _os.path.join(_TMP, "cache")
 _os.environ.setdefault("TRIP_PLANNER_QUIET", "1")   # no progress lines on stderr (TRIP_PLANNER_QUIET=0 shows them)
 import datetime as dt
+import json
 import os
 import sys
 import tempfile
 import unittest
+import urllib.parse
 from unittest import mock
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -29,6 +31,7 @@ from test_regressions import add_files  # noqa: E402
 from test_v098_hubs import feed, ok_network, run  # noqa: E402  (functions only: never import TestCase classes)
 
 DAY = dt.date(2026, 10, 15)   # Thursday
+BASE = ["--region", "none", "--no-discover", "--routing", "estimate"]
 REGIONS = {r["id"]: r for r in th.load_regions()}
 ONTARIO = REGIONS["ontario"]
 TZ = {"timezone": "America/Toronto", "utc_std_offset_hours": -5, "dst_rule": "north_america"}
@@ -219,6 +222,59 @@ class OriginRideArea(unittest.TestCase):
         self.assertEqual(res["pickup_wait_min"], 8.0)
         self.assertIsNotNone(res["pareto"][0]["uber"])
         self.assertFalse(any("(the origin)" in w for w in res["warnings"]), res["warnings"])
+
+
+# ------------------------------------------------------------------------------ hubs-pricing-io-6 (+ hubs-engine-6)
+def transitous_trip(walk_from, board, arrive):
+    """One Transitous itinerary (UTC clock strings, EDT = local + 4 h): walk to Hub A, bus 1 to Dest C."""
+    return {"legs": [
+        {"mode": "WALK", "startTime": "2026-10-15T%sZ" % walk_from, "endTime": "2026-10-15T%sZ" % board,
+         "from": {"name": "Origin"}, "to": {"name": "Hub A"}},
+        {"mode": "BUS", "agencyName": "Test Transit", "routeShortName": "1", "startTime": "2026-10-15T%sZ" % board,
+         "endTime": "2026-10-15T%sZ" % arrive, "from": {"name": "Hub A"}, "to": {"name": "Dest C"}}]}
+
+
+class CrossCheckMargin(unittest.TestCase):
+    """The second opinion is asked with the plan's own safety margin, so the departure the margin excluded is not
+    reported as a better connection."""
+
+    def crosscheck(self, trips, replies, when):
+        stops = [("A", "Hub A", 43.5000, -79.8000), ("C", "Dest C", 43.5500, -79.8000)]
+        times = []
+        for tid, (dep, arr) in trips.items():
+            times += [(tid, dep, dep, "A", 1, 0, 0), (tid, arr, arr, "C", 2, 0, 0)]
+        p = feed(stops, [("1", "WK", tid, "C") for tid in trips], times)
+        asked = []
+
+        def http_get(url, *a, **k):   # Transitous answers with the trips leaving at or after the asked time
+            q = urllib.parse.parse_qs(urllib.parse.urlsplit(url).query)
+            asked.append(q)
+            its = replies if q["arriveBy"] == ["true"] else [
+                i for i in replies if i["legs"][0]["startTime"] >= q["time"][0]]
+            return json.dumps({"itineraries": its}).encode()
+        with mock.patch.object(th, "http_get", side_effect=http_get),                 mock.patch.object(th, "check_network", side_effect=ok_network):
+            res = run(["--origin", "43.4955,-79.8000", "--dest", "43.5500,-79.8000", "--feed", "t=" + p,
+                       "--crosscheck"] + when + BASE)
+        return res, asked
+
+    def test_arrive_by_bus_inside_the_margin_is_not_a_better_connection(self):
+        res, asked = self.crosscheck({"a1": ("08:20:00", "08:40:00"), "a2": ("08:37:00", "08:58:00")},
+                                     [transitous_trip("12:11:00", "12:20:00", "12:40:00"),
+                                      transitous_trip("12:28:00", "12:37:00", "12:58:00")],
+                                     ["--arrive-by", "2026-10-15 09:00"])
+        self.assertEqual(asked[0]["time"], ["2026-10-15T12:57:00Z"])   # 09:00 less the 3 min margin
+        self.assertEqual(res["crosscheck"]["transit_only"]["verdict"], "agrees")
+        self.assertFalse(any("Transitous finds a better connection" in w for w in res["warnings"]), res["warnings"])
+
+    def test_depart_bus_inside_the_margin_is_not_a_better_connection(self):
+        res, asked = self.crosscheck({"a1": ("08:10:00", "08:30:00"), "a2": ("08:20:00", "08:40:00")},
+                                     [transitous_trip("12:00:30", "12:10:00", "12:30:00"),
+                                      transitous_trip("12:10:30", "12:20:00", "12:40:00")],
+                                     ["--depart", "2026-10-15 08:00"])
+        self.assertEqual(asked[0]["time"], ["2026-10-15T12:03:00Z"])   # 08:00 plus the 3 min margin
+        self.assertEqual(res["transit_only"]["arrive"] // 60, 8 * 60 + 40)
+        self.assertEqual(res["crosscheck"]["transit_only"]["verdict"], "agrees")
+        self.assertFalse(any("Transitous finds a better connection" in w for w in res["warnings"]), res["warnings"])
 
 
 if __name__ == "__main__":

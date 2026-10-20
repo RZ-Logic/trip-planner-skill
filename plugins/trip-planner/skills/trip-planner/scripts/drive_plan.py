@@ -1936,6 +1936,9 @@ def validate(args):
         raise SystemExit("--l-per-100km is for a fuel car; for an EV use --kwh-per-100km")
     if ev_set and args.vehicle == "gas":
         args.vehicle = "ev"   # EV options imply --vehicle ev
+    tz = getattr(args, "tz", None)
+    if tz and th._zoneinfo(tz) is None and tz not in th.TZ_TABLE:
+        raise SystemExit("--tz %r: unknown time zone; use an IANA name such as America/Winnipeg" % tz)
 
 
 def plan(args):
@@ -1956,7 +1959,12 @@ def _plan(args):
     d_lat, d_lon, d_label = resolve_drive_place(args.dest, "destination", warnings, strict)
     o, d = (o_lat, o_lon), (d_lat, d_lon)
     region = th.pick_region(regions, "auto", o_lat, o_lon)
-    tzname = (region or {}).get("timezone") or DEFAULT_TZ
+    tz_arg = getattr(args, "tz", None)
+    tzname = tz_arg or (region or {}).get("timezone") or DEFAULT_TZ
+    if not tz_arg and region is None:
+        warnings.append("the origin is outside the bundled region files, so the times you gave and the times shown "
+                        "are %s time; if the origin keeps another clock (northwestern Ontario is on Central time), "
+                        "rerun with --tz ZONE, an IANA name such as America/Winnipeg" % DEFAULT_TZ)
     holidays = dc.holidays_for(regions)
     now, _ = th.local_now(tzname, region)
     arrive_by = bool(args.arrive_by)
@@ -3047,6 +3055,8 @@ def render(res):
     when = "arrive by %s" % dc.fmt_clock(res["deadline"]) if res["mode"] == "arrive_by" else \
         "depart %s" % dc.fmt_clock(res["depart"])
     rt = ", round trip" if res["round_trip"] else ""
+    if res.get("timezone") and res["timezone"] != DEFAULT_TZ:
+        rt += ", times %s" % res["timezone"]
     L += sec("DRIVE", "%s -> %s, %s%s, %s%s" % (o, d, day.strftime("%a %Y-%m-%d"), hol, when, rt))
     routes = res.get("routes") or []
     if not routes:
@@ -3259,6 +3269,8 @@ def build_parser():
     g = ap.add_mutually_exclusive_group()
     g.add_argument("--depart", default="now", help="'YYYY-MM-DD HH:MM', 'HH:MM' or 'now' (local time)")
     g.add_argument("--arrive-by", help="be at the door by 'YYYY-MM-DD HH:MM' or 'HH:MM'")
+    ap.add_argument("--tz", help="IANA time zone for the times you give and the times printed, for an origin on "
+                                 "another clock (default: the region file's, America/Toronto)")
     s = ap.add_mutually_exclusive_group()
     s.add_argument("--stay-hours", type=pos, help="hours at the destination (default 2)")
     s.add_argument("--leave-at", help="when you leave the destination: 'HH:MM' on the trip day, or "

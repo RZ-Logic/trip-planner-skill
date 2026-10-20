@@ -186,5 +186,68 @@ class UnpricedTolls(unittest.TestCase):
         self.assertFalse(res["arrival"].get("border_min"))
 
 
+KENORA = "49.7670,-94.4894"
+WINNIPEG = "49.8951,-97.1384"
+UTC_1530 = dt.datetime(2026, 10, 14, 15, 30)   # 11:30 in Toronto, 10:30 in Kenora and Winnipeg, 08:30 in Vancouver
+
+
+def _utc(when=UTC_1530):
+    return mock.patch.object(th, "utc_now", return_value=when)
+
+
+def _tz_warnings(res):
+    return [w for w in res["warnings"] if "--tz" in w]
+
+
+class TimeZoneTests(unittest.TestCase):
+    """drive-core-2: an origin outside the region files was planned on Toronto time with no word about it."""
+
+    def trip(self, *extra):
+        return ["--origin", KENORA, "--dest", WINNIPEG, "--weather", "clear", "--incidents", "off",
+                "--park-and-ride", "off"] + list(extra)
+
+    def test_origin_outside_regions_warns(self):
+        with _utc():
+            res, _text = tdp.run(*self.trip("--depart", "2026-10-14 12:00"))
+        self.assertIsNone(res["region"])
+        self.assertEqual(res["timezone"], "America/Toronto")
+        w = _tz_warnings(res)
+        self.assertEqual(len(w), 1, res["warnings"])
+        self.assertIn("America/Toronto", w[0])
+
+    def test_tz_flag_reads_now_in_that_zone(self):
+        with _utc():
+            res, text = tdp.run(*self.trip("--tz", "America/Winnipeg", "--depart", "now"))
+        self.assertEqual(res["depart"], dt.datetime(2026, 10, 14, 10, 30))
+        self.assertEqual(res["timezone"], "America/Winnipeg")
+        self.assertEqual(_tz_warnings(res), [])
+        drive = [ln for ln in text.splitlines() if ln.startswith("DRIVE")][0]
+        self.assertIn("times America/Winnipeg", drive)
+
+    def test_tz_flag_hhmm_not_rolled_to_tomorrow(self):
+        with _utc():
+            res, _text = tdp.run("--origin", "49.2827,-123.1207", "--dest", "49.2488,-122.9805", "--weather", "clear",
+                                 "--incidents", "off", "--park-and-ride", "off", "--tz", "America/Vancouver",
+                                 "--depart", "09:00")
+        self.assertEqual(res["depart"], dt.datetime(2026, 10, 14, 9, 0))
+        self.assertFalse(any("already passed" in w for w in res["warnings"]), res["warnings"])
+
+    def test_bad_tz_is_one_line(self):
+        with tdp.Env():
+            with self.assertRaises(SystemExit) as cm:
+                dp.plan(tdp.args_for(*self.trip("--tz", "Mars/Base")))
+        self.assertIn("--tz 'Mars/Base'", str(cm.exception.code))
+        self.assertIn("America/Winnipeg", str(cm.exception.code))
+
+    def test_region_origin_keeps_toronto_time_quietly(self):
+        with _utc():
+            res, text = tdp.run(*(tdp.BASE + ["--dest", "%f,%f" % tdp.MARKHAM, "--depart", "now",
+                                              "--park-and-ride", "off"]))
+        self.assertEqual(res["timezone"], "America/Toronto")
+        self.assertEqual(res["depart"], dt.datetime(2026, 10, 14, 11, 30))
+        self.assertEqual(_tz_warnings(res), [])
+        self.assertNotIn("times America", text)
+
+
 if __name__ == "__main__":
     unittest.main()

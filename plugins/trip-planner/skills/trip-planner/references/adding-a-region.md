@@ -106,7 +106,8 @@ Rules:
   Megabus and Ontario Northland use 10). Transfers, book-by times and backups all count it, and the leg
   says "be at the stop by".
 - Feeds whose `agency_timezone` keeps another clock (FlixBus publishes UTC) are shifted to the region's
-  time automatically.
+  time automatically. Each run is converted at its own departure time, so evening trips before a clock change
+  keep the right hour.
 - **Hand-entered timetables** for operators with no public GTFS: a feed with `manual` instead of `urls`:
   `{"agency", "url", "phone", "timezone", "services": {ID: {"days": "1111100", "start", "end", "except": [dates],
   "extra": [dates]}}, "routes": [{"route", "name", "type", "trips": [{"service", "headsign", "stops":

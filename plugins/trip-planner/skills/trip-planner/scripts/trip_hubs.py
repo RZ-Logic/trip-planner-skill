@@ -1412,6 +1412,7 @@ def load_feed(net, fid, label, path, day, t0, t_end, holidays=None, local_tz=Non
                 net.fare_urls.setdefault((label, name), col(r, idx, "agency_url"))
     days = [day - dt.timedelta(days=1), day, day + dt.timedelta(days=1)]
     shifts = [0, 0, 0]   # per service day, so a window across a clock change stays right
+    feed_tz, run_fix = tz, None
     if tz and local_tz and not same_clock(tz, local_tz):
         noon = dt.datetime.combine(day, dt.time(12))
         unknown = [z for z, reg in ((local_tz, region), (tz, None))
@@ -1427,6 +1428,20 @@ def load_feed(net, fid, label, path, day, t0, t_end, holidays=None, local_tz=Non
                             - offset_at_local(noon, tz, None)[0]).total_seconds())
             shifts = [zone_gap(d) for d in days]
             log("%s keeps %s time: shifted %+.1f h to %s" % (label, tz, shifts[1] / 3600.0, local_tz))
+            day0 = dt.datetime.combine(day, dt.time(0))
+            base, memo = {}, {}   # base: offset -> service date, filled once offsets are built
+
+            def run_fix(o, s):
+                """Seconds to add to s + o so a run whose first departure is GTFS second s of the service day behind
+                offset o lands on the local wall clock at that instant (the noon offset is wrong on the evening
+                before a clock change)."""
+                k = (o, s)
+                if k not in memo:
+                    wall = dt.datetime.combine(base[o], dt.time(0)) + dt.timedelta(seconds=s)
+                    utc = wall - offset_at_local(wall, feed_tz, None)[0]
+                    loc = utc + offset_at_utc(utc, local_tz, region)[0]
+                    memo[k] = int((loc - day0).total_seconds()) - (s + o)
+                return memo[k]
         tz = local_tz
     if tz:
         net.timezones.add(tz)
@@ -1449,6 +1464,8 @@ def load_feed(net, fid, label, path, day, t0, t_end, holidays=None, local_tz=Non
             skip_routes.add(rid)
 
     offsets = [-86400 + shifts[0], shifts[1], 86400 + shifts[2]]
+    if run_fix:
+        base.update(zip(offsets, days))
     act, span = active_services(gz, days)
     substituted = False
     for d in days:
@@ -1595,9 +1612,10 @@ def load_feed(net, fid, label, path, day, t0, t_end, holidays=None, local_tz=Non
         for shift in shifts:
             for o in trip_off[tid]:
                 ti = None
+                fx = run_fix(o, trows[0][2] + shift) if run_fix else 0   # one clock correction per run
                 for k in range(len(trows) - 1):
                     r0, r1 = trows[k], trows[k + 1]
-                    dep = r0[2] + o + shift
+                    dep = r0[2] + o + shift + fx
                     if dep < t0 or dep > t_end:
                         continue
                     s0, s1 = gstop(r0[3]), gstop(r1[3])
@@ -1612,7 +1630,7 @@ def load_feed(net, fid, label, path, day, t0, t_end, holidays=None, local_tz=Non
                     flag = ("b" if r0[7] in ("2", "3") else "") + ("a" if r1[8] in ("2", "3") else "")
                     if flag:   # phone ahead or tell the driver
                         net.request[(ti, k)] = flag
-                    net.conns.append((dep, r1[1] + o + shift, s0, s1, ti, r0[4], r1[5], k))
+                    net.conns.append((dep, r1[1] + o + shift + fx, s0, s1, ti, r0[4], r1[5], k))
     if wrapped_n:
         net.warnings.append("%s: %d trips had times that ran backwards past midnight (00:06 written for 24:06) and "
                             "were read as after midnight; check them with the operator." % (label, wrapped_n))

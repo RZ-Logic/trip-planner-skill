@@ -100,6 +100,27 @@ class StopTimesOrderTests(unittest.TestCase):
         self.assertTrue(any("skipped" in w and "backwards" in w for w in net.warnings), net.warnings)
         self.assertEqual(scan.evaluate(idx["Hub A"], hms(9, 55))[0], hms(10, 30))
 
+class FeedClockTests(unittest.TestCase):
+    """hubs-engine-2 and hubs-engine-8: feeds that keep another clock (FlixBus publishes UTC)."""
+
+    def test_utc_feed_on_the_evening_before_a_clock_change(self):
+        p = feed([("1", "ALL", "c1", "C")],
+                 [("c1", "02:00:00", "02:00:00", "A", 1, 0, 0), ("c1", "02:30:00", "02:30:00", "C", 2, 0, 0)],
+                 {"agency.txt": UTC_AGENCY}, calendar=ALL_DAYS)
+        cases = ((dt.date(2026, 10, 31), hms(22, 0)),   # 02:00 UTC Nov 1 is 22:00 EDT Oct 31 (clocks go back at 06:00 UTC)
+                 (dt.date(2027, 3, 13), hms(21, 0)),    # 02:00 UTC Mar 14 is 21:00 EST Mar 13 (forward at 07:00 UTC)
+                 (dt.date(2026, 10, 15), hms(22, 0)))   # an ordinary evening
+        for builtin in (False, True):
+            with self.subTest(builtin_rules=builtin):
+                patch = mock.patch.object(th, "_zoneinfo", return_value=None) if builtin else mock.patch.object(
+                    th, "_zoneinfo", wraps=th._zoneinfo)
+                with patch:
+                    for day, expect in cases:
+                        net = th.Network()
+                        th.load_feed(net, "f", "F", p, day, hms(19, 0), hms(23, 30), None, "America/Toronto", REG)
+                        self.assertEqual(sorted(c[0] for c in net.conns), [expect], day)
+                        self.assertEqual([c[1] for c in net.conns], [expect + 1800], day)
+
 
 if __name__ == "__main__":
     unittest.main()

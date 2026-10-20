@@ -329,6 +329,31 @@ class RankingCountsTheFare(unittest.TestCase):
         u = next(o for o in res["others"] if o["hub"] == "Hub U")
         self.assertEqual((u["transit_fare"], u["fare_complete"]), (5.0, True))
 
+    # ------------------------------------------------------------------------------------------- hubs-engine-3
+    def test_near_equal_rides_across_a_bucket_edge_are_one_trade_off(self):
+        # ride all the way 83.06 (step 4.153), so the old bucket edge sat at 4 x 4.153 = 16.61: Hub A 16.66 arrives
+        # 11:05, Hub B 16.56 arrives 11:45; 0.10 cheaper for 40 minutes later is no trade-off
+        stops = [("A", "Hub A", HUB_1[0], HUB_1[1]), ("B", "Hub B", HUB_2[0], HUB_2[1]),
+                 ("C", "Dest C", DEST[0], DEST[1])]
+        p = self.feed(stops, [("R", "WK", "a1", "C"), ("S", "WK", "b1", "C")],
+                      [("a1", "10:40:00", "10:40:00", "A", 1, 0, 0), ("a1", "11:05:00", "11:05:00", "C", 2, 0, 0),
+                       ("b1", "11:10:00", "11:10:00", "B", 1, 0, 0), ("b1", "11:45:00", "11:45:00", "C", 2, 0, 0)])
+        with priced_rides({DEST: 83.06, HUB_1: 16.66, HUB_2: 16.56}):
+            res = run(plan_args(p, "--min-saving", "0"))
+        self.assertEqual([o["hub"] for o in res["pareto"]], ["Hub A"])                     # was ["Hub A", "Hub B"]
+
+    def test_tolerant_front_has_no_bucket_edges(self):
+        # (time, cost): equal costs within the step, wherever a multiple of the step falls between them
+        pts = [(1, 16.66), (2, 16.56), (3, 12.0), (3, 11.0), (4, 10.5)]
+        for step in (4.153, 1.0, 0.5):
+            front = th.tolerant_front(pts, lambda x: x[0], lambda x: x[1], step)
+            self.assertNotIn((2, 16.56), front, step)
+            self.assertNotIn((3, 12.0), front, step)          # same time, dearer: never the faster pick
+            self.assertEqual(front[0], (1, 16.66))
+        self.assertEqual(th.tolerant_front(pts, lambda x: x[0], lambda x: x[1], 1.0), [(1, 16.66), (3, 11.0)])
+        self.assertEqual(th.tolerant_front(pts, lambda x: x[0], lambda x: x[1], 0.4),
+                         [(1, 16.66), (3, 11.0), (4, 10.5)])
+
 
 if __name__ == "__main__":
     unittest.main()

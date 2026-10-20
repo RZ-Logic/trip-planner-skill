@@ -515,7 +515,7 @@ class FixSameTrain(unittest.TestCase):
         self.assertEqual(res["transit_only"]["transit_fare"], 8.0)
         self.assertIn("Hub D", hubs)                                     # about $1.40 in all vs $8: a real saving
         res, hubs = self.run_plan(["--depart", "2026-10-15 10:00"], ["--access", "car"], region(7.5))
-        self.assertNotIn("Hub D", hubs)                                  # about $7.90 vs $8: within a $1 bucket
+        self.assertNotIn("Hub D", hubs)                                  # about $7.90 vs $8: within a $1 step
 
     def test_ride_mode_still_applies_min_gain(self):
         res, hubs = self.run_plan(["--depart", "2026-10-15 10:00"], ["--min-saving", "0"])

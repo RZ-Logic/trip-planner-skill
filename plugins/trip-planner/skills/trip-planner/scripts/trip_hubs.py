@@ -3059,6 +3059,18 @@ def transitous(o, d, when_local, arrive_by, tzname, region):
 
 # --------------------------------------------------------------------------- planner
 
+def tolerant_front(items, time, cost, step):
+    """Options on the cost-time front, best time first (time: smaller is better). Costs within `step` count as
+    equal: an option is kept only if it costs more than `step` less than every option already kept (each no
+    slower). No fixed buckets, so 16.56 and 16.66 are equal whatever the step. Ties keep the input order."""
+    kept = []
+    for x in sorted(items, key=lambda x: (time(x), cost(x))):
+        c = cost(x)
+        if all(cost(k) - c > step for k in kept):
+            kept.append(x)
+    return kept
+
+
 def check_when_text(flag, text):
     """Stop with a format hint (not a traceback) when a --depart or --arrive-by value cannot be read."""
     if text in (None, "", "now"):
@@ -4049,20 +4061,18 @@ def plan(args):
         ride_all["arrive"] = target
         beats_transit = ((lambda o: o["book_by"] >= transit_only["leave_by"] + gain_s) if transit_only
                          else (lambda o: True))
-        better = lambda o, best: o["book_by"] > best  # noqa: E731
-        start, rank = -INF, (lambda o: (-o["book_by"], o["arrive"], cost_of(o)))
-        front_key = lambda o: o["book_by"]  # noqa: E731
+        rank = lambda o: (-o["book_by"], o["arrive"], cost_of(o))  # noqa: E731
+        front_time = lambda o: -o["book_by"]  # noqa: E731
     else:
         beats_transit = ((lambda o: o["arrive"] <= transit_only["arrive"] - gain_s) if transit_only
                          else (lambda o: True))
-        better = lambda o, best: o["arrive"] < best  # noqa: E731
-        start, rank = INF, (lambda o: (o["arrive"], -o["book_by"], cost_of(o)))
-        front_key = lambda o: o["arrive"]  # noqa: E731
+        rank = lambda o: (o["arrive"], -o["book_by"], cost_of(o))  # noqa: E731
+        front_time = lambda o: o["arrive"]  # noqa: E731
     if car and transit_only:
         # driving to the station replaces the walk and local bus, so --min-gain-min does not apply: a hub is hidden
         # only when transit only is at least as good on time (leaves no earlier; in depart mode arrives no later,
         # and on the same arrival leaves no earlier) and costs no more than car + parking + fare. Savings within one
-        # Pareto cost bucket (below) count as equal, so a long drive does not show for a few cents off the fare.
+        # Pareto cost step (below) count as equal, so a long drive does not show for a few cents off the fare.
         to_fare = transit_only.get("transit_fare") if transit_only.get("fare_complete") else None
         to_step = max(1.0, 0.05 * ride_all["cost"])
 
@@ -4126,14 +4136,10 @@ def plan(args):
         warnings.append("%d hubs hidden because they gain less than %d min over transit only (--min-gain-min)."
                         % (hidden_gain, args.min_gain_min))
 
-    # Pareto front on (ride + fare, time). Costs within one bucket (about 5% of the full ride, at least
+    # Pareto front on (ride + fare, time). Costs within one step (about 5% of the full ride, at least
     # 1 currency unit) count as equal, so a few cents never beat a much better time. Car mode: car + fare.
     step = max(1.0, 0.05 * ride_all["cost"])
-    pareto, best = [], start
-    for o in sorted(useful, key=lambda o: (math.floor(cost_of(o) / step),) + rank(o)):
-        if better(o, best):
-            pareto.append(o)
-            best = front_key(o)
+    pareto = tolerant_front(sorted(useful, key=rank), front_time, cost_of, step)
     pareto.sort(key=rank)
     keys = {id(o) for o in pareto}
     keep_rt = None   # car mode: id of the hub cheapest there and back when the one-way front leaves it out
@@ -4242,14 +4248,9 @@ def plan(args):
             main_pts.append((to_score, 0.0))
             raw = [x for x in raw if x[0] <= to_score - gain_s]
         raw = [x for x in raw if not any(ms <= x[0] and mc <= x[1] for ms, mc in main_pts)]
-        # Pareto on (total ride cost, time), with the same cost buckets as the main list
-        front, best_score = [], INF
-        for score, total, c, e, res, fr in sorted(raw, key=lambda x: (math.floor(x[1] / step), x[0], x[1],
-                                                                      -(x[4][0] if arrive_by else x[4][2]))):
-            if score < best_score:
-                front.append((score, total, c, e, res, fr))
-                best_score = score
-        front.sort(key=lambda x: x[0])
+        # Pareto on (total ride cost, time), with the same cost step as the main list (ties: the later one)
+        front = tolerant_front(sorted(raw, key=lambda x: -(x[4][0] if arrive_by else x[4][2])),
+                               lambda x: x[0], lambda x: x[1], step)
         k = max(2, args.top // 2)
         shown = front if len(front) <= k else front[:k - 1] + front[-1:]   # fastest few and the cheapest
         for score, total, c, e, res, fr in shown:

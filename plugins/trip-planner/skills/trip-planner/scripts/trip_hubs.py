@@ -1269,6 +1269,7 @@ class Network:
         self.xfer = {}    # (stop, stop) -> min seconds, or -1 when transfers.txt forbids it
         self.stop_heads = {}  # (trip_idx, row_k) -> stop_headsign where it differs from the trip headsign
         self.trip_buffer = []  # per trip: seconds a rider must be at the stop before it leaves (coaches, trains)
+        self.trip_headway = {}  # trip index -> headway seconds for 'every N min' runs (frequencies.txt exact_times=0)
         self.request = {}  # (trip_idx, row_k) -> "b" (boarding) / "a" (alighting) on request only
         self.idle_stops = {}  # feed label -> stop coordinates, for feeds with no service on the date
         self.feed_stops = {}  # feed label -> coordinates of every stop in the file, served in the window or not
@@ -1504,7 +1505,8 @@ def load_feed(net, fid, label, path, day, t0, t_end, holidays=None, local_tz=Non
             trip_off[tid] = offs
             trip_meta[tid] = (col(r, idx, "route_id"), safe_text(col(r, idx, "trip_headsign")))
 
-    # headway-based trips: stop_times holds one template run, repeated every headway_secs
+    # headway-based trips: stop_times holds one template run, repeated every headway_secs. exact_times other than 1
+    # (0 or empty) means 'every N min' with no timetable: the vehicle can come any time within the headway
     freq = {}
     if gz.has("frequencies.txt"):
         idx, rows = gz.table("frequencies.txt")
@@ -1517,7 +1519,7 @@ def load_feed(net, fid, label, path, day, t0, t_end, holidays=None, local_tz=Non
                 except (ValueError, TypeError):
                     continue
                 if start is not None and end is not None and head > 0:
-                    freq.setdefault(tid, []).append((start, end, head))
+                    freq.setdefault(tid, []).append((start, end, head, col(r, idx, "exact_times") == "1"))
 
     stops_raw = {}
     idx, rows = gz.table("stops.txt")
@@ -1601,15 +1603,15 @@ def load_feed(net, fid, label, path, day, t0, t_end, holidays=None, local_tz=Non
             continue
         rid, head = trip_meta[tid]
         short, long_, rtype, agency = routes.get(rid, (rid, "", 3, label))
-        shifts = [0]
+        runs = [(0, 0)]   # (shift from the template run, headway when not exact)
         if tid in freq:
-            first_dep, shifts = trows[0][2], []
-            for start, end, step in freq[tid]:
+            first_dep, runs = trows[0][2], []
+            for start, end, step, exact in freq[tid]:
                 t = start
                 while t < end:
-                    shifts.append(t - first_dep)
+                    runs.append((t - first_dep, 0 if exact else step))
                     t += step
-        for shift in shifts:
+        for shift, hw in runs:
             for o in trip_off[tid]:
                 ti = None
                 fx = run_fix(o, trows[0][2] + shift) if run_fix else 0   # one clock correction per run
@@ -1624,7 +1626,10 @@ def load_feed(net, fid, label, path, day, t0, t_end, holidays=None, local_tz=Non
                     if ti is None:
                         ti = len(net.trips)
                         net.trips.append((label, agency, short, long_, rtype, head, tid, rid))
-                        net.trip_buffer.append(int(board_buffer_s))
+                        # 'every N min': be at the stop one headway early, so the arrival shown is the latest
+                        net.trip_buffer.append(int(max(board_buffer_s, hw)))
+                        if hw > board_buffer_s:
+                            net.trip_headway[ti] = hw
                     if r0[6] and r0[6] != head:   # stop_headsign: what the sign says at this stop
                         net.stop_heads[(ti, k)] = safe_text(r0[6])
                     flag = ("b" if r0[7] in ("2", "3") else "") + ("a" if r1[8] in ("2", "3") else "")
@@ -2003,6 +2008,9 @@ class ProfileScan:
             buf = net.trip_buffer[ti] if ti < len(net.trip_buffer) else 0
             if buf:
                 legs[-1]["be_there_by"] = dep - buf
+            hw = net.trip_headway.get(ti)
+            if hw:
+                legs[-1]["headway_min"] = int(round(hw / 60.0))
             if "b" in net.request.get((ti, conns[c][7]), ""):
                 legs[-1]["request_board"] = True
             if "a" in net.request.get((ti, conns[r][7]), ""):
@@ -3875,15 +3883,19 @@ def legs_text(legs):
         if lg["type"] == "ride":
             hops = "nonstop" if lg["stops"] == 1 else "%d stops" % lg["stops"]
             notes = []
-            if lg.get("be_there_by") is not None:
+            if lg.get("be_there_by") is not None and not lg.get("headway_min"):
                 notes.append("be at the stop by %s" % fmt_t(lg["be_there_by"]))
             if lg.get("request_board"):
                 notes.append("request stop: call ahead or flag the driver to board")
             if lg.get("request_alight"):
                 notes.append("request stop: tell the driver you are getting off")
-            parts.append("%s: %s -> %s (%s-%s, %s)%s" % (
-                leg_name(lg), lg["from"], lg["to"], fmt_t(lg["depart"]), fmt_t(lg["arrive"]), hops,
-                " [%s]" % "; ".join(notes) if notes else ""))
+            if lg.get("headway_min"):   # no timetable: from when to be at the stop, and the latest arrival
+                start = lg.get("be_there_by", lg["depart"])
+                when = "every %d min from %s, arrive by %s" % (lg["headway_min"], fmt_t(start), fmt_t(lg["arrive"]))
+            else:
+                when = "%s-%s" % (fmt_t(lg["depart"]), fmt_t(lg["arrive"]))
+            parts.append("%s: %s -> %s (%s, %s)%s" % (leg_name(lg), lg["from"], lg["to"], when, hops,
+                                                    " [%s]" % "; ".join(notes) if notes else ""))
         elif lg["type"] == "final_ride":
             parts.append("final ride %.1f km / %s from %s to the destination" % (lg["km"], fmt_min(lg["seconds"]),
                                                                               lg["from"]))

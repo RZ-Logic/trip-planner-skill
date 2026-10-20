@@ -57,9 +57,10 @@ class ReviewRegressions(unittest.TestCase):
         return p
 
     def test_frequencies_expand_headway_trips(self):
+        # exact_times=1: timed runs every 10 min (exact_times 0 is 'every N min' service, test_review_gtfs.HeadwayTests)
         p = self.feed("freq.zip", [("F", "WK", "f1", "C")],
                       [("f1", "06:00:00", "06:00:00", "A", 1, 0, 0), ("f1", "06:20:00", "06:20:00", "C", 2, 0, 0)],
-                      {"frequencies.txt": "trip_id,start_time,end_time,headway_secs,exact_times\nf1,06:00:00,22:00:00,600,0\n"})
+                      {"frequencies.txt": "trip_id,start_time,end_time,headway_secs,exact_times\nf1,06:00:00,22:00:00,600,1\n"})
         net, scan, idx = scan_for(p, hms(9, 0), hms(13, 0))
         self.assertGreaterEqual(len(net.conns), 24)
         self.assertEqual(scan.evaluate(idx["Hub A"], hms(9, 5))[0], hms(9, 30))   # 09:10 run arrives 09:30

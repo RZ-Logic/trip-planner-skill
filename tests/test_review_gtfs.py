@@ -121,6 +121,36 @@ class FeedClockTests(unittest.TestCase):
                         self.assertEqual(sorted(c[0] for c in net.conns), [expect], day)
                         self.assertEqual([c[1] for c in net.conns], [expect + 1800], day)
 
+class HeadwayTests(unittest.TestCase):
+    """hubs-engine-7: 'every N min' service (frequencies.txt exact_times 0 or empty) is not a timed departure."""
+
+    TRIPS = [("F", "WK", "f1", "B"), ("T", "WK", "tr", "C"), ("T", "WK", "tr2", "C")]
+    TIMES = [("f1", "06:00:00", "06:00:00", "A", 1, 0, 0), ("f1", "06:10:00", "06:10:00", "B", 2, 0, 0),
+             ("tr", "10:13:00", "10:13:00", "B", 1, 0, 0), ("tr", "10:35:00", "10:35:00", "C", 2, 0, 0),
+             ("tr2", "11:28:00", "11:28:00", "B", 1, 0, 0), ("tr2", "11:50:00", "11:50:00", "C", 2, 0, 0)]
+
+    def headway_feed(self, exact):
+        return feed(self.TRIPS, self.TIMES, {"frequencies.txt": "trip_id,start_time,end_time,headway_secs,exact_times\n"
+                                                                "f1,06:00:00,22:00:00,900,%s\n" % exact})
+
+    def test_inexact_headway_assumes_the_longest_wait(self):
+        for exact in ("0", ""):
+            with self.subTest(exact_times=exact):
+                net, scan, idx = scan_for(self.headway_feed(exact), hms(9, 0), hms(13, 0))
+                # the bus may come any time in the next 15 min, so the 10:13 train cannot be promised
+                self.assertEqual(scan.evaluate(idx["Hub A"], hms(10, 0))[0], hms(11, 50))
+                arr, legs = scan.journey(idx["Hub A"], hms(10, 0))
+                self.assertEqual(arr, hms(11, 50))
+                self.assertEqual(legs[0]["headway_min"], 15)
+                # the latest start that still makes 11:28: at the stop by 11:00, a bus by 11:15, at B by 11:25
+                self.assertIn("every 15 min from 11:00, arrive by 11:25", th.legs_text(legs))
+
+    def test_exact_times_1_keeps_timed_departures(self):
+        net, scan, idx = scan_for(self.headway_feed("1"), hms(9, 0), hms(13, 0))
+        self.assertEqual(scan.evaluate(idx["Hub A"], hms(10, 0))[0], hms(10, 35))
+        arr, legs = scan.journey(idx["Hub A"], hms(10, 0))
+        self.assertNotIn("headway_min", legs[0])
+
 
 if __name__ == "__main__":
     unittest.main()

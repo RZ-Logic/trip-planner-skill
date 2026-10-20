@@ -237,10 +237,11 @@ priced.
   rolling maximums (Green P "any 4 hour period" or "24 hour rolling": each block of that length costs
   at most the maximum), block prices ("$7 for 3 hours": one charge per started block; next to an hourly
   rate, "$15/24 hours" stays a cap), prices written before their window ("$2/hr Mon-Fri 8am-6pm;
-  $1/hr Sat 9am-5pm"), free days and windows ("free Sat-Sun", "free after 6pm and weekends"),
-  OpenStreetMap day forms ("Mo-Fr") and opening hours past midnight. A night or overnight maximum with
-  no hours is noted, never used as the day maximum. One unreadable lot is left out with a WARNING; the
-  rest of its source still counts.
+  $1/hr Sat 9am-5pm"), free days and windows ("free Sat-Sun", "$2/hr Mon-Fri, Sat-Sun free", "free
+  after 6pm and weekends"), OpenStreetMap day forms ("Mo-Fr") and opening hours past midnight. A night
+  or overnight maximum with no hours is noted, never used as the day maximum, and a rate that calls
+  every paid day free is shown as price unknown, never free. One unreadable lot is left out with a
+  WARNING; the rest of its source still counts.
 - **OpenStreetMap searches** wait at most 60 s in total. After a timeout or a busy reply, later
   searches in the same run use only the disk cache.
 - **Ranking:** lots that fit the stay come first, then lots within the walk limit. Within those, by

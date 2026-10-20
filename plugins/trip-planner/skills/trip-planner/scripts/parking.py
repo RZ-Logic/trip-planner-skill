@@ -364,15 +364,27 @@ def _tokens(text):
         toks.append(("no_overnight", m.start(), m.end(), None))
     toks.sort(key=lambda t: t[1])
     # merge day lists such as "Sat, Sun, Holidays" or "Saturday - Sunday & Holidays"
-    out = []
+    out, parts = [], []
     for t in toks:
         if (t[0] == "days" and out and out[-1][0] == "days"
                 and re.match(r"^[\s,/&+]*(?:and)?[\s,/&+]*$", text[out[-1][2]:t[1]], re.I)):
             d0, h0 = out[-1][3]
             d1, h1 = t[3]
             out[-1] = ("days", out[-1][1], t[2], (d0 | d1, h0 or h1))
+            parts[-1].append(t)
         else:
             out.append(t)
+            parts.append([t])
+    # "$2/hr Mon-Fri, Sat-Sun free", "$1.50/hr Mon-Sat, Sun free": a list holding weekdays, then a weekend or
+    # holiday list right before "free", is a paid list followed by a free one, not one list of free days
+    for k in range(len(out) - 2, -1, -1):
+        t, nxt = out[k], out[k + 1]
+        if t[0] != "days" or len(parts[k]) < 2 or nxt[0] != "free" or not re.match(r"^[\s\-:,]*$", text[t[2]:nxt[1]]):
+            continue
+        first, rest = parts[k][0], parts[k][1:]
+        if any(d < 5 for d in first[3][0]) and not any(d < 5 for r in rest for d in r[3][0]):
+            rd = set().union(*(r[3][0] for r in rest))
+            out[k:k + 1] = [first, ("days", rest[0][1], rest[-1][2], (rd, any(r[3][1] for r in rest)))]
     return out
 
 
@@ -433,8 +445,9 @@ def parse_rate_text(text):
     // Sat,Sun,Holidays - Free", "$18 a day weekdays" (other days unknown, not free), "Weekdays $15, Weekends $8",
     "$3/h, $12 max, free after 6pm", "$20 per day, $10 after 5pm", "$5 first hour, $2 each additional hour",
     "$2.25/hour, max 3 hours", "$2/hr Mon-Fri 8am-6pm; $1/hr Sat 9am-5pm" (each price before its window),
-    "$12 Day Max, $5 Night Max" (a night maximum without hours is noted, not used). Unknown parts are left out;
-    an empty dict means nothing was understood."""
+    "$12 Day Max, $5 Night Max" (a night maximum without hours is noted, not used), "$2/hr Mon-Fri, Sat-Sun free"
+    (a paid day list, then the free one). Unknown parts are left out; an empty dict means nothing was understood,
+    or that the text calls every paid day free ("$2/hr, free Mon-Sun")."""
     if not text or not str(text).strip() or str(text).strip().lower() in ("n/a", "na", "none", "-"):
         return {}, []
     text = _strip_french(str(text))
@@ -730,6 +743,23 @@ def parse_rate_text(text):
             notes.append("night maximum %s not used (its hours are not given)" % dc.money(min(night_max)))
         else:
             rule["daily_max"] = min(night_max)     # "$10 overnight" alone: the only price given
+    # "$2/hr, free Mon-Sun": a price whose every paid day the text also calls free contradicts itself, so the
+    # lot is price unknown (never $0)
+    if any(k in rule for k in ("hourly", "flat", "daily_max")) or any(
+            p.get("hourly") is not None or p.get("flat") is not None or p.get("max") is not None for p in rule.get("periods") or []):
+        free_said = set(free_days)
+        for k, t in enumerate(toks):      # days written right after "free" in the same clause
+            if t[0] == "days" and k and toks[k - 1][0] == "free" and not CLAUSE_SEP.search(text[toks[k - 1][2]:t[1]]):
+                free_said |= t[3][0]
+        nonfree = [p for p in rule.get("periods") or [] if not p.get("free") and not (p.get("days") is None and p.get("holidays"))]
+        if nonfree:
+            paid = set().union(*(set(p.get("days") if p.get("days") is not None else range(7)) for p in nonfree))
+        elif rule.get("periods"):
+            paid = None       # only free windows: the base rate covers the rest of the week
+        else:
+            paid = set(rule["paid_days"]) if rule.get("paid_days") is not None else None
+        if paid is not None and free_said and paid <= free_said:
+            return {}, notes + ["free days cover every paid day; price not used"]
     roll = rule.pop("_roll_max", None)
     if roll:
         if rule.get("periods"):

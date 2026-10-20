@@ -80,5 +80,24 @@ class PriceBeforeWindow(unittest.TestCase):          # parking-1
         self.assertEqual(pk.parse_rate_text("$10 overnight")[0].get("daily_max"), 10.0)
 
 
+class PaidDaysThenFreeDays(unittest.TestCase):       # parking-2
+    def test_paid_list_then_free_list(self):
+        for text, paid in (("$2/hr Mon-Fri, Sat-Sun free", 4.0), ("$1.50/hr Mon-Sat, Sun free", 3.0),
+                           ("$2 per hour 9am-9pm Mon-Sat, Sunday free", 4.0),
+                           ("$2/hr, Mon-Sat, Sundays and holidays free", 4.0)):
+            self.assertEqual(price(text, WED10, 120), paid, text)           # HEAD: 0.0 (free every day)
+            self.assertEqual(price(text, SUN10, 120), 0.0, text)
+
+    def test_free_day_lists_still_merge(self):
+        self.assertEqual(pk.parse_rate_text("$2/hr, Sat, Sun and holidays free")[0].get("paid_days"), [0, 1, 2, 3, 4])
+        self.assertEqual(pk.parse_rate_text("Mon-Wed and Sat 8 am to 6 pm")[0]["paid_days"], [0, 1, 2, 5])
+
+    def test_free_every_paid_day_is_unpriced_not_free(self):
+        rule, notes = pk.parse_rate_text("$2/hr, free Mon-Sun")
+        self.assertEqual(rule, {})                                          # HEAD: paid_days [] priced $0
+        self.assertTrue(any("free days cover every paid day" in n for n in notes))
+        self.assertIsNone(pk.osm_charge_rule({"fee": "yes", "charge": "$2/hr, free Mon-Sun"})[0])
+
+
 if __name__ == "__main__":
     unittest.main()

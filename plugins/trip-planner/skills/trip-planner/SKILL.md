@@ -106,10 +106,12 @@ Read the output in this order:
    minutes) or the difference. Compare routes before recommending against it, and keep its link to
    https://transitous.org/sources/ when you quote it.
 
-The plan uses the region's pickup wait (printed on `RIDE COST MODEL`; none with `--access car`) and a 3
-minute margin (5 with `--access car`) at the hub and before a deadline. STRETCH connections are a
-bonus, never the plan. If the top option's `book by` is the current minute, lead with its backup
-(depart) or the option with the most time left to book (arrive-by).
+The plan uses the region's pickup wait (printed on `RIDE COST MODEL`; none with `--access car`; from a
+place the region file marks as having no ride-hail, the first ride is a local taxi with a 30 minute wait
+and no Uber link, and a WARNING lists the taxis) and a 3 minute margin (5 with `--access car`) at the hub
+and before a deadline. STRETCH connections are a bonus, never the plan. If the top option's `book by`
+is the current minute, lead with its backup (depart) or the option with the most time left to book
+(arrive-by).
 
 ## Step 2: Close the gaps timetables cannot see
 

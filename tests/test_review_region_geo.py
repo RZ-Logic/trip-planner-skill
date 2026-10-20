@@ -163,5 +163,63 @@ class RegionCountry(unittest.TestCase):
         self.assertEqual(REGIONS["ontario"]["country"], "CA")
 
 
+
+# ---------------------------------------------------------------------------------- hubs-pricing-io-2 (+ ap-7)
+class OriginRideArea(unittest.TestCase):
+    """The first ride starts where the region file may say there is no ride-hail (the trip home from a getaway)."""
+
+    def trip(self, area_name, origin):
+        area = next(a for a in ONTARIO["ride_areas"] if a["name"] == area_name)
+        region = dict(TZ, id="sb", name="sb", pickup_wait_min=8, feeds=[], ride_areas=[area],
+                      bbox={"min_lat": 44.0, "max_lat": 46.0, "min_lon": -82.5, "max_lon": -80.5},
+                      taxi_pricing_default=ONTARIO["taxi_pricing_default"])
+        lat, lon = origin
+        p = feed([("H", "Hub stop", lat + 0.0801, lon), ("D", "Dest stop", 45.0000, lon)], [("1", "WK", "t1", "D")],
+                 [("t1", "10:00:00", "10:00:00", "H", 1, 0, 0), ("t1", "11:00:00", "11:00:00", "D", 2, 0, 0)])
+        args = ["--origin", "%.4f,%.4f" % origin, "--dest", "45.0010,%.4f" % lon, "--depart", "2026-10-15 09:00",
+                "--region", "sb", "--feed", "t=" + p, "--routing", "estimate", "--no-discover", "--min-saving", "0",
+                "--final-ride", "off"]
+        with mock.patch.object(th, "load_regions", return_value=[region]), \
+                mock.patch.object(th, "check_network", side_effect=ok_network):
+            return run(args), run(args, as_json=False), region, area
+
+    def test_no_ride_hail_origin_prices_a_taxi_with_its_wait_and_no_uber_link(self):
+        res, txt, region, area = self.trip("Sauble Beach", (44.6299, -81.2649))
+        self.assertEqual(res["pickup_wait_min"], 30.0)
+        self.assertTrue(res["pricing"]["label"].startswith("rural Ontario taxi estimate"), res["pricing"])
+        self.assertEqual(res["pricing"]["currency"], "CAD")
+        o = res["pareto"][0]
+        self.assertIsNone(o["uber"])
+        self.assertNotIn("m.uber.com", txt)
+        self.assertNotIn("uber quote", txt)
+        warn = next((w for w in res["warnings"]
+                     if w.startswith("there is no ride-hail near Sauble Beach (the origin)")), None)
+        self.assertIsNotNone(warn, res["warnings"])
+        self.assertIn("Bayshore Taxi (Owen Sound)", warn)
+        self.assertIn("30 min", warn)
+        taxi = th.taxi_pricing(region, area)
+        ra = res["ride_all"]
+        self.assertAlmostEqual(ra["cost"], th.ride_cost(taxi, ra["ride_km"], ra["ride_s"]), places=6)
+        # the option's km and minutes are rounded to 0.1
+        self.assertAlmostEqual(o["ride_cost"], th.ride_cost(taxi, o["ride_km"], o["ride_min"] * 60), delta=0.1)
+        # book the taxi 30 min ahead, not the region's 8 min: ride, platform and the 3 min margin on top
+        self.assertLessEqual(abs(o["book_by"] - (o["board"] - 30 * 60 - o["ride_min"] * 60 - th.PLATFORM_S - 3 * 60)),
+                             60)
+
+    def test_sparse_origin_warns_to_book_ahead(self):
+        res, txt, _region, _area = self.trip("Owen Sound", (44.5687, -80.9415))
+        self.assertTrue(any(w.startswith("ride-hail near Owen Sound (the origin) is sparse") for w in res["warnings"]),
+                        res["warnings"])
+        self.assertIsNotNone(res["pareto"][0]["uber"])
+        self.assertIn("uber quote", txt)
+        self.assertEqual(res["pickup_wait_min"], 8.0)
+
+    def test_origin_outside_every_area_keeps_the_ride_hail_plan(self):
+        res, txt, _region, _area = self.trip("Sauble Beach", (44.4000, -81.2649))   # 25 km south of Sauble
+        self.assertEqual(res["pickup_wait_min"], 8.0)
+        self.assertIsNotNone(res["pareto"][0]["uber"])
+        self.assertFalse(any("(the origin)" in w for w in res["warnings"]), res["warnings"])
+
+
 if __name__ == "__main__":
     unittest.main()

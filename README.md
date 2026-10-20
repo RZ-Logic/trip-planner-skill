@@ -137,7 +137,7 @@ The trade-off prices the default case, no transponder: the $13.05 toll, the $5 a
 - Checks every transit stop within ride range in one backward pass over the GTFS timetables. A Milton trip compares 1,384 stops in 594 hubs in under a second.
 - Prices each option: the ride from regional Uber rate cards, then fares with free and credited transfers.
 - Gives the latest time to book, a backup departure and check links.
-- Plans forward or to a deadline. Getaways use intercity rail and coach, hand-entered rural timetables and a final taxi where ride-hail is sparse.
+- Plans forward or to a deadline. Getaways use intercity rail and coach, hand-entered rural timetables and a taxi at either end where ride-hail is sparse or absent.
 - Works beyond Ontario through MobilityDatabase feed discovery. Optional second opinion from the Transitous router.
 
 **Driving** ([`drive_plan.py`](plugins/trip-planner/skills/trip-planner/scripts/drive_plan.py))

@@ -109,9 +109,10 @@ Rules:
   boxes. `ride_pricing_outside`: the card for pickups in no area. `taxi_pricing_default`: `{base,
   per_km}` for places without ride-hail.
 - `ride_areas`: `[{"name", "lat", "lon", "radius_km", "uber": "yes" | "sparse" | "no", "taxis": [{"name",
-  "phone", "note"}], "taxi_rate": {base, per_km} | null, "taxi_wait_min": n, "note"}]`: what a final ride
-  near each destination can use. `"uber": "no"` prices final rides as a taxi and allows 30 minutes for it
-  to arrive (`taxi_wait_min` overrides).
+  "phone", "note"}], "taxi_rate": {base, per_km} | null, "taxi_wait_min": n, "note"}]`: what a ride
+  starting or ending near each place can use. `"uber": "no"` prices first rides from it and final rides to
+  it as a taxi, with no Uber link, and allows 30 minutes for it to arrive (`taxi_wait_min` overrides);
+  `"sparse"` adds a WARNING to book ahead.
 - `tools/build_coverage.py` builds the stop maps (and boxes for hand-entered feeds); re-run it after
   changing feeds.
 

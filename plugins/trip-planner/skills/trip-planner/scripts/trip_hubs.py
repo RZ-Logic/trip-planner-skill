@@ -1754,6 +1754,12 @@ def ride_area(region, lat, lon):
     return a
 
 
+def taxis_text(area):
+    """The taxis a ride area lists, with their own caveats: 'Name phone (note); ...'."""
+    return "; ".join("%s %s%s" % (t.get("name", ""), t.get("phone", ""), " (%s)" % t["note"] if t.get("note") else "")
+                     for t in (area or {}).get("taxis") or [])
+
+
 def cluster_stops(net, pairs):
     """[(distance, stop)] sorted by distance -> hubs {lat, lon, stops, straight_m}: a stop within CLUSTER_M
     of a hub's first stop joins that hub."""
@@ -2881,6 +2887,34 @@ def plan(args):
                   else (region or {}).get("pickup_wait_min", 6)) * 60)
     # --access car: drive your own car to the hub (no pickup wait; park and walk to the platform instead)
     car = getattr(args, "access", "ride") == "car"
+    hail_pricing = pricing   # the ride-hail card, for final rides when the region file names none
+    # the first ride starts at the origin: where the region file says there is no ride-hail it is a local taxi
+    # (30 min to arrive unless the area says otherwise, no Uber link); where ride-hail is sparse, book it ahead
+    o_area = None if car or o_foreign else ride_area(region, o_lat, o_lon)
+    no_ride_hail_origin = (o_area or {}).get("uber") == "no"
+    first_ride_wait_s = wait_s
+    if no_ride_hail_origin:
+        tp = taxi_pricing(region, o_area)
+        if tp:
+            tp.setdefault("currency", pricing.get("currency"))
+            tp.setdefault("source", "the region file's taxi rate for %s" % o_area.get("name", "the origin"))
+            pricing = tp   # the first ride, riding all the way and the short ride to the first stop
+        first_ride_wait_s = max(wait_s, int((o_area.get("taxi_wait_min") or 30) * 60))
+        taxis = taxis_text(o_area)
+        warnings.append("there is no ride-hail near %s (the origin)%s. %s The plan prices the first ride %s and "
+                        "allows %d min for it to arrive; book it ahead and confirm one will come."
+                        % (o_area.get("name", "the origin"),
+                           (" (area note: %s)" % o_area["note"].rstrip(".")) if o_area.get("note") else "",
+                           ("Taxis listed: %s." % taxis) if taxis else "No taxi is listed for it.",
+                           "as a local taxi" if tp else "at the ride-hail card (the region file has no taxi rate)",
+                           first_ride_wait_s // 60))
+    elif (o_area or {}).get("uber") == "sparse":
+        if o_area.get("taxi_wait_min"):
+            first_ride_wait_s = max(wait_s, int(o_area["taxi_wait_min"] * 60))
+        taxis = taxis_text(o_area)
+        warnings.append("ride-hail near %s (the origin) is sparse: book the first ride ahead (Uber Reserve) or call a "
+                        "local taxi%s." % (o_area.get("name", "the origin"),
+                                           (" (taxis listed: %s)" % taxis) if taxis else ""))
     safety_min = args.safety_min
     if safety_min is None:   # car mode plans the same spare as drive_plan.py (costs.json arrival slack)
         safety_min = car_plan_defaults()["slack_min"] if car else 3.0
@@ -2897,7 +2931,8 @@ def plan(args):
         tf = traffic_factor_for(ride_time)
     cpk = float(getattr(args, "car_cost_per_km", 0.17) or 0.0)
     stay_min = float(getattr(args, "stay_hours", 4.0) or 0.0) * 60.0
-    first_wait_s, board_s = (0, int(float(getattr(args, "park_min", 4.0)) * 60)) if car else (wait_s, PLATFORM_S)
+    first_wait_s, board_s = ((0, int(float(getattr(args, "park_min", 4.0)) * 60)) if car
+                             else (first_ride_wait_s, PLATFORM_S))
     target = t_end - safety_s  # arrive-by mode: arrive with a few minutes spare
 
     def factor_at(sec):
@@ -2938,7 +2973,7 @@ def plan(args):
             fpricing["source"] = ("generic North American-style rate card, not a local quote: the destination is "
                                   "outside the region files' country")
         else:
-            fpricing.update((region or {}).get("final_ride_pricing") or pricing)
+            fpricing.update((region or {}).get("final_ride_pricing") or hail_pricing)
         fpricing.setdefault("currency", pricing.get("currency"))
         area = None if d_foreign else ride_area(region, d_lat, d_lon)
         pts = []
@@ -3204,7 +3239,8 @@ def plan(args):
             "ride_km": round(c["ride_km"], 1), "ride_min": round(c["ride_s"] / 60.0, 1),
             "ride_source": c["ride_source"], "ride_cost": round(first_cost(c, c["ride_km"], c["ride_s"], ((o_lat, o_lon), (c["lat"], c["lon"]))), 2),
             "book_by": book, "board": board, "arrive": arr, "legs": legs, "backup": backup, "stretch": stretch,
-            "uber": uber_link((o_lat, o_lon), hub, net.stop_name[s]),
+            # no Uber link from a place where the region file says there is no ride-hail
+            "uber": None if no_ride_hail_origin else uber_link((o_lat, o_lon), hub, net.stop_name[s]),
             "check_drive": gmaps_link((o_lat, o_lon), hub, "driving"),
             "check_transit": gmaps_link(hub, (d_lat, d_lon), "transit"),
         }
@@ -3230,7 +3266,7 @@ def plan(args):
         "region_notes_files": (region or {}).get("notes_files"), "window_h": args.max_hours,
         "feeds": net.feeds, "pricing": pricing, "payment": args.payment,
         "transfer_rules": (transfer_rules or {}).get("verified") or bool(transfer_rules),
-        "pickup_wait_min": wait_s / 60.0, "safety_min": safety_s / 60.0,
+        "pickup_wait_min": (wait_s if car else first_wait_s) / 60.0, "safety_min": safety_s / 60.0,
         "radius_km": round(radius_m / 1000.0, 1),
         "hubs_checked": len(clusters), "stops_checked": len(cand),
         "hubs_with_service": sum(1 for c in clusters if c["result"]),
@@ -3296,7 +3332,7 @@ def plan(args):
             else:
                 km, sec = heuristic_ride(transit_only["walk_to_stop_m"] / WALK_DETOUR)
                 sec *= tf
-            ride_lead = wait_s + int(sec) + PLATFORM_S + safety_s
+            ride_lead = first_wait_s + int(sec) + PLATFORM_S + safety_s
             book, dep, arr_sr = first_cut - ride_lead, first_dep, transit_only["arrive"]
             if book < now_s - 60:   # too late to ride to this departure: use the next one it can make
                 arr_sr, legs_sr = scan.journey(s_first, now_s + ride_lead)
@@ -3568,9 +3604,7 @@ def plan(args):
                                 final_m / 1000.0, ", ".join(net.stop_name[e["stops"][0]] for e in pick[:3])))
         if pick and area and area.get("uber") == "no":
             # say what the region file says: which taxis it lists (with their own caveats) and the area note
-            taxis = "; ".join("%s %s%s" % (t.get("name", ""), t.get("phone", ""),
-                                           " (%s)" % t["note"] if t.get("note") else "")
-                              for t in area.get("taxis") or [])
+            taxis = taxis_text(area)
             warnings.append("there is no ride-hail near %s%s. %s The plan allows %d min for a pre-booked taxi to "
                             "arrive; confirm one will come before relying on a plan that finishes with a ride."
                             % (area.get("name", "the destination"),
@@ -3931,8 +3965,8 @@ def render(res):
             elif o["backup"]:
                 out.append("    backup if missed: %s at %s, arrive %s"
                            % (o["backup"]["route"], fmt_t(o["backup"]["board"]), fmt_t(o["backup"]["arrive"])))
-            out.append("    check: drive %s\n           transit %s\n           uber quote %s"
-                       % (o["check_drive"], o["check_transit"], o["uber"]))
+            out.append("    check: drive %s\n           transit %s" % (o["check_drive"], o["check_transit"])
+                       + ("\n           uber quote %s" % o["uber"] if o["uber"] else ""))   # none: no ride-hail
             out.append("")
 
     def car_block(opts):

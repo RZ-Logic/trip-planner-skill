@@ -342,6 +342,9 @@ platform), then runs the usual transit scan. Hubs qualify when they have parking
 - MTO carpool and 407 park and ride stops;
 - OpenStreetMap park and ride lots, and public parking beside rail stations.
 
+The search always lists the hub cheapest there and back (drive both ways, hub parking once, fares both
+ways), tagged `(cheapest there and back)`, even past `--top` or on the same train as a listed hub.
+
 The car stays at the hub, and the script plans only the way there. Its there-and-back total doubles
 the outbound fare, so it is an estimate until the return is checked. Before recommending a station, the
 agent gets the expected return time and finds a trip back to the car: `trip_hubs.py --origin

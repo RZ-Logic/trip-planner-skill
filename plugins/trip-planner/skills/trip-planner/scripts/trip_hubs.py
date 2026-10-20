@@ -3598,6 +3598,15 @@ def plan(args):
         return (o["ride_cost"] + (fare if fare is not None else UNKNOWN_PARKING_PENALTY)
                 + (UNKNOWN_PARKING_PENALTY if o.get("parking_unknown") else 0.0))
 
+    def car_rt_cost(o):
+        """Car mode: the there-and-back total drive_plan ranks park and ride on (drive both ways, hub parking once,
+        fare both ways); None when the fare or the hub parking price is unknown."""
+        fare = o.get("transit_fare") if o.get("fare_complete") else None
+        if fare is None or o.get("parking_unknown"):
+            return None
+        park = (o.get("parking") or {}).get("cost") or 0.0
+        return 2 * (o["ride_cost"] - park) + park + 2 * fare
+
     common = {
         "version": VERSION,
         "origin": {"lat": o_lat, "lon": o_lon, "label": o_label},
@@ -3808,6 +3817,15 @@ def plan(args):
             best = front_key(o)
     pareto.sort(key=rank)
     keys = {id(o) for o in pareto}
+    keep_rt = None   # car mode: id of the hub cheapest there and back when the one-way front leaves it out
+    if car:   # drive_plan ranks park and ride there and back: keep that hub even when the same-vehicle rule or
+              # --top would cut it (it is listed in others and does not take a --top slot)
+        priced = [o for o in useful if car_rt_cost(o) is not None]
+        if priced:
+            cheapest = min(priced, key=lambda o: (round(car_rt_cost(o), 2),) + rank(o))
+            if id(cheapest) not in keys:
+                keep_rt = id(cheapest)
+                cheapest["rt_cheapest"] = True
 
     def ride_keys(o):
         rides = [lg for lg in o["legs"] if lg["type"] == "ride"]
@@ -3822,10 +3840,13 @@ def plan(args):
         if id(o) in keys:
             continue
         first, last = ride_keys(o)
+        if id(o) == keep_rt:   # the round-trip keep: exempt from the same-vehicle rule and --top
+            runners.append(o)
+            continue
         if first in firsts or last in lasts:
             same_vehicle += 1
             continue
-        if len(runners) >= max(0, args.top - len(pareto)):
+        if len([r for r in runners if id(r) != keep_rt]) >= max(0, args.top - len(pareto)):
             past_top += 1
             continue
         firsts.add(first)
@@ -4362,7 +4383,8 @@ def render(res):
                     vs += "; arrives %s" % mins_vs(to["arrive"] - o["arrive"], "earlier than transit only",
                                                    "later than transit only", "with transit only")
             pk = o.get("parking") or {}
-            out.append("%2d. %s  [%s]" % (i, o["hub"], o["hub_agency"]))
+            out.append("%2d. %s  [%s]%s" % (i, o["hub"], o["hub_agency"],
+                                           "  (cheapest there and back)" if o.get("rt_cheapest") else ""))
             out.append("    drive %.1f km / %.0f min (%s), car ~$%.2f%s  |  leave by %s, board %s, ARRIVE %s"
                        % (o["ride_km"], o["ride_min"], o["ride_source"], o["drive_cost"],
                           " + parking $%.2f" % pk["cost"] if pk.get("cost") else unknown_parking(pk),

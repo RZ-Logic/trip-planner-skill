@@ -3405,6 +3405,8 @@ def render(res):
                              dc.money(rp.get("public_cost") or 0),
                              "; ".join("%s at km %.0f, %d min" % (s.get("name"), s.get("km_along") or 0,
                                                                   round(s.get("charge_min") or 0)) for s in stops)))
+                if rp.get("stretch_note"):   # stops that charge above the charge limit, and to how much
+                    L.append("     drive back: %s%s" % (rp["stretch_note"][0].lower(), rp["stretch_note"][1:]))
         for dch in (ch.get("dest_chargers") or [])[:3]:
             L.append("     near the destination: %s (%s, %s kW, %.1f km)%s" % (
                 dch.get("name"), dch.get("network") or "?", _num(dch.get("max_kw")), dch.get("km") or 0,

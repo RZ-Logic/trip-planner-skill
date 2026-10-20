@@ -717,10 +717,11 @@ def plan_charging(poly, route_km, depart, car, soc_start, temp_c, warnings, opts
         if r2["feasible"]:
             warnings.extend(x for x in w2 if x not in warnings)
             hi = [s for s in r2["stops"] if s["depart_soc"] > max_soc + 1e-9]
-            r2["notes"].append("No plan stays within the %.0f%% charge limit: charge to %s (charging above %.0f%% is "
-                               "slower than the times shown)"
-                               % (max_soc * 100, " and ".join("%.0f%% at %s" % (s["depart_soc"] * 100, s["name"])
-                                                              for s in hi), max_soc * 100))
+            r2["stretch_note"] = ("No plan stays within the %.0f%% charge limit: charge to %s (charging above %.0f%% "
+                                  "is slower than the times shown)"
+                                  % (max_soc * 100, " and ".join("%.0f%% at %s" % (s["depart_soc"] * 100, s["name"])
+                                                                 for s in hi), max_soc * 100))
+            r2["notes"].append(r2["stretch_note"])   # kept apart too: a drive back's notes are not printed
             return r2
     warnings.extend(lw)
 
@@ -851,6 +852,9 @@ def _return_plan(poly, route_km, car, arrive_soc, temp_c, m, per_km, reserve, ma
                "feasible": rp["feasible"], "start_soc": round(soc0, 3), "soc_start": round(soc0, 3),
                "kwh_used": rp["kwh_used"], "home_energy_cost": rp["home_energy_cost"],
                "charge_at_destination": charge_dest, "estimated": rp["estimated"], "arrive_soc": rp["arrive_soc"]}
+    stretch = rp.get("stretch_note")
+    if stretch:
+        summary["stretch_note"] = stretch
     n = len(rp["stops"])
     est = " (estimate, charger lists unavailable)" if rp["estimated"] else ""
     head = "Return trip: the %.0f km drive back needs more than one charge" % route_km
@@ -862,6 +866,8 @@ def _return_plan(poly, route_km, car, arrive_soc, temp_c, m, per_km, reserve, ma
     tail = "%d charging stop%s on the way back%s, km counted from the destination: %s; about %s and %s extra" % (
         n, "" if n == 1 else "s", est, _stop_list(rp["stops"]), dc.money(rp["public_cost"]),
         dc.fmt_dur(rp["extra_s"]))
+    if stretch:   # stops above the charge limit: the note names them and their charge
+        tail += "; " + stretch[0].lower() + stretch[1:]
     if not charge_dest:
         txt = "%s: from the %.0f%% you arrive with, plan %s" % (head, start * 100, tail)
         return summary, txt, None, False, []

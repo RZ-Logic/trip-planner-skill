@@ -1,5 +1,5 @@
 """Regression tests for the EV and car lookup review findings (ev-vehicles-*, ext-1, ext-5, ext-13, gem-G1S,
-gem-G6A). Offline: every fetch is mocked. Run: python -m unittest tests.test_review_ev -v
+gem-G6A) and the review follow-ups. Offline: every fetch is mocked. Run: python -m unittest tests.test_review_ev -v
 """
 import os as _os
 for _k in ("TOMTOM_API_KEY", "NLR_API_KEY", "ON511_API_KEY", "GOOGLE_PLACES_API_KEY"):
@@ -480,6 +480,53 @@ class ParkRideRateTest(tcp.CarCase):
         home_rate = dp.costs()["electricity"]["home_rate"]
         self.assertAlmostEqual(seen["per_km"], 98.9 / rec["km"] * home_rate)
         self.assertGreaterEqual(seen["one_way"], 34.43 + 6.86 - 1e-9)
+
+
+# --------------------------------------------------------------------------- Review follow-up
+
+class ReturnStretchNoteTest(unittest.TestCase):
+    """Follow-up to ev-vehicles-5 and ev-vehicles-3: a drive back that can be planned only by charging above 80%
+    says so in the Return trip note and under the CHARGING 'drive back from' line (generic EV, 420 km, chargers
+    at km 160, 180 and 280, -5 C: the way there stays within 80%, the way back needs about 93% at one stop)."""
+    KMS = (160, 180, 280)
+
+    def test_return_note_names_the_charge_above_80(self):
+        r, w = tev.plan_st([tev.nst(k, off_deg=0.0) for k in self.KMS], 420, ev.car_profile("generic"), 0.9,
+                           temp=-5, near=[], return_trip=True)
+        rp = r["return_plan"]
+        self.assertTrue(r["feasible"] and rp["feasible"], w)
+        self.assertTrue(all(s["depart_soc"] <= 0.8 + 1e-9 for s in r["stops"]), r["stops"])
+        hi = [s for s in rp["stops"] if s["depart_soc"] > 0.8 + 1e-9]
+        self.assertTrue(hi, rp["stops"])
+        note = [n for n in r["notes"] if n.startswith("Return trip")][0]
+        self.assertIn("charge limit", note)
+        self.assertIn("slower", note)
+        for s in hi:
+            self.assertIn("%.0f%% at %s" % (s["depart_soc"] * 100, s["name"]), note)
+        self.assertIn("charge limit", rp["stretch_note"])
+
+    def test_drive_back_line_names_the_charge_above_80(self):
+        o, d = InfeasibleRouteTest.O, InfeasibleRouteTest.D
+
+        def get_routes(o_, d_, depart, opts, warnings, arrive_at=None):
+            return [tdp.fake_retime(tdp.make_route("fastest", o, d, 420.0, 4.5 * 3600), depart, opts)]
+        with tdp.Env(), mock.patch.dict(sys.modules, {"ev_charging": real_ev(lambda km: [k / 420. for k in self.KMS])}):
+            sys.modules["drive_route"].get_routes = get_routes
+            res = dp.plan(tdp.args_for("--origin", "%f,%f" % o, "--dest", "%f,%f" % d, "--weather", "clear",
+                                       "--temp-c", "-5", "--incidents", "off", "--depart", "2026-10-16 08:00",
+                                       "--vehicle", "ev", "--ev-model", "generic", "--soc", "90",
+                                       "--park-and-ride", "off", "--round-trip", "--stay-hours", "3",
+                                       "--transponder"))
+            text = dp.render(res)
+        cr = res["charging_return"]
+        self.assertTrue(cr and cr["feasible"], cr)
+        hi = [s for s in cr["stops"] if s["depart_soc"] > 0.8 + 1e-9]
+        self.assertTrue(hi, cr["stops"])
+        lines = text.splitlines()
+        i = [k for k, x in enumerate(lines) if x.strip().startswith("drive back from")][0]
+        self.assertIn("charge limit", lines[i + 1])
+        for s in hi:
+            self.assertIn("%.0f%% at %s" % (s["depart_soc"] * 100, s["name"]), lines[i + 1])
 
 
 if __name__ == "__main__":

@@ -208,10 +208,12 @@ priced.
      to the newest rating of the same car when that trim still exists ("Honda Civic Si" gives the 2026
      Civic Sedan Si). A model is matched under another make only for a distinctive name, with a
      WARNING and at most medium confidence; a one- or two-letter name never is ("2022 Honda e" gives
-     no match and Honda's model list). "RWD" or "FWD" keeps the versions named so (electric
-     Performance, GT, Rally and Plaid trims count as all-wheel drive); "PowerBoost" and "i-FORCE MAX"
-     pick the hybrid. A word no version carries (other than a trim grade) gives at most medium
-     confidence.
+     no match and Honda's model list). "RWD" or "FWD" keeps the versions named so, never an
+     electric Performance, GT, Rally or Plaid trim. "AWD" keeps the versions named with a drive word;
+     when none is, those electric trims count as all-wheel drive, with the plain-named versions (the
+     2022 "Model S" is the dual-motor Long Range) but not one naming a single motor. "PowerBoost" and
+     "i-FORCE MAX" pick the hybrid. A word no version carries (other than a trim grade) gives at most
+     medium confidence.
   3. The class median from `--car-class`, or for a small SUV by default.
 
   For an electric car, `--car` gives kWh/100 km. Battery size and charging power come from the

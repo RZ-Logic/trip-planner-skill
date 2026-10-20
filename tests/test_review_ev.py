@@ -571,5 +571,52 @@ class ReturnNeedTemperatureTest(unittest.TestCase):
         self.assertTrue(any("no charging is needed for the return" in n for n in res["charging"]["notes"]))
 
 
+class AwdWordTest(unittest.TestCase):
+    """Follow-up to ev-vehicles-4: 'AWD' keeps the variants whose name carries a drive word; only when none does,
+    the electric Performance, GT, Rally and Plaid trims count as AWD, together with the family's plain-named rows
+    (NRCan's plain 'Model S' is the dual-motor Long Range) but never a row naming a single motor. Real bundled
+    index, no download."""
+
+    def setUp(self):
+        self.nodl = mock.patch.object(V, "_download_year", return_value=False)
+        self.nodl.start()
+
+    def tearDown(self):
+        self.nodl.stop()
+
+    def look(self, text):
+        w = []
+        return V.lookup(text, w), w
+
+    def test_rows_named_awd_win_over_performance_trims(self):
+        got, w = self.look("2025 Tesla Model 3 AWD")
+        self.assertEqual(got["variant_names"], ["Model 3 Long Range AWD (Import)"])
+        self.assertEqual((got["city"], got["hwy"]), (15.3, 16.9))
+        got, w = self.look("2024 Tesla Model Y AWD")
+        self.assertFalse(any("Performance" in n for n in got["variant_names"]), got["variant_names"])
+        self.assertEqual((got["city"], got["hwy"]), (17.2, 18.5))
+        got, w = self.look("2025 Ford Mustang Mach-E AWD")
+        self.assertFalse(any("GT" in n or "Rally" in n for n in got["variant_names"]), got["variant_names"])
+        self.assertEqual((got["city"], got["hwy"]), (20.2, 22.2))
+
+    def test_plain_rows_join_the_dual_motor_trims(self):
+        got, w = self.look("2022 Tesla Model S Long Range AWD")
+        self.assertIn("Model S", got["variant_names"])
+        self.assertEqual(len(got["variant_names"]), 3)
+        self.assertEqual((got["city"], got["hwy"], got["range_km"]), (17.6, 18.7, 637))
+        self.assertFalse(any("no AWD variant" in x for x in w), w)
+        got, w = self.look("2023 Tesla Model X Long Range AWD")
+        self.assertIn("Model X", got["variant_names"])
+        got, w = self.look("2021 Tesla Model S AWD")
+        self.assertIn("Model S Long Range", got["variant_names"])
+
+    def test_single_motor_rows_stay_out(self):
+        got, w = self.look("2025 Volvo EX30 AWD")
+        self.assertEqual(got["variant_names"], ["EX30 Twin Performance"])
+        got, w = self.look("2023 Audi e-tron GT quattro")
+        self.assertEqual(got["variant_names"], ["e-tron GT"])
+        self.assertFalse(any("no AWD variant" in x for x in w), w)
+
+
 if __name__ == "__main__":
     unittest.main()

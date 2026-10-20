@@ -1212,8 +1212,11 @@ def lookup(text, warnings, allow_download=True):
             warnings.append("ignored 'ecoboost': no %d %s variant is an EcoBoost" % (year, family_display(
                 picked[0].model)))
     if q["drive"]:
-        if q["drive"] == "awd":
-            d = [r for r in picked if r.drive == "awd"]
+        if q["drive"] == "awd":   # a drive word in the name, else the dual-motor EV trims ('Plaid') with the
+            # plain-named rows ('Model S', NRCan's dual-motor Long Range), never a row naming a single motor
+            d = [r for r in picked if set(r.toks) & DRIVE_WORDS]
+            if not d and any(r.drive == "awd" for r in picked):
+                d = [r for r in picked if r.drive == "awd" or (r.drive is None and "single" not in r.toks)]
         else:   # the word typed ('RWD') in the name, else any 2WD word, else a name with no drive word
             d = ([r for r in picked if q.get("drive_tok") in r.toks] or [r for r in picked if r.drive == "2wd"]
                  or [r for r in picked if r.drive is None])

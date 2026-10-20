@@ -132,6 +132,12 @@ Ottawa, Kitchener-Waterloo and London (boxes in `driving/traffic.json`).
 The "allow" factors are a conservative planning allowance, modelled on FHWA's planning-time idea and TomTom's Toronto
 congestion figures. They are a model, not measurements.
 
+Rides to and from hubs in `trip_hubs.py` (and its `--access car` drives) use the same congested and
+elsewhere rows, blended by the share of the straight line inside the areas, without the free-flow
+calibration or the 407 and getaway rows (a table route has no geometry). That holds on trips planned
+with the Ontario region files; elsewhere every drive uses the congested rows. Park and ride from
+`drive_plan.py` passes one factor for its drive to the station.
+
 - **Weather:** rain adds 15% and snow 40% (FHWA weather studies), and snow counts only at 1 C or
   colder. The adder applies only when the forecast is within 3 days; further out the forecast is a
   WARNING and the times are unchanged. A TomTom route leaving now gets no adder: live traffic already

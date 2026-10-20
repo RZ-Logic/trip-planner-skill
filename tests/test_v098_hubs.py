@@ -755,7 +755,8 @@ class SmallFixes(unittest.TestCase):
                   ("t2", "10:15:00", "10:15:00", "B2", 1, 0, 0), ("t2", "10:40:00", "10:40:00", "C", 2, 0, 0),
                   ("t3", "10:05:00", "10:05:00", "D", 1, 0, 0), ("t3", "10:25:00", "10:25:00", "C", 2, 0, 0)])
         args = ["--origin", "43.4990,-79.8000", "--dest", "43.5500,-79.8000", "--depart", "2026-10-15 09:50",
-                "--feed", "t=" + p, "--min-saving", "0", "--origin-walk-m", "300", "--radius-km", "5"] + BASE
+                "--feed", "t=" + p, "--min-saving", "0", "--origin-walk-m", "300", "--radius-km", "5",
+                "--traffic-factor", "1.2"] + BASE   # 09:50 is a weekday shoulder (x1.3): keep the x1.2 scenario
         res = run(args)
         self.assertEqual(res["transit_only"]["ride_instead"]["hub"], "Hub D")
         self.assertIn("Hub D", [o["hub"] for o in res["pareto"]])

@@ -30,7 +30,9 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from test_engine import hms, make_feed, pin_clock, th  # noqa: E402  (test_engine adds the scripts folder)
 
 BASE = ["--region", "none", "--no-discover", "--routing", "estimate"]
+ALL_YEARS = [("WK", 1, 1, 1, 1, 1, 1, 1, "20260101", "20291231")]
 DAY = dt.date(2026, 10, 15)   # a Thursday
+TT = th._driving_json("traffic.json")
 _CLOCK = pin_clock()
 
 
@@ -181,6 +183,54 @@ class FinalRideDirection(unittest.TestCase):
         fin = res["finish_with_ride"][0]["final_ride"]
         x_to_d = one_way_s((43.90, -79.80), (43.99, -79.80))[0]
         self.assertAlmostEqual(fin["min"], round(x_to_d / 60.0, 1), places=1)   # was the D->X time, twice as long
+
+
+
+# -------------------------------------------------------------- architecture-product-3, data-integrity-10 (batch 5)
+ONTARIO = {"id": "ontario", "name": "Ontario (test)", "timezone": "America/Toronto", "feeds": [],
+           "bbox": {"min_lat": 41.6, "max_lat": 57.0, "min_lon": -95.2, "max_lon": -74.3}}
+
+
+def row(table, name):
+    return next(r for r in TT[table] if r["name"] == name)
+
+
+class RideTrafficByArea(unittest.TestCase):
+    """Ride legs use traffic.json's rows: congested inside its areas, elsewhere outside, holidays as weekends."""
+
+    def test_rural_ontario_ride_uses_the_elsewhere_rows(self):
+        stops = [("H", "Hub H", 44.5900, -80.2000), ("C", "Dest C", 44.7000, -80.2000)]
+        p = feed(stops, [("X", "WK", "x1", "C")],
+                 [("x1", "08:40:00", "08:40:00", "H", 1, 0, 0), ("x1", "09:00:00", "09:00:00", "C", 2, 0, 0)])
+        res = run(["--origin", "44.5000,-80.2000", "--dest", "44.7000,-80.2000", "--depart", "2026-10-15 08:00",
+                   "--feed", "t=" + p, "--min-saving", "0", "--no-discover", "--routing", "estimate"],
+                  regions=[ONTARIO])
+        free = th.heuristic_ride(th.haversine_m(44.5, -80.2, 44.7, -80.2))[1]
+        self.assertAlmostEqual(res["ride_all"]["ride_s"] / free, row("elsewhere", "daytime")["typical"])   # was 1.45
+
+    def test_ride_factor_matches_drive_route_rows(self):
+        import drive_route as drt
+        inside = ((43.50, -79.70), (43.60, -79.60))     # Mississauga and Toronto boxes
+        outside = ((44.50, -80.20), (44.70, -80.20))    # Grey County, outside every area box
+        hol = {"2027-07-01"}
+        for when in (at(DAY, 8, 0), at(DAY, 9, 45), at(DAY, 12, 0), at(DAY, 22, 0), at(dt.date(2027, 7, 1), 8, 0)):
+            self.assertAlmostEqual(th.drive_factor(when, hol, inside), drt.factors({"urban": True}, when, hol)[0])
+            self.assertAlmostEqual(th.drive_factor(when, hol, outside),
+                                   drt.factors({"urban": False, "hwy": False}, when, hol)[0])
+            self.assertAlmostEqual(th.drive_factor(when, hol, outside, "plan"),
+                                   drt.factors({"urban": False, "hwy": False}, when, hol)[1])
+
+    def test_ride_factor_comes_from_traffic_json(self):
+        self.assertEqual(th.traffic_factor_for(at(DAY, 9, 45)), row("congested", "weekday shoulder")["typical"])
+        self.assertEqual(th.traffic_factor_for(at(dt.date(2027, 7, 1), 8, 0), {"2027-07-01"}),
+                         row("congested", "daytime")["typical"])                # Canada Day: no weekday peak
+
+    def test_listed_holiday_ride_is_not_priced_at_the_weekday_peak(self):
+        p = train_at("08:30:00", "08:50:00", calendar=ALL_YEARS)
+        res = run(HUB_ARGS + ["--arrive-by", "2027-07-01 11:30", "--feed", "t=" + p] + BASE)
+        o = option(res, "Hub H")
+        self.assertAlmostEqual(o["ride_min"], round(FREE_S * row("congested", "daytime")["typical"] / 60.0, 1),
+                               places=1)                                         # was x1.45 on Canada Day
 
 
 if __name__ == "__main__":

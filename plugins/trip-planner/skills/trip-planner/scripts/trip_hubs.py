@@ -62,6 +62,7 @@ MAX_WINDOW_H = 9.0         # longest automatic search window
 FINAL_RIDE_MIN_M = 60000.0   # trips at least this long also try finishing with a ride (auto mode)
 FINAL_RIDE_SHARE = 0.6       # a final ride may start this share of the trip away from the destination
 FINAL_RIDE_RADIUS_M = (8000.0, 80000.0)   # final-ride reach, clamped to this range
+TRAFFIC_AREA_REGIONS = ("ontario", "gtha")   # region files inside the areas references/driving/traffic.json draws
 FINAL_RIDE_DROP_POINTS = 5   # stops near the destination tried as the place to switch to a ride
 FINAL_RIDE_WALK_M = 600      # a final ride can be picked up this far from where you get off
 LONG_HOP_M = 10000           # a vehicle covering this much between two stops is a coach or train
@@ -2359,25 +2360,22 @@ def journey_fare(net, legs, flat=None, payment="card", card_discount=None, rules
 
 # --------------------------------------------------------------------------- ride model
 
-def traffic_factor_for(when):
-    """OSRM times are free-flow. Inflate them by time of day (weekday peaks worst)."""
-    h = when.hour + when.minute / 60.0
-    weekday = when.weekday() < 5
-    if weekday and (7.0 <= h < 9.5 or 15.5 <= h < 18.5):
-        return 1.45
-    if h >= 20.0 or h < 6.0:
-        return 1.0
-    return 1.2
+def traffic_factor_for(when, holidays=()):
+    """Ride mode: the typical multiplier on OSRM free-flow time for a drive at `when` in a congested area (the
+    "typical" column of the congested rows in references/driving/traffic.json; a holiday counts as a weekend)."""
+    return float(_traffic_row(_traffic_rows("congested"), when, holidays)["typical"])
 
 
 DRIVING_DIR = os.path.normpath(os.path.join(HERE, "..", "references", "driving"))
 # used when references/driving/traffic.json is missing: weekday peak, shoulder, daytime, night (plan = the conservative planning allowance)
 PLAN_ROWS_FALLBACK = [
-    {"name": "weekday peak", "days": "weekday", "windows": [["07:00", "09:30"], ["15:30", "18:30"]], "plan": 2.1},
+    {"name": "weekday peak", "days": "weekday", "windows": [["07:00", "09:30"], ["15:30", "18:30"]], "typical": 1.45,
+     "plan": 2.1},
     {"name": "weekday shoulder", "days": "weekday",
-     "windows": [["06:00", "07:00"], ["09:30", "10:30"], ["14:30", "15:30"], ["18:30", "19:30"]], "plan": 1.7},
-    {"name": "daytime", "days": "any", "windows": [["06:00", "20:00"]], "plan": 1.45},
-    {"name": "night", "days": "any", "windows": [["20:00", "06:00"]], "plan": 1.15}]
+     "windows": [["06:00", "07:00"], ["09:30", "10:30"], ["14:30", "15:30"], ["18:30", "19:30"]], "typical": 1.3,
+     "plan": 1.7},
+    {"name": "daytime", "days": "any", "windows": [["06:00", "20:00"]], "typical": 1.2, "plan": 1.45},
+    {"name": "night", "days": "any", "windows": [["20:00", "06:00"]], "typical": 1.0, "plan": 1.15}]
 
 
 def _driving_json(name):
@@ -2397,7 +2395,16 @@ def car_plan_defaults():
 def plan_traffic_factor(when, holidays=()):
     """Car mode: the planning-allowance multiplier on free-flow time for a drive at `when` (the congested-area
     rows of references/driving/traffic.json, as drive_plan.py plans its own drive). Returns (factor, row name)."""
-    rows = _driving_json("traffic.json").get("congested") or PLAN_ROWS_FALLBACK
+    row = _traffic_row(_traffic_rows("congested"), when, holidays)
+    return float(row["plan"]), row.get("name", "")
+
+
+def _traffic_rows(name):
+    return _driving_json("traffic.json").get(name) or (PLAN_ROWS_FALLBACK if name == "congested" else [])
+
+
+def _traffic_row(rows, when, holidays=()):
+    """The first row of a traffic.json table whose days and clock windows hold `when` (else the last row)."""
     hm = when.hour * 60 + when.minute
     weekday = when.weekday() < 5 and when.date().isoformat() not in set(holidays)
     for row in rows:
@@ -2406,8 +2413,33 @@ def plan_traffic_factor(when, holidays=()):
         for a, b in row.get("windows") or []:
             lo, hi = _hm(a), _hm(b)
             if (lo <= hm < hi) if lo <= hi else (hm >= lo or hm < hi):
-                return float(row["plan"]), row.get("name", "")
-    return float(rows[-1]["plan"]), rows[-1].get("name", "")
+                return row
+    return rows[-1]
+
+
+def area_share(a, b, areas, step_m=2000.0):
+    """Share of the straight line from a to b ((lat, lon) pairs) inside any box of traffic.json's congested areas,
+    sampled every step_m (the stand-in for drive_route's per-chunk areas: a table route has no geometry)."""
+    n = max(2, int(math.ceil(haversine_m(a[0], a[1], b[0], b[1]) / max(1.0, step_m))) + 1)
+    pts = [(a[0] + (b[0] - a[0]) * k / (n - 1.0), a[1] + (b[1] - a[1]) * k / (n - 1.0)) for k in range(n)]
+    inside = sum(1 for lat, lon in pts if any(in_bbox(lat, lon, bx) for ar in areas for bx in ar.get("boxes") or []))
+    return inside / float(n)
+
+
+def drive_factor(when, holidays=(), ends=None, column="typical"):
+    """Multiplier on free-flow time for a drive from ends[0] to ends[1] starting at `when`: traffic.json's
+    congested rows inside its congested areas and its elsewhere rows outside them, weighted by the share of the
+    straight line inside (column: "typical" for a ride, "plan" for --access car). Without ends, all congested
+    rows. No free-flow calibration and no 407 or getaway rows (drive_route.py has the route geometry for those)."""
+    tt = _driving_json("traffic.json")
+    fc = float(_traffic_row(_traffic_rows("congested"), when, holidays)[column])
+    if not ends or not tt.get("areas") or not tt.get("elsewhere"):
+        return fc
+    share = area_share(ends[0], ends[1], tt["areas"], float(tt.get("chunk_m") or 2000.0))
+    if share >= 1.0:
+        return fc
+    fe = float(_traffic_row(tt["elsewhere"], when, holidays)[column])
+    return round(share * fc + (1.0 - share) * fe, 4)
 
 
 def heuristic_ride(straight_m):
@@ -3238,27 +3270,30 @@ def plan(args):
     elif car:   # leave-by on the planning allowance, like drive_plan.py, not the typical time
         tf, tf_basis = plan_traffic_factor(ride_time, hol)
     else:
-        tf = traffic_factor_for(ride_time)
+        tf = traffic_factor_for(ride_time, hol)
+    # traffic.json's areas are drawn for Ontario: elsewhere every drive stays on the congested rows
+    area_model = any((r or {}).get("id") in TRAFFIC_AREA_REGIONS for r in ([home] + list(extra) if home else []))
     cpk = float(getattr(args, "car_cost_per_km", 0.17) or 0.0)
     stay_min = float(getattr(args, "stay_hours", 4.0) or 0.0) * 60.0
     first_wait_s, board_s = ((0, int(float(getattr(args, "park_min", 4.0)) * 60)) if car
                              else (first_ride_wait_s, PLATFORM_S))
     target = t_end - safety_s  # arrive-by mode: arrive with a few minutes spare
 
-    def factor_at(sec):
-        """Traffic factor for a drive that starts `sec` seconds after midnight of the travel day."""
+    def factor_at(sec, ends=None):
+        """Traffic factor for a drive from ends[0] to ends[1] ((lat, lon) pairs) that starts `sec` seconds after
+        midnight of the travel day: typical traffic for a ride, the planning allowance for --access car."""
         if args.traffic_factor:
             return tf
         when = day0 + dt.timedelta(seconds=int(sec))
-        return plan_traffic_factor(when, hol)[0] if car else traffic_factor_for(when)
+        return drive_factor(when, hol, ends if area_model else None, "plan" if car else "typical")
 
-    def settle(free_s, start_of):
+    def settle(free_s, start_of, ends=None):
         """The factor for a drive whose start depends on its own length (arrive-by: start_of(ride seconds) gives
         the start). A few rounds until it stops changing; at a peak boundary that flips, the slower one."""
-        f, tried = tf, []
+        f, tried = factor_at(t_end - 3600, ends), []
         while len(tried) < 4:
             tried.append(f)
-            f2 = factor_at(start_of(free_s * f))
+            f2 = factor_at(start_of(free_s * f), ends)
             if f2 == f or (f2 in tried and max(f, f2) == f):
                 break
             f = max(f, f2) if f2 in tried else f2
@@ -3338,7 +3373,8 @@ def plan(args):
                         e.update(ride_free_s=r[0], ride_km=r[1] / 1000.0, osrm=True)
                 break
         for e in pick:   # arrive-by: the final ride ends at the deadline, so it starts about one ride before it
-            f = settle(e["ride_free_s"], lambda rs: target - rs) if arrive_by else tf
+            to_door = ((e["lat"], e["lon"]), (d_lat, d_lon))
+            f = settle(e["ride_free_s"], lambda rs: target - rs, to_door) if arrive_by else factor_at(t0, to_door)
             e.update(ride_tf=f, ride_s=e["ride_free_s"] * f, ride_source=osrm_label(f) if e["osrm"] else "estimate")
         taxi_wait_s = int(((area or {}).get("taxi_wait_min") or (30 if (area or {}).get("uber") == "no" else 0)) * 60)
         egrid = Grid(net.stop_lat, net.stop_lon, used, FINAL_RIDE_WALK_M, d_lat)
@@ -3421,7 +3457,8 @@ def plan(args):
         """The ride to hub c in the traffic of its own start, then its best connections. Depart mode: timed as if
         booked now (picked up after the wait); make_option retimes each later book-by (rebook). Arrive-by: the
         start (the hub's book-by) moves with the ride's length, so settle it."""
-        f, tried = (tf if arrive_by else factor_at(t0 + first_wait_s)), []
+        ends = ((o_lat, o_lon), (c["lat"], c["lon"]))
+        f, tried = factor_at((t_end - 3600) if arrive_by else (t0 + first_wait_s), ends), []
         c["ride_free_s"] = free_s
         while True:
             c["ride_s"] = free_s * f
@@ -3430,7 +3467,7 @@ def plan(args):
             books = [r[0] for r in [c["result"]] + c["fresults"] if r]
             if not arrive_by or args.traffic_factor or not books or len(tried) > 3:
                 break
-            f2 = factor_at((c["result"][0] if c["result"] else max(books)) + first_wait_s)
+            f2 = factor_at((c["result"][0] if c["result"] else max(books)) + first_wait_s, ends)
             if f2 == f or (f2 in tried and max(f, f2) == f):
                 break
             f = max(f, f2) if f2 in tried else f2
@@ -3441,7 +3478,8 @@ def plan(args):
         c["ride_km"] = km
         set_ride(c, sec, False)
     km, sec = heuristic_ride(od_m)
-    f_all = tf if arrive_by else factor_at(t0 + first_wait_s)   # depart mode: picked up after the wait
+    od_ends = ((o_lat, o_lon), (d_lat, d_lon))
+    f_all = factor_at((t_end - 3600) if arrive_by else (t0 + first_wait_s), od_ends)   # depart: after the wait
     ride_all = {"ride_km": km, "ride_s": sec * f_all, "source": "estimate", "free_s": sec}
 
     osrm_ok, routed = False, None   # routed: (hubs with OSRM driving times, hubs left on estimates) under the cap
@@ -3498,7 +3536,7 @@ def plan(args):
                                 "of the ranked lists and appear only with --all." % (unrefined, len(live)))
 
     if arrive_by:   # riding all the way ends at the deadline: price it in the traffic of its own start
-        f = settle(ride_all["free_s"], lambda rs: target - rs)   # the pickup, one ride before the deadline
+        f = settle(ride_all["free_s"], lambda rs: target - rs, od_ends)   # the pickup, one ride before the deadline
         ride_all["ride_s"] = ride_all["free_s"] * f
         if ride_all["source"] != "estimate":
             ride_all["source"] = osrm_label(f)
@@ -3529,7 +3567,7 @@ def plan(args):
             return book0, (free_s or 0.0) * f0, f0
         f, tried, book = f0, [f0], book0
         while len(tried) < 5:
-            f2 = factor_at(book + first_wait_s)
+            f2 = factor_at(book + first_wait_s, ends)
             if f2 == f or (f2 in tried and max(f, f2) == f):
                 break
             f = max(f, f2) if f2 in tried else f2
@@ -3696,7 +3734,7 @@ def plan(args):
                 km, sec = c["ride_km"], c["ride_s"]
             else:
                 km, sec = heuristic_ride(transit_only["walk_to_stop_m"] / WALK_DETOUR)
-                sec *= tf
+                sec *= factor_at(t0 + first_wait_s, ((o_lat, o_lon), (net.stop_lat[s_first], net.stop_lon[s_first])))
             ride_lead = first_wait_s + int(sec) + PLATFORM_S + safety_s
             book, dep, arr_sr = first_cut - ride_lead, first_dep, transit_only["arrive"]
             if book < now_s - 60:   # too late to ride to this departure: use the next one it can make
@@ -3902,7 +3940,7 @@ def plan(args):
         def final_adjust(e, arr):
             """Depart mode: the final ride starts when the plan gets there, not at the start of the trip.
             (arrival, ride seconds, factor) with the ride in the traffic of that time."""
-            f = factor_at(arr - e["ride_s"])
+            f = factor_at(arr - e["ride_s"], ((e["lat"], e["lon"]), (d_lat, d_lon)))
             ride_s = e["ride_free_s"] * f
             return arr - e["ride_s"] + ride_s, ride_s, f
 
@@ -4113,8 +4151,9 @@ def plan(args):
     if car:
         common.update({"access": "car", "parking_summary": parking_summary,
                        "car": {"cost_per_km": cpk, "park_min": board_s / 60.0, "stay_hours": stay_min / 60.0,
-                               "traffic_factor": tf, "traffic_basis": ("planning allowance, %s" % tf_basis)
-                               if tf_basis else "--traffic-factor"}})
+                               "traffic_factor": tf, "traffic_basis": ("planning allowance, %s%s" % (
+                                   tf_basis, " in congested areas; each drive at its own start time and area"
+                                   if area_model else "")) if tf_basis else "--traffic-factor"}})
     return common
 
 
@@ -4660,8 +4699,8 @@ def build_parser():
                     "stop is near the destination)" % (FINAL_RIDE_MIN_M / 1000))
     ap.add_argument("--routing", choices=["auto", "osrm", "estimate"], default="auto")
     ap.add_argument("--osrm-url", default="https://router.project-osrm.org")
-    ap.add_argument("--traffic-factor", type=float, help="multiplier on OSRM free-flow times (default by time of day: "
-                    "typical traffic for a ride, the planning allowance for --access car)")
+    ap.add_argument("--traffic-factor", type=float, help="multiplier on OSRM free-flow times (default by time of day "
+                    "and area: typical traffic for a ride, the planning allowance for --access car)")
     ap.add_argument("--min-saving", type=float, help="hide hubs whose ride + fare (car mode: the drive) saves less "
                     "than this vs going all the way (default 20%% of the full ride; 0 for --access car; in ride mode "
                     "at 0 or below, a dearer hub shows only if faster)")

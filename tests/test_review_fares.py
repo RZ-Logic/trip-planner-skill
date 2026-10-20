@@ -375,6 +375,25 @@ class RankingCountsTheFare(unittest.TestCase):
         u = next(o for o in res["others"] if o["hub"] == "Hub U")
         self.assertEqual((u["transit_fare"], u["fare_complete"]), (5.0, True))
 
+    def test_fare_bound_ignores_a_hub_dearer_than_riding_all_the_way(self):
+        # review follow-up: Hub Q (ride 30 + exact 60) costs more than riding all the way (60), so it is never
+        # listed and its fare does not raise Hub U's approximate 5.00: U ranks at 15 + 10 (Hub K's exact fare)
+        p = self.three_routes({"fare_attributes.txt": FARE_HEADER + "a,10.00,CAD,0,\nb,5.00,CAD,0,\nc,60.00,CAD,0,\n",
+                               "fare_rules.txt": "fare_id,route_id\na,R\nb,S\nc,T\n"})
+        real = th.journey_fare
+
+        def scale_fare(net, legs, *a, **k):
+            total, cur, parts, complete = real(net, legs, *a, **k)
+            if legs and legs[0]["route"] == "S":
+                for part in parts:
+                    part["approx"] = "distance-based: $5 to $20"
+            return total, cur, parts, complete
+        with priced_rides({DEST: 60.0, HUB_1: 20.0, HUB_2: 15.0, HUB_3: 30.0}), \
+                mock.patch.object(th, "journey_fare", side_effect=scale_fare):
+            res = run(plan_args(p))   # the default --min-saving: 20% of riding all the way, 12
+        self.assertEqual([o["hub"] for o in res["pareto"]], ["Hub K", "Hub U"])            # was ["Hub K"]
+        self.assertNotIn("Hub Q", [o["hub"] for o in res["pareto"] + res["others"]])
+
     # ------------------------------------------------------------------------------------------- hubs-engine-3
     def test_near_equal_rides_across_a_bucket_edge_are_one_trade_off(self):
         # ride all the way 83.06 (step 4.153), so the old bucket edge sat at 4 x 4.153 = 16.61: Hub A 16.66 arrives

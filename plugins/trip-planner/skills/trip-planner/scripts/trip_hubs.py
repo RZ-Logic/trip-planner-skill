@@ -4090,12 +4090,15 @@ def plan(args):
     if car:
         cost_of = car_rank_cost
     else:
-        exact = [o["transit_fare"] for o in options if fare_exact(o)]
+        # only options that can be listed (bookable, ride + fare under riding all the way) set the bound
+        exact = [o["transit_fare"] for o in options if fare_exact(o) and o["book_by"] >= now_s - 60
+                 and o["ride_cost"] + o["transit_fare"] < ride_all["cost"]]
         fare_bound = max(exact) if exact else 0.0
 
         def cost_of(o):
             """Ride mode: ride + fare. A fare that is unknown, partly unknown, in another currency or approximate
-            counts as at least the dearest exact fare among the options (0 when none is known), not as exact."""
+            counts as at least the dearest exact fare among the options cheaper than riding all the way (0 when
+            none is known), not as exact."""
             if not o.get("fare_parts"):   # no transit leg to pay for
                 return o["ride_cost"]
             if fare_exact(o):

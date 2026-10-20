@@ -100,7 +100,7 @@ Read the output in this order:
    user values time.
 5. `BEST TRADE-OFFS`: no other hub is both cheaper in ride + fare and earlier (totals within 5% of the
    ride-all cost, at least 1 unit, count as equal; a fare that is unknown or approximate counts as
-   at least the dearest exact one). Hubs whose ride + fare saves less than 20% of riding all the way
+   at least the dearest exact one among hubs cheaper than riding all the way). Hubs whose ride + fare saves less than 20% of riding all the way
    are hidden (`--min-saving`). If neither section appears, the WARNINGs say why; answer from the
    baselines and the NOTE.
 6. Per option: `book by` (latest time to request the ride), `board`, `ARRIVE`, ride, fare and total,

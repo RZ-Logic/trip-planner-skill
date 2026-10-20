@@ -726,5 +726,79 @@ class GeocodeCacheFolder(unittest.TestCase):
         self.assertEqual(warnings, [])
 
 
+def tls_network(hosts, timeout=6):
+    return {h: "tls failed: x" for h in hosts}
+
+
+class PreflightTlsAndOffline(unittest.TestCase):
+    """Follow-ups to hubs-pricing-io-4 and docs-contract-4: a certificate failure does not stop a trip that plans
+    offline; only a failed certificate check is TLS FAILED (a handshake cut or refused by a filter or proxy is a
+    blocked network); a mix of TLS and blocked probes is NETWORK BLOCKED with the certificate fix in the note; and
+    with nothing to allow, NETWORK BLOCKED names what keeps the trip from planning offline."""
+
+    def setUp(self):
+        fresh_cache(self)
+        refused = urllib.error.URLError(ConnectionRefusedError())
+        for p in (mock.patch.object(th, "http_get", side_effect=refused),
+                  mock.patch.object(th, "reverse_place_info",
+                                    side_effect=AssertionError("no reverse geocoding expected"))):
+            p.start()
+            self.addCleanup(p.stop)
+
+    def test_bundled_trip_plans_offline_when_certificates_fail(self):
+        reg = {"id": "t", "timezone": "America/Toronto", "bbox": HSAT_BOX, "feeds": [dict(HSAT, bbox=HSAT_BOX)]}
+        with mock.patch.object(th, "check_network", side_effect=tls_network), \
+                mock.patch.object(th, "load_regions", return_value=[reg]):
+            rc, out = run_main(OFFLINE_ARGV)
+        self.assertEqual(rc, 0, rc)
+        self.assertIn("BASELINE transit only", out)
+        lines = [ln for ln in out.splitlines() if ln.startswith("WARNING")]
+        self.assertTrue(any("OFFLINE" in ln for ln in lines), out)
+        self.assertTrue(any("cannot verify HTTPS certificates" in ln for ln in lines), out)
+
+    def test_handshake_cut_by_a_filter_is_not_a_certificate_problem(self):
+        for err in (ssl.SSLEOFError(8, "EOF occurred in violation of protocol (_ssl.c:1131)"),
+                    ssl.SSLError(1, "[SSL: TLSV1_ALERT_ACCESS_DENIED] tlsv1 alert access denied (_ssl.c:1131)"),
+                    ssl.SSLError(1, "[SSL: WRONG_VERSION_NUMBER] wrong version number (_ssl.c:1131)")):
+            e = urllib.error.URLError(err)
+            self.assertFalse(th._tls_failed(e), err)
+            self.assertTrue(th._unreachable(e), err)
+            self.assertEqual(th._net_cause(e), "TLS handshake refused")
+        self.assertTrue(th._tls_failed(CERT))
+        self.assertTrue(th._tls_failed(urllib.error.URLError(ssl.SSLError(
+            1, "[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed (_ssl.c:1131)"))))
+        eof = urllib.error.URLError(ssl.SSLEOFError(8, "EOF occurred in violation of protocol (_ssl.c:1131)"))
+        with mock.patch.object(th.urllib.request, "urlopen", side_effect=eof):
+            code, _out = run_main(["--origin", "43.4988,-79.8560"] + TRIP)
+        self.assertTrue(code.startswith("NETWORK BLOCKED"), code)
+        self.assertIn("TLS handshake refused", code)
+        self.assertNotIn("cannot verify HTTPS certificates", code)
+
+    def test_one_tls_and_two_blocked_probes_give_network_blocked(self):
+        def status(hosts, timeout=6):
+            return {h: ("tls failed: x" if h == "nominatim.openstreetmap.org" else "blocked: a proxy refused (x)")
+                    for h in hosts}
+        ns = th.argparse.Namespace(origin="43.4988,-79.8560", dest="43.5812,-79.6475", region="auto",
+                                   routing="osrm", crosscheck=False, feed=None, no_discover=False, access="ride",
+                                   radius_km=None, dest_walk_m=1500)
+        with mock.patch.object(th, "check_network", side_effect=status):
+            with self.assertRaises(SystemExit) as ctx:
+                th.preflight(ns, th.load_regions(), [])
+        code = str(ctx.exception.code)
+        self.assertTrue(code.startswith("NETWORK BLOCKED"), code)
+        self.assertIn("router.project-osrm.org", code)
+        self.assertIn("a proxy refused", code)
+        self.assertIn("The certificate check failed for nominatim.openstreetmap.org", code)
+
+    def test_nothing_to_allow_names_why_the_trip_cannot_plan_offline(self):
+        with mock.patch.object(th, "check_network", side_effect=blocked_network):
+            code, _out = run_main(["--origin", "45.55,-78.45", "--dest", "45.62,-78.30",
+                                   "--depart", "2026-10-21 10:00", "--routing", "estimate"])
+        self.assertTrue(code.startswith("NETWORK BLOCKED"), code)
+        self.assertNotIn("plans offline", code)
+        self.assertIn("no feed in the region files is near this trip", code)
+        self.assertIn("--discover", code)
+
+
 if __name__ == "__main__":
     unittest.main()

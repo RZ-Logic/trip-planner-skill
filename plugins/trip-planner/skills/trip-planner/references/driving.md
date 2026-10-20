@@ -433,7 +433,8 @@ reviews as spaces and drops invisible ones (zero-width marks, tag characters, BO
 
 `NETWORK BLOCKED` means the sandbox cannot reach the geocoding or routing hosts. It lists every host
 to allow (`--check-network` re-checks them). `TLS FAILED` is the certificate case: the hosts answer but
-this Python cannot verify their certificates, so there is nothing to allow; the message gives the fix.
+this Python cannot verify their certificates, so there is nothing to allow; the message gives the fix. A
+handshake that a filter or proxy cuts off (an EOF, an access-denied alert) counts as a blocked network.
 
 - **With addresses,** the script stops at geocoding and prints no parking. Its message says to pass
   `lat,lon` instead to still get the curated parking, and points here for the manual method.

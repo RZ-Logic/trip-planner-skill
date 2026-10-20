@@ -81,9 +81,11 @@ python3 ${CLAUDE_SKILL_DIR}/scripts/trip_hubs.py --origin "ORIGIN" --dest "DESTI
 - **`NETWORK BLOCKED`**: the sandbox cannot reach the timetable hosts, the routing hosts or both (not an
   address problem). Ask the user to allow the listed domains (`--check-network` re-checks) and meanwhile
   use the manual method (end of Step 3). With `lat,lon` and `--routing estimate`, a trip whose timetables
-  are all hand-entered or cached still plans offline, with an `OFFLINE` WARNING.
+  are all hand-entered or cached still plans offline, with an `OFFLINE` WARNING (even when the certificate
+  check fails); with no domain to allow, the message names what keeps the trip from planning offline.
 - **`TLS FAILED`**: this computer's Python cannot verify HTTPS certificates. Pass on the fix the message
-  gives; it is not an allow-list or address problem.
+  gives; it is not an allow-list or address problem. A handshake a filter or proxy cuts off is `NETWORK
+  BLOCKED` instead, and a mix of both is `NETWORK BLOCKED` with the certificate fix added.
 
 Read the output in this order:
 1. `COVERAGE`: stops and hubs checked. Report it.

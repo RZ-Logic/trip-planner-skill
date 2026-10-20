@@ -581,6 +581,8 @@ def _unreachable(e):
     reason = e.reason if isinstance(e, urllib.error.URLError) else e
     if isinstance(reason, (socket.gaierror, ConnectionRefusedError, socket.timeout, TimeoutError)):
         return True
+    if _tls_refused(reason):
+        return True
     text = str(reason).lower()
     return any(k in text for k in ("name or service not known", "getaddrinfo", "nodename", "timed out",
                                    "tunnel connection failed", "proxy", "refused", "no route to host",
@@ -588,14 +590,20 @@ def _unreachable(e):
 
 
 def _tls_failed(e):
-    """True when the TLS handshake failed: this Python could not verify the host's certificate (missing root
-    certificates, or a proxy that intercepts HTTPS). Not a blocked network and not an address problem."""
+    """True when this Python could not verify the host's certificate (missing root certificates, or a proxy that
+    intercepts HTTPS). Not a blocked network and not an address problem."""
     import ssl
     reason = e.reason if isinstance(e, urllib.error.URLError) else e
-    text = str(reason).lower()
-    if "timed out" in text:   # 'The handshake operation timed out' is a slow or blocked path, not a certificate
-        return False
-    return isinstance(reason, ssl.SSLError) or "certificate verify failed" in text
+    return isinstance(reason, ssl.SSLCertVerificationError) or "certificate verify failed" in str(reason).lower()
+
+
+def _tls_refused(reason):
+    """True when the TLS handshake was cut or refused without a certificate check (an EOF, an alert such as access
+    denied, plain HTTP on port 443): what egress filters and transparent proxies do, so a blocked network.
+    'The handshake operation timed out' is left to the timeout checks."""
+    import ssl
+    return (isinstance(reason, ssl.SSLError) and not _tls_failed(reason)
+            and "timed out" not in str(reason).lower())
 
 
 def _net_cause(e):
@@ -610,6 +618,8 @@ def _net_cause(e):
         return "DNS lookup failed"
     if isinstance(reason, (socket.timeout, TimeoutError)) or "timed out" in text:
         return "timed out, so the host is slow or unreachable"
+    if _tls_refused(reason):
+        return "TLS handshake refused"
     if "tunnel connection failed" in text or "proxy" in text:
         return "a proxy refused"
     if isinstance(reason, ConnectionRefusedError) or "refused" in text:
@@ -762,20 +772,35 @@ def _trip_feeds(args, regions):
 def offline_ready(args, regions):
     """True when this trip can be planned with no network: 'lat,lon' at both ends, estimated ride times, no
     Transitous, and every feed it needs hand-entered, local or already in the cache."""
+    return not offline_blocker(args, regions)
+
+
+def offline_blocker(args, regions):
+    """What keeps this trip from planning with no network, for NETWORK BLOCKED ('' when nothing does)."""
     if not (LATLON_RE.match(args.origin or "") and LATLON_RE.match(args.dest or "")):
-        return False
-    if args.routing != "estimate" or args.crosscheck:
-        return False
+        return "an end is a text address (pass 'lat,lon')"
+    if args.routing != "estimate":
+        return "ride times come from a router (pass --routing estimate)"
+    if args.crosscheck:
+        return "--crosscheck asks Transitous"
     for spec in args.feed or []:
         fid, src = parse_feed_spec(spec, set())
         if not (os.path.exists(src) or os.path.exists(_feed_cache_path(fid, src))):
-            return False
+            return "the --feed %s is not stored here" % safe_url(src)
     region, feeds = _trip_feeds(args, regions)
     if not region:   # no region file: only --feed, and no catalog search
-        return bool(args.feed) and args.no_discover
-    return bool(feeds) and all(
-        f.get("manual") or any(os.path.exists(u) or os.path.exists(_feed_cache_path(f["id"], u))
-                               for u in f.get("urls", [])) for f in feeds)
+        if args.feed and args.no_discover:
+            return ""
+        return ("no region file holds this trip, so its feeds come from a catalog search (rerun with the network, "
+                "or pass --feed with a local GTFS file and --no-discover)")
+    if not feeds:
+        return ("no feed in the region files is near this trip (rerun with the network so --discover can search "
+                "the MobilityDatabase catalog, or pass --feed with a local GTFS file)")
+    missing = [safe_text(f.get("name") or f["id"]) for f in feeds if not (f.get("manual") or any(
+        os.path.exists(u) or os.path.exists(_feed_cache_path(f["id"], u)) for u in f.get("urls", [])))]
+    if missing:
+        return "these feeds are not stored here: %s" % ", ".join(missing)
+    return ""
 
 
 def trip_domains(args, regions):
@@ -830,12 +855,15 @@ def trip_domains(args, regions):
     return out, note
 
 
-def network_blocked_message(blocked, hosts, note="", causes=None):
+def network_blocked_message(blocked, hosts, note="", causes=None, offline=""):
     """causes: what the failed requests saw (_net_cause), named in the message. hosts: the trip's own list
-    (trip_domains); when it is empty there is nothing to allow, so the message says how to plan offline."""
+    (trip_domains); when it is empty there is nothing to allow, so the message says what keeps the trip from
+    planning offline (offline: offline_blocker) or, without that, how to plan offline."""
     if hosts:
         allow = ("Either allow these domains in this environment's network settings (on claude.ai, the code "
                  "execution network access setting):\n  %s\n" % "\n  ".join(hosts))
+    elif offline:
+        allow = "No domain on this trip's own list needs allowing, but it cannot plan offline: %s.\n" % offline
     else:
         allow = ("No domain on this trip's own list needs allowing: with 'lat,lon' at both ends and --routing "
                  "estimate, a trip whose timetables are all hand-entered or cached plans offline.\n")
@@ -883,17 +911,24 @@ def preflight(args, regions, warnings):
     blocked = [h for h, s in status.items() if s != "ok"]
     tls = [h for h in blocked if status[h].startswith("tls failed")]
     if len(blocked) == len(status):
-        if tls:   # certificates, not the allow-list: allowing the hosts again would not help
-            raise SystemExit(tls_failed_message(tls))
         causes = sorted({s[len("blocked: "):].split(" (", 1)[0] for s in status.values() if s.startswith("blocked: ")})
-        if offline_ready(args, regions):   # everything this trip needs is stored here: plan it, labelled
+        offline = offline_blocker(args, regions)
+        if not offline:   # everything this trip needs is stored here: plan it, labelled (certificates or not)
+            seen = causes + (["certificate check failed"] if tls else [])
             warnings.append("OFFLINE: this environment cannot reach %s (%s), so this plan uses only the hand-entered "
                             "timetables and cached feeds stored here, with estimated ride times; anything that "
                             "needs a download is missing. Allow those hosts to run the live planner."
-                            % (", ".join(blocked), "; ".join(causes) or "no connection"))
+                            % (", ".join(blocked), "; ".join(seen) or "no connection"))
+            if tls:
+                warnings.append("the certificate check failed for %s. %s" % (", ".join(tls), TLS_HELP))
             return status
+        if len(tls) == len(blocked):   # certificates, not the allow-list: allowing the hosts would not help
+            raise SystemExit(tls_failed_message(tls))
         hosts, note = trip_domains(args, regions)
-        raise SystemExit(network_blocked_message(blocked, hosts, note, causes=causes))
+        if tls:   # blocked hosts first: fixing the certificates alone would still leave them unreachable
+            note = (note + " " if note else "") + "The certificate check failed for %s. %s" % (", ".join(tls), TLS_HELP)
+        raise SystemExit(network_blocked_message([h for h in blocked if h not in tls], hosts, note,
+                                                 causes=causes, offline=offline))
     if tls:
         warnings.append("the certificate check failed for %s. %s" % (", ".join(tls), TLS_HELP))
     if len(blocked) > len(tls):

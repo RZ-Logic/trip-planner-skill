@@ -1,7 +1,7 @@
 """Regression tests for the review fixes to the driving route core: tolls the routing engine reports that the
 planner does not price (US toll roads, crossings missing from tolls.json), the time zone of an origin outside
-the region files, border waits and charging stops placed in the timeline, and navigation links that follow the
-recommended route.
+the region files, border waits and charging stops placed in the timeline, navigation links that follow the
+recommended route, and rain or snow in the planning time behind a leave-by.
 
 Every HTTP call is mocked: either drive_common.fetch with test_drive_route.FakeFetch, or test_drive_plan.Env.
 
@@ -445,6 +445,62 @@ class LinksFollowRecommendedRoute(unittest.TestCase):
         self.assertNotIn("avoid_tolls=t", ln["waze"])
         self.assertNotIn("avoid=tolls", ln["apple"])
         self.assertIn("avoid=tolls", ln["google_alt"])   # the second link still offers the toll-free way
+
+
+class WeatherPlanTime(unittest.TestCase):
+    """tests-ci-eng-4: rain or snow scales the planning time as well as the typical time, so a leave-by in snow is
+    earlier by the weather allowance on the plan time; the park-and-ride ride factor carries the weather too."""
+
+    def test_retime_peak_plan_time_includes_weather(self):
+        f = _milton_markham()[0]
+        drt.retime(f, tdr.WED_0730, dict(tdr.OPTS, weather=1.3))
+        fac = [drt.factors(c, tdr.WED_0730, set(), None, "valhalla") for c in f["chunks"]]
+        st = sum(c["s"] * x[0] for c, x in zip(f["chunks"], fac))
+        sp = sum(c["s"] * x[1] for c, x in zip(f["chunks"], fac))
+        self.assertGreater(sp, st)   # the peak plan rows are above the typical ones, so max() does not hide p
+        # every chunk stays in the weekday peak, so the later clock of each chunk does not change its factors
+        self.assertAlmostEqual(f["plan_s"], round(max(sp, st) * 1.3, 1), delta=1)
+        self.assertAlmostEqual(f["typical_s"], round(st * 1.3, 1), delta=1)
+
+    def test_arrive_by_leave_by_in_snow_uses_real_retime(self):
+        fake = tdr.FakeFetch([(("valhalla", "exclude_tolls"), tdr.milton_markham_tollfree()),
+                              (("valhalla",), tdr.milton_markham_valhalla())])
+
+        def fetch(url, **kw):
+            if "fueltypesall" in url:
+                return tdp.FUEL_CSV.encode("utf-8")
+            return fake(url, **kw)
+        deadline = dt.datetime(2026, 10, 14, 9, 0)
+        with tdp.Env(), tdp.at_now(tdp.NOW), mock.patch.dict(sys.modules, {"drive_route": drt}),                 mock.patch.object(dc, "fetch", side_effect=fetch):
+            res = dp.plan(tdp.args_for("--origin", "%f,%f" % tdr.MILTON, "--dest", "%f,%f" % tdr.MARKHAM,
+                                       "--incidents", "off", "--park-and-ride", "off",
+                                       "--arrive-by", "2026-10-14 09:00", "--weather", "snow"))
+        self.assertEqual(res["weather"]["mult"], dp.costs()["weather"]["snow_factor"])
+        got = {r["letter"]: r["leave_by"] for r in res["routes"]}
+        self.assertEqual(got, {"A": dt.datetime(2026, 10, 14, 7, 42), "B": dt.datetime(2026, 10, 14, 7, 2)})
+        a = res["arrival"]
+        extra = (a["search_min"] + a["walk_min"] + a["slack_min"]) * 60.0
+        for r in res["routes"]:   # the latest whole minute: on time, and one minute later would be late
+            spare = (deadline - r["leave_by"]).total_seconds() - r["plan_s"] - extra
+            self.assertGreaterEqual(spare, 0, r["letter"])
+            self.assertLess(spare, 60, r["letter"])
+
+    def test_park_and_ride_traffic_factor_includes_weather(self):
+        seen = {}
+
+        def pnr(*a, **kw):
+            seen.update(kw["ctx"])
+            return {"options": [], "notes": [], "trigger": None}
+        with tdp.Env(parking_cost=30.0), tdp.at_now(tdp.NOW), mock.patch.object(dp, "park_and_ride", side_effect=pnr):
+            res = dp.plan(tdp.args_for(*tdp.BASE[:2], "--incidents", "off", "--weather", "snow",
+                                       "--dest", "%f,%f" % tdp.UNION, "--depart", "2026-10-14 07:30",
+                                       "--park-and-ride", "on"))
+        self.assertIsNotNone(res["park_and_ride"])
+        rec = next(r for r in res["routes"] if r["letter"] == res["recommended"])
+        snow = dp.costs()["weather"]["snow_factor"]
+        self.assertGreater(snow, 1.0)
+        want = th.plan_traffic_factor(rec["depart"], dc.holidays_for())[0] * snow
+        self.assertAlmostEqual(seen["traffic_factor"], want, places=6)
 
 
 if __name__ == "__main__":

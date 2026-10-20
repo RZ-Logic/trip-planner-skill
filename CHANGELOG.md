@@ -161,6 +161,55 @@ verified findings. They are fixed in batches below, test first; IDs in brackets 
   longer carry a test's request out. Both planners share one per-host pacing clock, so Nominatim stays at
   one request per second. [tests-ci-eng-8, tests-ci-eng-9]
 
+### Batch 7: low severity
+
+- **Drive clock and TomTom.** Arrivals, 407 entry times (so the toll band) and leave-by times follow the
+  wall clock across a daylight-saving change. With a TomTom key, the 407 entry time comes from TomTom's
+  turn-by-turn times, not an even spread by distance (older cached TomTom replies are not reused). 13
+  Hwy 407 interchange points were re-taken from OpenStreetMap; York-Durham Line to Whites Rd still
+  disagrees with its published km posts and is noted in tolls.json. The drive back prices fuel and
+  home-charged EV energy at its own forecast temperature. [drive-core-7, drive-core-8,
+  data-integrity-12, ext-13]
+- **Car lookup and EV.** "RWD"/"FWD" keeps only those versions, and electric Performance, GT, Rally and
+  Plaid trims count as all-wheel drive; "PowerBoost" and "i-FORCE MAX" pick the hybrid, and an unmatched
+  word caps confidence at medium. No pointless fast top-up near the start when charging later is no
+  slower. EV park and ride prices the drive to the station at the home rate. [ev-vehicles-4,
+  ev-vehicles-8, ev-vehicles-9, gem-G6A]
+- **Park and ride and the 407.** A park-and-ride search that times out stops making requests. SKILL.md
+  has the agent ask about --407-this-month (the $5 account fee can flip the 407 verdict). The README
+  calibration table is computed from the current model and pinned by a test. [gem-G5B, docs-contract-6,
+  drive-core-9]
+- **Hub finder.** No false "NO service" warning after midnight when last night's trips are used.
+  --footpath-m 0 no longer crashes, --radius-km must be above 0, negative waits are refused. Walking
+  transfers far north of a feed's other stops are no longer missed. Totals within the 5% margin count as
+  equal wherever they fall (no bucket edges). A bank-card tap where the agency takes none is priced at
+  the cash fare. The Uber accuracy figures are described as a one-off check whose route list is not
+  published, and same-vehicle hubs are listed only beyond the 5% margin. [hubs-engine-9, hubs-engine-10,
+  hubs-pricing-io-12, hubs-engine-11, hubs-engine-3, hubs-pricing-io-11, architecture-product-10]
+- **Network, cache and text safety.** NETWORK BLOCKED points to references/manual-method.md. A catalog or
+  JSON/CSV reply that is not the expected format (proxy or login pages with HTTP 200) is never cached, and
+  --refresh re-downloads the catalog. Text output drops invisible Unicode. Geocoding is cached on disk for
+  30 days. Overpass retries close the error they drop. [docs-contract-8, hubs-pricing-io-9,
+  security-tos-5, security-tos-3, security-tos-7, gem-G4]
+- **Attribution and privacy.** Drive plans credit OpenStreetMap and Open-Meteo (CC BY 4.0) on the SOURCES
+  line, and transit plans list each discovered feed's licence page. A lat,lon label lookup asks Nominatim
+  at street level with 3 decimals, so a home pin no longer gets its house number back. [security-tos-6,
+  security-tos-8]
+- **Parking and region data.** Times without am/pm ("8:00-6:00") read as 8am to 6pm. Bluffer's Park and
+  Jack Darling charge on holidays like weekends, and Bluffer's weekday evenings at the published $6
+  maximum (an upper bound). Places with 2026 fees get a check note on later trips, and EV plans past the
+  OEB rate period warn. Residual projected timetables are flagged. Notes files match the data.
+  [parking-11, data-integrity-9, parking-10, data-integrity-11, data-integrity-5, data-integrity-13]
+- **Docs against code.** A test checks every flag, label, version and reference path the docs name, and
+  the zip contents. README coverage numbers match the published example, the unmeasured "under a second"
+  is gone, and the Bay St row is labelled as the stand-in example. [docs-contract-9, docs-contract-7,
+  docs-contract-11]
+
+**Not fixed, waiting on owner decisions:** data-integrity-2 (data licence notices), docs-contract-1 and
+parking-12 (OSM names and website URLs shown to the agent), architecture-product-1 (non-commercial
+routing and weather hosts), architecture-product-5 (Onex and Megabus provenance), gem-G2A (PRESTO credits
+before a GO tap), gem-G3 (rolling-maximum semantics).
+
 ## 0.9.8 (2026-10-12)
 
 **Review:** a code, test and security review by Sonnet and Opus agents raised 80 findings. Verifiers

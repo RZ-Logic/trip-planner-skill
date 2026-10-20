@@ -3082,8 +3082,8 @@ def plan(args):
                             % (radius_m / 1000.0))
 
     def best_on(c, sc):
-        """depart mode: (arrival, stop, ready). arrive-by mode: (latest booking, stop, board, arrival).
-        Ties go to the stop that leaves more slack."""
+        """depart mode: (arrival, stop, ready, slack: t0 + slack is the latest booking). arrive-by mode: (latest
+        booking, stop, board, arrival). Ties go to the stop that leaves more slack."""
         best = None
         for s in c["stops"]:
             extra = walk_s(haversine_m(c["lat"], c["lon"], net.stop_lat[s], net.stop_lon[s]))
@@ -3099,16 +3099,18 @@ def plan(args):
                 slack = net.conns[c0][0] - net.trip_buffer[net.conns[c0][4]] - (t0 + lead)
                 if best is None or (arr, -slack) < (best[0], -best[3]):
                     best = (arr, s, t0 + lead, slack)
-        return best[:3] if (best and not arrive_by) else best
+        return best
 
     def evaluate_cluster(c):
         c["result"] = best_on(c, scan)
         c["fresults"] = [best_on(c, e["scan"]) for e in pick]
 
     def set_ride(c, free_s, osrm):
-        """The ride to hub c in the traffic of its own start, then its best connections. Depart mode: every ride
-        starts now. Arrive-by: the start (the hub's book-by) moves with the ride's length, so settle it."""
-        f, tried = tf, []
+        """The ride to hub c in the traffic of its own start, then its best connections. Depart mode: timed as if
+        booked now (picked up after the wait); make_option retimes each later book-by (rebook). Arrive-by: the
+        start (the hub's book-by) moves with the ride's length, so settle it."""
+        f, tried = (tf if arrive_by else factor_at(t0 + first_wait_s)), []
+        c["ride_free_s"] = free_s
         while True:
             c["ride_s"] = free_s * f
             evaluate_cluster(c)
@@ -3127,7 +3129,8 @@ def plan(args):
         c["ride_km"] = km
         set_ride(c, sec, False)
     km, sec = heuristic_ride(od_m)
-    ride_all = {"ride_km": km, "ride_s": sec * tf, "source": "estimate", "free_s": sec}
+    f_all = tf if arrive_by else factor_at(t0 + first_wait_s)   # depart mode: picked up after the wait
+    ride_all = {"ride_km": km, "ride_s": sec * f_all, "source": "estimate", "free_s": sec}
 
     osrm_ok, routed = False, None   # routed: (hubs with OSRM driving times, hubs left on estimates) under the cap
     if args.routing in ("auto", "osrm"):
@@ -3169,7 +3172,7 @@ def plan(args):
         else:
             osrm_ok = True
             if res[0]:
-                ride_all.update(ride_s=res[0][0] * tf, ride_km=res[0][1] / 1000.0, source=osrm_label(tf),
+                ride_all.update(ride_s=res[0][0] * f_all, ride_km=res[0][1] / 1000.0, source=osrm_label(f_all),
                                 free_s=res[0][0])
             for c, r in zip(refine, res[1:]):
                 if r:
@@ -3202,6 +3205,33 @@ def plan(args):
         o["transit_fare"], o["fare_currency"], o["fare_parts"], o["fare_complete"] = total, cur, parts, complete
         return o
 
+    def rebook(free_s, f0, book0, ends, floor=None):
+        """A ride booked at book0 was timed in factor f0's traffic, but it is picked up first_wait_s after the
+        booking: time it in the traffic of that pickup and move the booking by the change (a few rounds; at a band
+        edge that flips, the slower factor). Returns (book, ride seconds, factor). floor (depart mode: the trip
+        start, when book0 is not before it): if the later traffic needs booking before the floor, book at the floor
+        in f0's traffic, which the scan already showed catches the departure. Call it with the book worked out from
+        f0, never with one it returned."""
+        if args.traffic_factor or free_s is None:
+            return book0, (free_s or 0.0) * f0, f0
+        f, tried, book = f0, [f0], book0
+        while len(tried) < 5:
+            f2 = factor_at(book + first_wait_s)
+            if f2 == f or (f2 in tried and max(f, f2) == f):
+                break
+            f = max(f, f2) if f2 in tried else f2
+            tried.append(f)
+            book = book0 - (int(free_s * f) - int(free_s * f0))
+        if floor is not None and book < floor <= book0:
+            return floor, free_s * f0, f0
+        return book, free_s * f, f
+
+    def ride_at(c, book0, floor=None):
+        """rebook() for the ride to hub c (a walk start is unchanged)."""
+        if c.get("walk"):
+            return book0, c["ride_s"], None
+        return rebook(c.get("ride_free_s"), c["ride_tf"], book0, ((o_lat, o_lon), (c["lat"], c["lon"])), floor)
+
     def make_option(c, sc=None, result=None):
         sc = sc or scan
         if arrive_by:
@@ -3209,18 +3239,20 @@ def plan(args):
             _, legs = sc.journey(s, dep)
             earlier = sc.latest_departure(s, arr - 60)
             backup = None
-            if earlier and earlier[0] - (dep - book) >= now_s:   # only if it can still be booked
+            e_book = ride_at(c, earlier[0] - (dep - book))[0] if earlier else None   # booked earlier: its own traffic
+            if earlier and e_book >= now_s:   # only if it can still be booked
                 _, e_legs = sc.journey(s, earlier[0])
                 if e_legs:
                     backup = {"board": e_legs[0]["depart"], "arrive": earlier[1], "route": leg_name(e_legs[0]),
-                              "book_by": earlier[0] - (dep - book)}
+                              "book_by": e_book}
             board, stretch = (legs[0]["depart"] if legs else dep), None
+            book, ride_s, ride_tf = ride_at(c, book)   # settled already for the main result; a finish result moves
         else:
-            arr, s, ready = result or c["result"]
+            arr, s, ready = (result or c["result"])[:3]
             _, legs = sc.journey(s, ready)
             board = legs[0]["depart"] if legs else ready
             cutoff = legs[0].get("be_there_by", board) if legs else board   # be at the stop by
-            book = cutoff - (ready - t0)
+            book, ride_s, ride_tf = ride_at(c, cutoff - (ready - t0), t0)   # the ride in the traffic after booking
             nxt_arr, nxt_legs = sc.journey(s, cutoff + 60)
             backup = None if nxt_arr >= INF or not nxt_legs else {
                 "board": nxt_legs[0]["depart"], "arrive": nxt_arr, "route": leg_name(nxt_legs[0])}
@@ -3231,13 +3263,15 @@ def plan(args):
                     stretch = {"board": s_legs[0]["depart"], "arrive": s_arr, "route": leg_name(s_legs[0]),
                                "slack_min": round((s_legs[0].get("be_there_by", s_legs[0]["depart"])
                                                    - (ready - safety_s)) / 60.0, 1),
-                               "book_by": s_legs[0].get("be_there_by", s_legs[0]["depart"]) - (ready - safety_s - t0)}
+                               "book_by": ride_at(c, s_legs[0].get("be_there_by", s_legs[0]["depart"])
+                                                  - (ready - safety_s - t0), t0)[0]}
         hub = (net.stop_lat[s], net.stop_lon[s])
         o = {
             "hub": net.stop_name[s], "hub_agency": legs[0]["agency"] if legs else net.stop_feed[s],
             "hub_lat": hub[0], "hub_lon": hub[1],
-            "ride_km": round(c["ride_km"], 1), "ride_min": round(c["ride_s"] / 60.0, 1),
-            "ride_source": c["ride_source"], "ride_cost": round(first_cost(c, c["ride_km"], c["ride_s"], ((o_lat, o_lon), (c["lat"], c["lon"]))), 2),
+            "ride_km": round(c["ride_km"], 1), "ride_min": round(ride_s / 60.0, 1),
+            "ride_source": osrm_label(ride_tf) if c["ride_source"].startswith("osrm") else c["ride_source"],
+            "ride_cost": round(first_cost(c, c["ride_km"], ride_s, ((o_lat, o_lon), (c["lat"], c["lon"]))), 2),
             "book_by": book, "board": board, "arrive": arr, "legs": legs, "backup": backup, "stretch": stretch,
             # no Uber link from a place where the region file says there is no ride-hail
             "uber": None if no_ride_hail_origin else uber_link((o_lat, o_lon), hub, net.stop_name[s]),
@@ -3338,6 +3372,9 @@ def plan(args):
                 arr_sr, legs_sr = scan.journey(s_first, now_s + ride_lead)
                 dep = legs_sr[0]["depart"] if legs_sr else None
                 book = legs_sr[0].get("be_there_by", dep) - ride_lead if dep is not None else None
+            if book is not None and c is not None:   # the ride in the traffic after booking
+                book, sec, _f = rebook(c.get("ride_free_s"), c["ride_tf"], book,
+                                       ((o_lat, o_lon), (c["lat"], c["lon"])), None if arrive_by else t0)
             if book is not None and arr_sr < INF and not (arrive_by and arr_sr > t_end):   # never after the deadline
                 transit_only["short_ride"] = {"cost": round(ride_cost(pricing, km, sec), 2), "book_by": book,
                                               "board": dep, "arrive": arr_sr}
@@ -3524,13 +3561,16 @@ def plan(args):
                                 best = (arr, s, t0 + lead)
                     res, first_c = best, 0.0
                 else:
-                    res = c["fresults"][k]
-                    first_c = first_cost(c, c["ride_km"], c["ride_s"], ((o_lat, o_lon), (c["lat"], c["lon"])))
+                    res, first_c = c["fresults"][k], None
                 if not res:
                     continue
                 if not arrive_by and res[0] >= INF:
                     continue
-                if arrive_by and res[0] < now_s - 60:   # its ride or walk would have had to start already
+                book_r = res[0] if arrive_by else None
+                if first_c is None:   # the ride in the traffic after its own booking (make_option does the same)
+                    book_r, rs, _f = ride_at(c, res[0]) if arrive_by else ride_at(c, t0 + res[3], t0)
+                    first_c = first_cost(c, c["ride_km"], rs, ((o_lat, o_lon), (c["lat"], c["lon"])))
+                if arrive_by and book_r < now_s - 60:   # its ride or walk would have had to start already
                     continue
                 fr = {"ride_s": e["ride_s"], "cost": e["cost"], "source": e["ride_source"]}
                 if not arrive_by:
@@ -3540,7 +3580,7 @@ def plan(args):
                               "cost": ride_cost(e["pricing"], e["ride_km"], rs2,
                                                 ((e["lat"], e["lon"]), (d_lat, d_lon)))}
                         res = (arr2,) + tuple(res[1:])
-                score = -res[0] if arrive_by else res[0]
+                score = -book_r if arrive_by else res[0]
                 total = first_c + fr["cost"]
                 if total <= ride_all["cost"] - min_save:
                     raw.append((score, total, c, e, res, fr))

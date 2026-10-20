@@ -1,6 +1,6 @@
 """Offline regression tests for the parking ranking, check-line and curated parking data findings of the 2026-10
 review (ext-11, -14, -15, -16, data-integrity-1, -4, -7, -9, -11, parking-3, -4, -8, -10, docs-contract-5,
-security-tos-9).
+security-tos-9), and the follow-up review of those fixes.
 
 Every HTTP call is mocked or blocked; nothing here touches the network.
 
@@ -231,7 +231,7 @@ class Verification(unittest.TestCase):
         osm = self.mk("OSM lot", 5.0, "osm", 0.0010)
         off = self.mk("City lot", 6.0, "official", 0.0015)
         self.assertEqual([x["name"] for x in pk.rank([osm, off])], ["City lot", "OSM lot"])
-        # but an unverified price at least 25% cheaper still comes first, and the real price is kept
+        # but an unverified price more than 20% cheaper (here 50%) still comes first, and the real price is kept
         cheap = self.mk("OSM cheap", 3.0, "osm", 0.0010)
         ranked = pk.rank([cheap, off])
         self.assertEqual([x["name"] for x in ranked], ["OSM cheap", "City lot"])
@@ -314,6 +314,23 @@ class HomeRatePlan(tcp.CarCase):
         self.assertFalse(any("2026-10-31" in w for w in res["warnings"]), res["warnings"])
         res, _text = self.run_plan("--depart", "2026-11-02 10:00")   # a petrol car never uses the home rate
         self.assertFalse(any("2026-10-31" in w for w in res["warnings"]), res["warnings"])
+
+
+class RankingRuleDocs(unittest.TestCase):    # follow-up of parking-4, docs-contract-2
+    def test_25_percent_rule_stated_as_the_code_ranks(self):
+        # an old or unverified price counts 25% more: a verified $10 lot beats an OSM $8.10 one, not an OSM $7.80 one
+        mk = lambda name, cost, conf: pk.make_lot(name, DEST[0] + 0.0015, DEST[1], "garage", {"flat": cost}, "src", "",
+                                                  conf, DEST, dt.datetime(2026, 10, 14, 9), 480, set())
+        off = mk("City lot", 10.0, "official")
+        self.assertEqual(pk.rank([mk("OSM lot", 8.1, "osm"), off])[0]["name"], "City lot")
+        self.assertEqual(pk.rank([mk("OSM lot", 7.8, "osm"), off])[0]["name"], "OSM lot")
+        with open(os.path.join(ROOT, "README.md"), encoding="utf-8") as f:
+            readme = f.read()
+        # assertFalse/assertTrue: never print the whole file
+        self.assertFalse("up to 25% cheaper" in readme)                     # before: README said this
+        self.assertTrue("ranks as if it cost 25% more, so a verified lot up to 25% dearer comes first" in readme)
+        with open(os.path.join(ROOT, "CHANGELOG.md"), encoding="utf-8") as f:
+            self.assertFalse("at least 25% cheaper" in f.read())
 
 
 if __name__ == "__main__":

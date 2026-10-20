@@ -106,8 +106,8 @@ verified findings. They are fixed in batches below, test first; IDs in brackets 
   its reservation fees and 4 h limit only from Sep 26 to Nov 8 and is price unknown outside it (the
   off-window fee is not published). [ext-14, ext-15, ext-16, data-integrity-1, data-integrity-4, parking-8]
 - **Verification and ranking.** Low-confidence prices get a "price not confirmed" check line. Curated lots
-  that only OpenStreetMap calls free are shown as unverified free. A verified price ranks ahead of an old
-  or unverified one unless that one is at least 25% cheaper; the docs describe this instead of
+  that only OpenStreetMap calls free are shown as unverified free. An old or unverified price ranks as if it
+  cost 25% more, so a verified lot up to 25% dearer comes first; the docs describe this instead of
   "best-verified lots first". [ext-11, data-integrity-7, parking-4, docs-contract-2]
 - **Offline Toronto.** Offline, downtown Toronto lists the bundled post-2019 Green P carparks with 2026
   rates, and an empty offline result says the offline data has no parking there. [parking-3]

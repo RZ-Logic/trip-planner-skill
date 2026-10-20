@@ -382,7 +382,8 @@ spaces; `--json` keeps the raw values.
 ## No code execution, or the network is blocked
 
 `NETWORK BLOCKED` means the sandbox cannot reach the geocoding or routing hosts. It lists every host
-to allow (`--check-network` re-checks them).
+to allow (`--check-network` re-checks them). `TLS FAILED` is the certificate case: the hosts answer but
+this Python cannot verify their certificates, so there is nothing to allow; the message gives the fix.
 
 - **With addresses,** the script stops at geocoding and prints no parking. Its message says to pass
   `lat,lon` instead to still get the curated parking, and points here for the manual method.

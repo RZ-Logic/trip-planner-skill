@@ -57,11 +57,15 @@ def drive_hosts():
 
 
 def blocked_note(warnings):
-    """NETWORK BLOCKED text when the routing hosts cannot be reached at all (a sandbox), else None."""
+    """NETWORK BLOCKED text when the routing hosts cannot be reached at all (a sandbox), TLS FAILED text when this
+    Python could not verify their certificates, else None."""
     status = th.check_network(ROUTING_HOSTS, timeout=6)
     blocked = [h for h in ROUTING_HOSTS if status[h] != "ok"]
     if len(blocked) < len(ROUTING_HOSTS):
         return None
+    tls = [h for h in blocked if status[h].startswith("tls failed")]
+    if tls:   # certificates, not the allow-list
+        return th.tls_failed_message(tls) + " Meanwhile the parking above comes from the curated files only."
     return ("NETWORK BLOCKED: this environment cannot reach the routing hosts (%s), so there are no driving times. "
             "This is not an address problem. Allow these domains in this environment's network settings (on "
             "claude.ai, the code execution network access setting): %s. Meanwhile follow the manual method in "
@@ -3426,6 +3430,8 @@ def main(argv=None):
         blocked = [h for h in hosts if status[h] != "ok"]
         print("\n%d of %d reachable.%s" % (len(hosts) - len(blocked), len(hosts),
                                             " Allow the blocked ones to run the live planner." if blocked else ""))
+        if any(status[h].startswith("tls failed") for h in hosts):
+            print(th.TLS_HELP)
         return 1 if blocked else 0
     if not args.origin or not args.dest:
         if args.forget_car or args.save_car:   # car only: save or forget, then exit

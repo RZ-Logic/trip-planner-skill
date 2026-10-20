@@ -502,8 +502,49 @@ def _unreachable(e):
                                    "network is unreachable", "temporary failure in name resolution"))
 
 
+def _tls_failed(e):
+    """True when the TLS handshake failed: this Python could not verify the host's certificate (missing root
+    certificates, or a proxy that intercepts HTTPS). Not a blocked network and not an address problem."""
+    import ssl
+    reason = e.reason if isinstance(e, urllib.error.URLError) else e
+    text = str(reason).lower()
+    if "timed out" in text:   # 'The handshake operation timed out' is a slow or blocked path, not a certificate
+        return False
+    return isinstance(reason, ssl.SSLError) or "certificate verify failed" in text
+
+
+def _net_cause(e):
+    """Short cause for an _unreachable() error, for NETWORK BLOCKED (no parentheses: preflight reads it back)."""
+    import socket
+    if isinstance(e, urllib.error.HTTPError):
+        return "a proxy refused"
+    reason = e.reason if isinstance(e, urllib.error.URLError) else e
+    text = str(reason).lower()
+    if isinstance(reason, socket.gaierror) or any(k in text for k in (
+            "name or service not known", "getaddrinfo", "nodename", "temporary failure in name resolution")):
+        return "DNS lookup failed"
+    if isinstance(reason, (socket.timeout, TimeoutError)) or "timed out" in text:
+        return "timed out, so the host is slow or unreachable"
+    if "tunnel connection failed" in text or "proxy" in text:
+        return "a proxy refused"
+    if isinstance(reason, ConnectionRefusedError) or "refused" in text:
+        return "connection refused"
+    return "no route to the host"
+
+
+TLS_HELP = ("This Python cannot verify HTTPS certificates. This is not an address problem and not a blocked network. "
+            "On Windows, Python trusts only root certificates Windows has already downloaded: open one of the hosts "
+            "once through Windows (PowerShell: Invoke-WebRequest https://HOST). On macOS, run "
+            "'Install Certificates.command' in the Python folder. Behind a proxy that inspects HTTPS, set "
+            "SSL_CERT_FILE to its CA bundle.")
+
+
+def tls_failed_message(hosts):
+    return "TLS FAILED: the certificate check failed for %s. %s" % (", ".join(hosts), TLS_HELP)
+
+
 def _geocode(text, label, warnings, strict=True):
-    nom, blocked = None, []
+    nom, blocked, tls, causes = None, [], [], []
     try:
         url = "https://nominatim.openstreetmap.org/search?" + urllib.parse.urlencode(
             {"q": text, "format": "jsonv2", "limit": 1})
@@ -511,8 +552,11 @@ def _geocode(text, label, warnings, strict=True):
         if data:
             nom = data[0]
     except Exception as e:  # noqa: BLE001
-        if _unreachable(e):
+        if _tls_failed(e):
+            tls.append("nominatim.openstreetmap.org")
+        elif _unreachable(e):
             blocked.append("nominatim.openstreetmap.org")
+            causes.append(_net_cause(e))
         warnings.append("Nominatim geocoding failed for %s (%s)" % (label, e))
     if nom and (nom.get("addresstype") in PRECISE_GEOCODE or nom.get("category") in PRECISE_GEOCODE):
         return float(nom["lat"]), float(nom["lon"]), nom.get("display_name", text)
@@ -525,8 +569,11 @@ def _geocode(text, label, warnings, strict=True):
             name = ", ".join(str(p[k]) for k in ("housenumber", "street", "city") if p.get(k)) or text
             return float(lat), float(lon), name
     except Exception as e:  # noqa: BLE001
-        if _unreachable(e):
+        if _tls_failed(e):
+            tls.append("photon.komoot.io")
+        elif _unreachable(e):
             blocked.append("photon.komoot.io")
+            causes.append(_net_cause(e))
         warnings.append("Photon geocoding failed for %s (%s)" % (label, e))
     if nom:
         if strict and HOUSE_NUMBER_RE.match(text.split(",")[0]):
@@ -540,10 +587,12 @@ def _geocode(text, label, warnings, strict=True):
                         "Hubs in range can change; ask for a pin, a nearby landmark or 'lat,lon'."
                         % (label, text, nom.get("addresstype")))
         return float(nom["lat"]), float(nom["lon"]), nom.get("display_name", text)
+    if tls and len(tls) + len(blocked) == 2:
+        raise SystemExit(tls_failed_message(tls))
     if len(blocked) == 2:
         raise SystemExit(network_blocked_message(blocked, ["nominatim.openstreetmap.org", "photon.komoot.io"],
                                                  "The feed hosts depend on where the trip is: rerun with 'lat,lon' "
-                                                 "for the full list."))
+                                                 "for the full list.", causes=sorted(set(causes))))
     raise SystemExit("could not find %s %r with the geocoders. Pass coordinates as 'lat,lon'." % (label, text))
 
 
@@ -654,18 +703,20 @@ def trip_domains(args, regions):
     return out, note
 
 
-def network_blocked_message(blocked, hosts, note=""):
-    return ("NETWORK BLOCKED: this environment cannot reach %s (DNS failure or connection refused), so the live "
+def network_blocked_message(blocked, hosts, note="", causes=None):
+    """causes: what the failed requests saw (_net_cause), named in the message."""
+    return ("NETWORK BLOCKED: this environment cannot reach %s (%s), so the live "
             "planner cannot run here. This is not an address problem. Either allow these domains in this "
             "environment's network settings (on claude.ai, the code execution network access setting):\n  %s\n%s"
             "or follow the manual method in SKILL.md: use a tool or connector that can request any URL (an "
             "HTTP, fetch or scraping connector; built-in web-fetch tools often refuse URLs you build), and "
             "plan from the region notes and the hand-entered timetables in the region files meanwhile."
-            % (", ".join(blocked), "\n  ".join(hosts), (note + "\n") if note else ""))
+            % (", ".join(blocked), "; ".join(causes) if causes else "no connection", "\n  ".join(hosts),
+               (note + "\n") if note else ""))
 
 
 def check_network(hosts, timeout=6):
-    """{host: 'ok' | 'blocked: reason'} using one light request per host."""
+    """{host: 'ok' | 'tls failed: error' | 'blocked: cause (error)'} using one light request per host."""
     out = {}
     for h in hosts:
         try:
@@ -673,7 +724,12 @@ def check_network(hosts, timeout=6):
             urllib.request.urlopen(req, timeout=timeout).close()
             out[h] = "ok"
         except Exception as e:  # noqa: BLE001
-            out[h] = ("blocked: %s" % e) if _unreachable(e) else "ok"
+            if _tls_failed(e):
+                out[h] = "tls failed: %s" % e
+            elif _unreachable(e):
+                out[h] = "blocked: %s (%s)" % (_net_cause(e), e)
+            else:
+                out[h] = "ok"   # the host answered (an HTTP error, even a dropped connection)
             if isinstance(e, urllib.error.HTTPError):
                 close_quietly(e)
         finally:
@@ -683,7 +739,7 @@ def check_network(hosts, timeout=6):
 
 def preflight(args, regions, warnings):
     """Tell 'network blocked' apart from 'address not found' before anything else fails. Returns
-    {host: 'ok' | 'blocked: reason'} for the hosts it checked ({} when the trip needs no network)."""
+    check_network's status for the hosts it checked ({} when the trip needs no network)."""
     local_only = (args.region == "none" and args.routing == "estimate" and not args.crosscheck
                   and all(os.path.exists(FEED_ID_RE.sub(r"\2", s)) or os.path.exists(s) for s in (args.feed or []))
                   and LATLON_RE.match(args.origin) and LATLON_RE.match(args.dest or ""))
@@ -691,11 +747,18 @@ def preflight(args, regions, warnings):
         return {}
     status = check_network(["files.mobilitydatabase.org", "nominatim.openstreetmap.org", "router.project-osrm.org"])
     blocked = [h for h, s in status.items() if s != "ok"]
+    tls = [h for h in blocked if status[h].startswith("tls failed")]
     if len(blocked) == len(status):
+        if tls:   # certificates, not the allow-list: allowing the hosts again would not help
+            raise SystemExit(tls_failed_message(tls))
         hosts, note = trip_domains(args, regions)
-        raise SystemExit(network_blocked_message(blocked, hosts, note))
-    if blocked:
-        warnings.append("some services are unreachable from here: %s" % ", ".join(blocked))
+        causes = sorted({s[len("blocked: "):].split(" (", 1)[0] for s in status.values() if s.startswith("blocked: ")})
+        raise SystemExit(network_blocked_message(blocked, hosts, note, causes=causes))
+    if tls:
+        warnings.append("the certificate check failed for %s. %s" % (", ".join(tls), TLS_HELP))
+    if len(blocked) > len(tls):
+        warnings.append("some services are unreachable from here: %s"
+                        % ", ".join(h for h in blocked if h not in tls))
     return status
 
 
@@ -4485,6 +4548,8 @@ def main(argv=None):
         blocked = [h for h in hosts if status[h] != "ok"]
         print("\n%d of %d reachable.%s" % (len(hosts) - len(blocked), len(hosts),
                                             " Allow the blocked ones to run the live planner." if blocked else ""))
+        if any(status[h].startswith("tls failed") for h in hosts):
+            print(TLS_HELP)
         return 1 if blocked else 0
     if not args.origin:
         ap.error("--origin is required")

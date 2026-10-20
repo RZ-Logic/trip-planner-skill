@@ -217,7 +217,7 @@ set -a; . ./.env; set +a
 
 Never paste a key into the chat with the agent.
 
-On Windows, Python trusts only root certificates Windows has already downloaded. If the first TomTom call fails with a certificate error, one request through Windows loads the root: `Invoke-WebRequest https://api.tomtom.com`.
+On Windows, Python trusts only root certificates Windows has already downloaded. If a call fails with a certificate error (the planner stops with `TLS FAILED`, or `--check-network` shows `tls failed`), one request through Windows to that host loads the root, for example `Invoke-WebRequest https://api.tomtom.com`.
 
 ---
 

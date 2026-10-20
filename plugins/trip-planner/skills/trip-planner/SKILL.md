@@ -81,6 +81,8 @@ python3 ${CLAUDE_SKILL_DIR}/scripts/trip_hubs.py --origin "ORIGIN" --dest "DESTI
 - **`NETWORK BLOCKED`**: the sandbox cannot reach the timetable and routing hosts (not an address
   problem). Ask the user to allow the listed domains (`--check-network` re-checks) and meanwhile use the
   manual method (end of Step 3).
+- **`TLS FAILED`**: this computer's Python cannot verify HTTPS certificates. Pass on the fix the message
+  gives; it is not an allow-list or address problem.
 
 Read the output in this order:
 1. `COVERAGE`: stops and hubs checked. Report it.
@@ -235,6 +237,7 @@ python3 ${CLAUDE_SKILL_DIR}/scripts/drive_plan.py --origin "ORIGIN" --dest "DEST
 - **`NETWORK BLOCKED`**: ask the user to allow the listed domains (`--check-network`). With addresses
   the script stops at geocoding (rerun with `lat,lon`); with coordinates it still prints the curated
   parking. Meanwhile use the manual method in `references/driving.md`.
+- **`TLS FAILED`**: Python cannot verify HTTPS certificates; pass on the fix the message gives.
 
 Answer with one recommendation, then a short table:
 

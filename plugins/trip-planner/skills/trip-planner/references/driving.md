@@ -62,7 +62,9 @@ Addresses work like `trip_hubs.py` (the same `ADDRESS NOT PRECISE` rule). Pass `
      the difference in leave-by times, which use the planning allowance, not a shorter drive;
    - arrive-by round trip: a combined figure, a later leave-by plus the drive back, as the output says.
 
-   The user can then decide whether the time is worth the money.
+   The user can then decide whether the time is worth the money. A route whose charging stops cannot
+   be planned (or whose drive back cannot) is not recommended when another route's can; `WARNINGS`
+   names it.
 4. `ARRIVAL`: the leave-by time (arrive-by mode), or the expected arrival. Both include parking
    search, the walk to the door and any charging. Planning uses the "allow" time plus 5 minutes spare.
 5. `PARKING`: up to five options in the text (eight in `--json`), ordered by stay fit, walk limit and

@@ -2398,6 +2398,17 @@ def _plan(args):
                     " and ".join(it["letter"] for it in late),
                     " / ".join(dc.fmt_clock(it["route"]["leave_by"]) for it in late),
                     "it is" if len(late) == 1 else "they are"))
+
+        # a route whose charging stops (or drive back) cannot be planned is not recommended while another's can
+        def no_charge(it):
+            ch_ = energy[id(it["route"])].get("charging") or {}
+            back_ = returns.get(id(it["route"])) or {}
+            return ch_.get("feasible") is False or bool(back_.get("charging_infeasible"))
+        stuck = [it for it in cands if no_charge(it)]
+        if stuck and len(stuck) < len(cands):
+            cands = [it for it in cands if it not in stuck]
+            notes.append("%s cannot be driven on the fast chargers found (see CHARGING), so %s not recommended" % (
+                " and ".join(it["letter"] for it in stuck), "it is" if len(stuck) == 1 else "they are"))
         t = trade_off(cands, args.value_of_time, args.transponder, args.round_trip,
                       fee_included=count_fee and any(it["fee"] for it in its), arrive_by=arrive_by)
         if not count_fee and not args.transponder and t.get("fee_note"):

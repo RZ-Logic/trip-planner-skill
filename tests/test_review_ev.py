@@ -126,5 +126,34 @@ class TrimBatteryTest(tcp.CarCase):
         self.assertLess(car["battery_kwh"], 45)
 
 
+class InfeasibleRouteTest(unittest.TestCase):
+    """ext-1: a route whose charging cannot be planned is not recommended when another route's can."""
+    O, D = (43.65, -79.38), (45.42, -75.69)
+
+    def plan(self, fracs):
+        o, d = self.O, self.D
+
+        def get_routes(o_, d_, depart, opts, warnings, arrive_at=None):
+            return [tdp.fake_retime(tdp.make_route("fastest", o, d, 400.0, 4 * 3600), depart, opts),
+                    tdp.fake_retime(tdp.make_route("toll-free", o, d, 420.0, 5 * 3600), depart, opts)]
+        with tdp.Env(), mock.patch.dict(sys.modules, {"ev_charging": real_ev(fracs)}):
+            sys.modules["drive_route"].get_routes = get_routes
+            res = dp.plan(tdp.args_for("--origin", "%f,%f" % o, "--dest", "%f,%f" % d, "--weather", "clear",
+                                       "--incidents", "off", "--depart", "2026-10-16 08:00", "--vehicle", "ev",
+                                       "--ev-model", "generic", "--soc", "80", "--park-and-ride", "off"))
+            return res, dp.render(res)
+
+    def test_feasible_route_wins(self):
+        res, text = self.plan(lambda km: [] if km < 410 else [100 / 420., 200 / 420., 300 / 420.])
+        self.assertEqual(res["recommended"], "B")
+        self.assertTrue(res["charging"]["feasible"])
+        self.assertTrue(any("A cannot be driven on the fast chargers found" in w for w in res["warnings"]),
+                        res["warnings"])
+        # every route infeasible: keep them all, the fastest stays recommended, no such warning
+        res, text = self.plan(lambda km: [])
+        self.assertEqual(res["recommended"], "A")
+        self.assertFalse(any("cannot be driven on the fast chargers" in w for w in res["warnings"]))
+
+
 if __name__ == "__main__":
     unittest.main()

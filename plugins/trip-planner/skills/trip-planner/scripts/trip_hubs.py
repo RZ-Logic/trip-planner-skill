@@ -30,6 +30,7 @@ import os
 import re
 import sys
 import time
+import unicodedata
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -458,6 +459,24 @@ def check_geocode(query, found, label, warnings):
                         % (label, query, found, ", ".join(missing)))
 
 
+def _fold(text):
+    """Lowercase without accents, so 'Montréal' matches 'montreal'."""
+    return "".join(c for c in unicodedata.normalize("NFKD", text or "") if not unicodedata.combining(c)).lower()
+
+
+def check_place_words(query, props, label, found, warnings):
+    """Photon only: warn when the town, province or country words of the request (the comma parts after the first)
+    are not in Photon's place fields, so a same-named street in another town is flagged."""
+    words = [w for part in query.split(",")[1:] for w in re.findall(r"[a-z]{3,}", _fold(part))
+             if w not in STREET_WORDS and w != "usa"]
+    places = _fold(" ".join(str(props[k]) for k in ("name", "city", "town", "locality", "district", "county",
+                                                    "state", "country", "postcode") if props.get(k)))
+    missing = [w for w in words if w not in places]
+    if missing:
+        warnings.append("%s %r was geocoded to %r, which does not mention %s. Confirm the spot or pass 'lat,lon'."
+                        % (label, query, found, ", ".join(missing)))
+
+
 def reverse_place_info(lat, lon, warnings):
     """Town names, country code and state around a point. Town names match catalog feeds that have no
     bounding box; country and state rank large feeds."""
@@ -543,6 +562,9 @@ def tls_failed_message(hosts):
     return "TLS FAILED: the certificate check failed for %s. %s" % (", ".join(hosts), TLS_HELP)
 
 
+PHOTON_MAX_FROM_STREET_M = 5000   # tuning: a Photon house farther than this from Nominatim's street is elsewhere
+
+
 def _geocode(text, label, warnings, strict=True):
     nom, blocked, tls, causes = None, [], [], []
     try:
@@ -561,13 +583,24 @@ def _geocode(text, label, warnings, strict=True):
     if nom and (nom.get("addresstype") in PRECISE_GEOCODE or nom.get("category") in PRECISE_GEOCODE):
         return float(nom["lat"]), float(nom["lon"]), nom.get("display_name", text)
     try:
-        url = "https://photon.komoot.io/api/?" + urllib.parse.urlencode({"q": text, "limit": 1})
+        q = {"q": text, "limit": 1}
+        if nom:   # bias toward the street Nominatim found (3 decimals: the street, not a door)
+            q.update(lat="%.3f" % float(nom["lat"]), lon="%.3f" % float(nom["lon"]))
+        url = "https://photon.komoot.io/api/?" + urllib.parse.urlencode(q)
         feats = json.loads(http_get(url, timeout=20, min_interval=1.0)).get("features") or []
         if feats and feats[0]["properties"].get("type") in ("house", "building", "amenity"):
             lon, lat = feats[0]["geometry"]["coordinates"]
             p = feats[0]["properties"]
-            name = ", ".join(str(p[k]) for k in ("housenumber", "street", "city") if p.get(k)) or text
-            return float(lat), float(lon), name
+            town = p.get("city") or p.get("town") or p.get("locality") or p.get("district")
+            name = ", ".join(str(x) for x in (p.get("housenumber"), p.get("street"), town, p.get("state"),
+                                              p.get("country")) if x) or text
+            far = haversine_m(float(lat), float(lon), float(nom["lat"]), float(nom["lon"])) if nom else 0.0
+            if far > PHOTON_MAX_FROM_STREET_M:   # a same-named street elsewhere: fall back to the street below
+                warnings.append("Photon's house match for %s (%s) is %.0f km from the street Nominatim found (%s), "
+                                "so it was not used." % (label, name, far / 1000.0, nom.get("display_name", "")))
+            else:
+                check_place_words(text, p, label, name, warnings)
+                return float(lat), float(lon), name
     except Exception as e:  # noqa: BLE001
         if _tls_failed(e):
             tls.append("photon.komoot.io")

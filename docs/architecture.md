@@ -10,7 +10,7 @@ Adapted from the *"Where is the AI?"* table in [FinAgent OS](https://github.com/
 | # | Stage | Deterministic? | What it does |
 |---|---|:-:|---|
 | 1 | **Pin down the request** | ❌ agent | Origin, destination, time, priority, payment, and for drives the car. Asks once; if the user declines, states the assumption the script prints. |
-| 2 | **Geocoding** | ✅ | Nominatim, then Photon. A house number that matches only the street stops the run (`ADDRESS NOT PRECISE`), because a point a kilometre off changes which hubs are in range. |
+| 2 | **Geocoding** | ✅ | Nominatim, then Photon biased to Nominatim's street; a Photon house more than 5 km from that street is not used. A house number that matches only the street stops the run (`ADDRESS NOT PRECISE`), because a point a kilometre off changes which hubs are in range. |
 | 3 | **Data selection** | ✅ | Region files, bundled stop maps, MobilityDatabase discovery. Region files claim only points in their own country (reverse geocoded at town level). Feeds with no stops near the trip are never downloaded. Bundled data (stop maps, hand-entered timetables, curated parking, the car index) keeps working when the network is blocked. |
 | 4 | **Enumeration** | ✅ | One backward profile connection scan over GTFS; every hub in ride or drive range checked within the search area. For drives: fastest, toll-free and alternative routes, plus every parking source near the door. |
 | 5 | **Times** | ✅ | OSRM or Valhalla free-flow times through a calibrated time-of-day model, or TomTom live traffic with a key. Plan times use a conservative planning allowance. |

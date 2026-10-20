@@ -72,7 +72,7 @@ Operator trip planners (for example GO, MiWay) are authoritative for that operat
 | Valhalla (FOSSGIS) | https://valhalla1.openstreetmap.de/sources_to_targets | No | POST JSON; models turn costs, slightly slower times than OSRM. |
 | OSRM route (manual method) | https://router.project-osrm.org/route/v1/driving/LON1,LAT1;LON2,LAT2?overview=false&alternatives=3 | No | One route's free-flow `duration` (seconds) and `distance` (metres) per alternative. For a toll-free route use Valhalla's `/route` with `"costing_options":{"auto":{"exclude_tolls":true}}`. |
 | Nominatim | https://nominatim.openstreetmap.org/search | No | 1 request per second, identifying User-Agent, cache results. Often returns only the street for suburban house numbers. |
-| Photon | https://photon.komoot.io/api/ | No | Often finds the house when Nominatim only finds the street. |
+| Photon | https://photon.komoot.io/api/ | No | Often finds the house when Nominatim only finds the street. The script sends Nominatim's street as `lat`/`lon` bias parameters and does not use a house more than 5 km from it. |
 
 If geocoding returns only a street, the origin can be off by kilometres, which changes which hubs
 are in range. Ask the user for a dropped pin or `lat,lon`.

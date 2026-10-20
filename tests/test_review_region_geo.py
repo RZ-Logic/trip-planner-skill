@@ -277,5 +277,49 @@ class CrossCheckMargin(unittest.TestCase):
         self.assertFalse(any("Transitous finds a better connection" in w for w in res["warnings"]), res["warnings"])
 
 
+# ---------------------------------------------------------------------------------------- hubs-pricing-io-7
+class PhotonFallback(unittest.TestCase):
+    """Photon's house match is biased to the street Nominatim found and is not used when it is far from it; its
+    label names the province and country, and a Photon match that misses the query's town is flagged."""
+    STREET = {"lat": "43.51", "lon": "-79.88", "addresstype": "road", "category": "highway",
+              "display_name": "Santa Maria Boulevard, Milton, Ontario, Canada"}
+
+    def geocode(self, nominatim, lat, lon, city, state, country, strict):
+        photon = {"features": [{"geometry": {"coordinates": [lon, lat]},
+                                "properties": {"type": "house", "housenumber": "805", "street": "Santa Maria Boulevard",
+                                               "city": city, "state": state, "country": country}}]}
+        asked = []
+
+        def http_get(url, *a, **k):
+            asked.append(url)
+            return json.dumps(photon if "photon.komoot.io" in url else nominatim).encode()
+        w = []
+        with mock.patch.object(th, "http_get", side_effect=http_get):
+            try:
+                return th.resolve_place("805 Santa Maria Blvd, Milton", "origin", w, strict=strict), w, asked
+            except SystemExit as e:
+                return str(e), w, asked
+
+    def test_far_photon_house_is_not_used(self):
+        got, w, asked = self.geocode([self.STREET], 39.78, -89.65, "Springfield", "Illinois", "United States",
+                                     strict=True)
+        self.assertIn("ADDRESS NOT PRECISE", got)
+        self.assertTrue(any(x.startswith("Photon's house match for origin") and "km from the street" in x
+                            for x in w), w)
+        q = urllib.parse.parse_qs(urllib.parse.urlsplit(next(u for u in asked if "photon" in u)).query)
+        self.assertEqual((q["lat"], q["lon"]), (["43.510"], ["-79.880"]))
+
+    def test_near_photon_house_label_has_province_and_country(self):
+        got, w, _asked = self.geocode([self.STREET], 43.5125, -79.8790, "Milton", "Ontario", "Canada", strict=True)
+        self.assertEqual(got, (43.5125, -79.879, "805, Santa Maria Boulevard, Milton, Ontario, Canada"))
+        self.assertEqual(w, [])
+
+    def test_photon_only_match_in_another_town_is_flagged(self):
+        got, w, asked = self.geocode([], 39.78, -89.65, "Springfield", "Illinois", "United States", strict=False)
+        self.assertEqual(got[:2], (39.78, -89.65))
+        self.assertTrue(any("does not mention milton" in x for x in w), w)
+        self.assertNotIn("lat=", next(u for u in asked if "photon" in u))   # nothing to bias toward
+
+
 if __name__ == "__main__":
     unittest.main()

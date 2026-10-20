@@ -19,8 +19,10 @@ import io
 import os
 import socket
 import ssl
+import subprocess
 import sys
 import tempfile
+import threading
 import time
 import unittest
 import urllib.error
@@ -275,6 +277,48 @@ class OfflinePlan(unittest.TestCase):
         self.assertNotIn(":\n  \n", msg)
         self.assertNotIn("allow these domains", msg)
         self.assertIn(":\n  b\n", th.network_blocked_message(["a"], ["b"]))
+
+
+class GuardProxy(unittest.TestCase):
+    """tests-ci-eng-8: under the CI network guard, a proxy on the machine itself must not carry a request out. The
+    guard allows loopback connections, and urllib sends every request to HTTP(S)_PROXY when one is set."""
+
+    CHILD = ("import urllib.request, urllib.error\n"
+             "try:\n"
+             "    urllib.request.urlopen('http://example.invalid/', timeout=5); print('REACHED')\n"
+             "except urllib.error.URLError as e:\n"
+             "    print('refused', 'TRIP_PLANNER_NO_NETWORK' in str(e.reason))\n")
+
+    def test_loopback_proxy_does_not_carry_requests_out(self):
+        srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.addCleanup(srv.close)
+        srv.bind(("127.0.0.1", 0))
+        srv.listen(1)
+        srv.settimeout(15)
+        seen = []
+
+        def proxy():   # a permissive proxy: answers whatever it is asked
+            try:
+                conn, _addr = srv.accept()
+            except (socket.timeout, OSError):
+                return
+            with conn:
+                seen.append(conn.recv(200))
+                conn.sendall(b"HTTP/1.0 200 OK\r\nContent-Length: 2\r\n\r\nok")
+
+        t = threading.Thread(target=proxy, daemon=True)
+        t.start()
+        env = {k: v for k, v in os.environ.items()
+               if k.lower() not in ("http_proxy", "https_proxy", "all_proxy", "no_proxy")}
+        env.update({"PYTHONPATH": os.path.join(ROOT, "tools", "ci"), "TRIP_PLANNER_NO_NETWORK": "1",
+                    "HTTP_PROXY": "http://127.0.0.1:%d" % srv.getsockname()[1]})
+        r = subprocess.run([sys.executable, "-c", self.CHILD], env=env, capture_output=True, text=True, timeout=60)
+        srv.close()
+        t.join(5)
+        self.assertEqual(r.stdout.strip(), "refused True", (r.stdout, r.stderr))
+        self.assertEqual(r.returncode, 1, r.stderr)
+        self.assertIn("example.invalid:80", r.stderr)
+        self.assertEqual(seen, [])
 
 
 if __name__ == "__main__":

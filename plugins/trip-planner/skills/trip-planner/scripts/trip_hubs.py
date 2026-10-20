@@ -175,6 +175,17 @@ def safe_text(s):
                                                             or unicodedata.category(ch) in _HIDDEN_CATEGORIES))
 
 
+OSM_NAME_MAX = 80
+
+
+def osm_name_cut(s, n=OSM_NAME_MAX):
+    """An OpenStreetMap name or operator as printed: anyone can edit it, so at most n characters ('...' when
+    cut). None stays None."""
+    if s is None or len(s) <= n:
+        return s
+    return s[:n - 3].rstrip() + "..."
+
+
 def safe_url(url):
     """A feed URL fit to print: a user:password@ part is dropped and query values are hidden, since agency feeds
     often carry an API key there. Local paths come back unchanged. For display only: downloads use the real URL."""
@@ -2957,7 +2968,8 @@ def osm_lots(elements):
             continue
         pr = tags.get("park_ride", "").strip().lower()
         out.append({"id": "%s/%s" % (el.get("type", "node"), el.get("id")), "lat": float(lat), "lon": float(lon),
-                    "name": tags.get("name") or tags.get("operator") or "", "park_ride": bool(pr) and pr != "no",
+                    "name": osm_name_cut(tags.get("name") or tags.get("operator") or ""),
+                    "park_ride": bool(pr) and pr != "no",
                     "fee": tags.get("fee", "").strip().lower(), "charge": tags.get("charge", ""),
                     "maxstay_min": _minutes(tags.get("maxstay")), "capacity": tags.get("capacity")})
     return out

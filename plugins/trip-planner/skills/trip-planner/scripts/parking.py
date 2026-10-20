@@ -2651,8 +2651,9 @@ def osm_lots(lat, lon, arrive, stay_min, holidays, radius_m, height_m, warnings,
                 name = "%s facility lot%s" % (tags["operator"], (", " + addr) if addr else "")
             if (tags.get("fee") or "").lower() == "yes" and rule is None:
                 notes.append("paid (fee=yes), no rate in OSM")
+            name = th.osm_name_cut(name)
             if tags.get("operator") and tags["operator"] not in name:
-                notes.append("operator %s" % tags["operator"])
+                notes.append("operator %s" % th.osm_name_cut(tags["operator"]))
             conf, stale_yr = "osm", None
             yr = re.search(r"\b(19|20)(\d\d)\b", tags.get("charge") or "")
             if yr and int(yr.group(0)) <= arrive.year - 2:
@@ -2683,9 +2684,10 @@ def osm_lots(lat, lon, arrive, stay_min, holidays, radius_m, height_m, warnings,
             lot["_street"] = (tags.get("addr:street") or "").strip()
             lot["_addr"] = " ".join(x.strip() for x in (tags.get("addr:housenumber"), tags.get("addr:street")) if x and x.strip())
             lot["_city"] = (tags.get("addr:city") or "").strip() or city_of(lat, lon)
+            # anyone can edit these tags: shown as "OSM-supplied, unverified", never the check link (check_hint)
             site = tags.get("website") or tags.get("contact:website") or tags.get("url")
             if site and re.match(r"https?://", site) and not _no_fetch(site):
-                lot["_website"] = site
+                lot["_osm_website"] = site
             # opening hours: a lot closed during the stay does not fit; the raw value is shown only in a safe
             # character set, and a value this reader cannot read is noted (and flagged on the check line)
             shown = oh_raw if OH_TEXT_RE.match(oh_raw) else None
@@ -2886,7 +2888,10 @@ def check_hint(lot):
     "free per OpenStreetMap, unverified" | "price per OpenStreetMap, unverified" | "old price (...)" |
     "price not confirmed" (low confidence, or a curated price_confidence of low), with
     "; opening hours not read" added when the lot's OSM opening_hours could not be read,
-    "url": the operator's own page or None, "search": a web search string or None}. Green P: the url is the
+    "url": an official page or None, "search": a web search string or None, and "osm_url" when OpenStreetMap
+    tags a website}. The url comes only from official or curated data: a city layer's lot page, a curated or
+    official source_url, Green P's page, or an unnamed or brand-only OSM lot's map entry; an OSM website tag
+    (anyone can edit it) is only "osm_url", printed as "OSM-supplied, unverified". Green P: the url is the
     carpark's page from the 2019 data (43, 283 and the toronto.open pages are live; some 2019 addresses are a 404
     now, so the search is the fallback); the page is rendered with JavaScript (toronto.page_fetch_note). Other
     lots: the search names the lot, its street and city ('<name> <street> Toronto parking rates'); a brand-only
@@ -2932,7 +2937,10 @@ def check_hint(lot):
         search = "%s parking rates" % _join(lot.get("name"), addr, city) if addr else None
     else:
         search = "%s parking rates" % _join(lot.get("name"), addr, city)
-    return {"why": why, "url": url or None, "search": search}
+    out = {"why": why, "url": url or None, "search": search}
+    if lot.get("_osm_website"):
+        out["osm_url"] = lot["_osm_website"]
+    return out
 
 
 def check_list(options, top=5, limit=3):
@@ -2950,6 +2958,11 @@ def check_list(options, top=5, limit=3):
     return sorted(out, key=lambda h: h["n"])
 
 
+def osm_link(url):
+    """An OSM website tag as printed: labelled, so it is never read as the lot's official page."""
+    return "OSM-supplied, unverified: %s" % url
+
+
 def check_text(items):
     """One line for the text output: '#1 Green P ...: 2019 price, search "..."; #3 ...: price unknown, https://...'."""
     out = []
@@ -2957,6 +2970,8 @@ def check_text(items):
         how = c.get("url") or ('search "%s"' % c["search"] if c.get("search") else "")
         if c.get("url") and c.get("search"):
             how = '%s or search "%s"' % (c["url"], c["search"])
+        if c.get("osm_url"):
+            how = "%s (%s)" % (how, osm_link(c["osm_url"])) if how else osm_link(c["osm_url"])
         out.append("#%d %s: %s%s" % (c["n"], c.get("name") or "parking", c["why"], ", " + how if how else ""))
     return "; ".join(out)
 

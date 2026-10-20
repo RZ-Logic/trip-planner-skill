@@ -3127,6 +3127,9 @@ def check_text(items):
             how = c["url"]
         elif c.get("search"):
             how = 'search "%s"' % c["search"]
+        if c.get("osm_url"):   # an OSM website tag: shown labelled, never the check link (parking.check_hint)
+            osm = "OSM-supplied, unverified: %s" % c["osm_url"]
+            how = "%s (%s)" % (how, osm) if how else osm
         out.append("#%d %s: %s%s" % (c.get("n") or 0, c.get("name") or "parking", c.get("why") or "check",
                                      ", " + how if how else ""))
     return "; ".join(out)

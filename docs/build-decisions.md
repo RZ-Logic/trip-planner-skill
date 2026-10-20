@@ -25,7 +25,7 @@ Planning a Sunday at Toronto Island, the planner's top pick was a Green P carpar
 - known closures are dropped;
 - lots missing from current data are flagged "may have closed" and ranked below the unflagged priced lots (a priced flagged lot still outranks one with an unknown price, so the output marks it);
 - the "check before you go" line lists the first three flagged lots among the top five, plus #1 and the first lot that may have closed; in `--json` every flagged option carries a `check` field;
-- `SKILL.md` tells the agent to verify the recommended lot on the operator's page, and never to hand off a flagged lot's link until it is shown to be open.
+- `SKILL.md` tells the agent to verify the recommended lot on its official or curated page, else by web search, and never to hand off a flagged lot's link until it is shown to be open; an OpenStreetMap website tag, which anyone can edit, is shown only as "OSM-supplied, unverified", never as the page to check.
 
 ## 6. A default car is an assumption, so the output says so and the agent asks
 

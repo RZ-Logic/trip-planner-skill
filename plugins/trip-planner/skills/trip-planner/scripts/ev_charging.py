@@ -416,7 +416,7 @@ def norm_osm(e):
     lon = e.get("lon", (e.get("center") or {}).get("lon"))
     if lat is None or lon is None:
         return None
-    name = tags.get("name") or tags.get("brand") or tags.get("operator") or "charging station"
+    name = th.osm_name_cut(tags.get("name") or tags.get("brand") or tags.get("operator") or "charging station")
     hay = " ".join(tags.get(k, "") for k in ("name", "brand", "operator", "network")).lower()
     units, assumed = {}, False
     for sock, code in OSM_SOCKETS.items():
@@ -533,7 +533,8 @@ def stations_near(lat, lon, warnings, opts=None):
             if la is None:
                 continue
             n = int(tags.get("capacity", "1")) if tags.get("capacity", "").isdigit() else 1
-            s = {"id": "osm:%s" % e.get("id"), "name": tags.get("name") or tags.get("operator") or "charging station",
+            s = {"id": "osm:%s" % e.get("id"),
+                 "name": th.osm_name_cut(tags.get("name") or tags.get("operator") or "charging station"),
                  "network_code": tags.get("operator") or tags.get("network") or "", "lat": float(la), "lon": float(lo),
                  "address": "", "units": {"J1772": (None, n)}, "pricing": tags.get("charge", ""), "access_text": "",
                  "dc_num": 0, "l2_num": n, "status": "E", "source": "OSM", "assumed": True}

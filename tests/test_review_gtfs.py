@@ -356,6 +356,18 @@ class ServiceWarningTests(unittest.TestCase):
         self.assertNotIn("trips are missing", warn[0])
         self.assertNotIn("test", net.idle_stops)
 
+    def test_next_day_trips_after_midnight_are_not_called_last_night(self):
+        # follow-up: the file starts on Monday, so Sunday's 00:30 (+1d) is Monday's own trip, not Saturday night's
+        p = feed([("N", "WK", "n1", "night")],
+                 [("n1", "00:30:00", "00:30:00", "A", 1, 0, 0), ("n1", "01:00:00", "01:00:00", "C", 2, 0, 0)],
+                 calendar=[("WK", 1, 1, 1, 1, 1, 0, 0, "20261019", "20271231")])
+        net, scan, idx = scan_for(p, hms(22, 0), hms(26, 0), day=dt.date(2026, 10, 18))
+        self.assertEqual([(c[0], c[1]) for c in net.conns], [(hms(24, 30), hms(25, 0))])
+        warn = [w for w in net.warnings if "NO service on 2026-10-18" in w]
+        self.assertEqual(len(warn), 1, net.warnings)
+        self.assertNotIn("night before", warn[0])
+        self.assertIn("next day", warn[0])
+
 
 class FootpathTests(unittest.TestCase):
     """hubs-engine-10, hubs-pricing-io-12: --footpath-m 0 means no walking transfers, only transfers.txt pairs."""

@@ -1850,6 +1850,7 @@ def load_feed(net, fid, label, path, day, t0, t_end, holidays=None, local_tz=Non
 
     wrapped_n = bad_order = 0
     n0 = len(net.conns)
+    added_by = dict.fromkeys(offsets, 0)   # connections per service day, for the NO-service warning
     for tid, trows in per_trip.items():
         trows.sort(key=lambda x: x[0])
         trows, wrapped = fix_time_order(trows)   # before interpolation, or untimed stops fill in backwards
@@ -1872,7 +1873,7 @@ def load_feed(net, fid, label, path, day, t0, t_end, holidays=None, local_tz=Non
                     t += step
         for shift, hw in runs:
             for o in trip_off[tid]:
-                ti = None
+                ti, n1 = None, len(net.conns)
                 fx = run_fix(o, trows[0][2] + shift) if run_fix else 0   # one clock correction per run
                 for k in range(len(trows) - 1):
                     r0, r1 = trows[k], trows[k + 1]
@@ -1902,15 +1903,19 @@ def load_feed(net, fid, label, path, day, t0, t_end, holidays=None, local_tz=Non
                         net.request[(ti, k)] = flag
                     board = r0[4] and dep <= t_end   # ride on past the window end, but board only inside it
                     net.conns.append((dep, r1[1] + o + shift + fx, s0, s1, ti, board, r1[5], k))
-    # no service today, but last night's trips can still run after midnight: warn only when nothing of the feed
-    # is in the window, or when the file does not cover the day at all
+                added_by[o] += len(net.conns) - n1
+    # no service today, but last night's or the next day's trips can still run in the window: warn only when
+    # nothing of the feed is in the window, or when the file does not cover the day at all
     added = len(net.conns) - n0
     covered = bool(span[0] and span[0] <= day <= span[1])
+    night = added_by[offsets[0]]   # with no service today, the rest are the next day's
     if not act[day] and not substituted and (not added or not covered):
         net.warnings.append("%s has NO service on %s (file covers %s to %s). %s" % (
             label, day.isoformat(), info["service_from"], info["service_to"],
             "Its trips are missing from this answer." if not added
-            else "Only its trips from the night before, running after midnight, are used."))
+            else "Only its trips from the night before, running after midnight, are used." if night == added
+            else "Only its trips from the next day, after midnight, are used." if night == 0
+            else "Only its trips from the night before and the next day that fall in this window are used."))
     if not act[day] and not added:
         net.idle_stops[label] = net.feed_stops[label]
     if wrapped_n:

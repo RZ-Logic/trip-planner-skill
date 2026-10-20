@@ -4,7 +4,7 @@
  {"id": "niagara-falls", "name": "Niagara Falls (Niagara Parks, Clifton Hill, Fallsview)",
   "match": {"lat": 43.088, "lon": -79.072, "radius_km": 4.5},
   "season": {"from": "01-01", "to": "12-31", "off_season": "free", "note": "Niagara Parks lots are paid all year; Lot C Rapidsview is seasonal (closed in winter); no overnight parking at any Niagara Parks lot (00:00 to 06:00)"},
-  "source": "https://www.niagaraparks.com/visit/plan/parking/", "source_date": "2026 (page and 2026 variable price chart, checked 2026-10-10)", "confidence": "curated",
+  "source": "https://www.niagaraparks.com/visit/plan/parking/", "source_date": "2026 (page and 2026 variable price chart, checked 2026-10-10)", "confidence": "curated", "rate_year": 2026,
   "rules": [
    "Niagara Parks Lot A (Falls), Lot B (Floral Showhouse) and Queen Victoria Place use a variable daily price set by month in 2026: Jan $20 or $36, Feb $25 or $30, Mar $25, Apr $25 or $30, May and Jun $35 or $40, Jul and Aug $40, Sep $30 or $40, Oct $30, Nov $25 or $30, Dec $30 or $40. Priced here at the higher figure for the month; check the chart for the day. January is usually $20; the $36 applies only on the chart's marked dates (likely New Year's).",
    "Rapidsview Lot C (4555 Upper Rapids Blvd area): $10 for the day plus WEGO, $16 per adult and $12 per child 3 to 12 (24 h pass), about 8 min on the WEGO Green Line to Table Rock Centre; cheaper than Lot A only for a solo driver; seasonal, closes for winter (dates not published).",
@@ -116,7 +116,7 @@
  {"id": "toronto-zoo", "name": "Toronto Zoo",
   "match": {"lat": 43.819852, "lon": -79.184937, "radius_km": 1.6},
   "season": {"from": "01-01", "to": "12-31", "off_season": "free", "note": "zoo open all year"},
-  "source": "https://www.torontozoo.com/hostyourevent/admission", "source_date": "2026 (group admission page lists 2026 parking)", "confidence": "curated",
+  "source": "https://www.torontozoo.com/hostyourevent/admission", "source_date": "2026 (group admission page lists 2026 parking)", "confidence": "curated", "rate_year": 2026,
   "rules": ["Zoo parking $20.00 per vehicle (paid on site); zoo members check their membership level for parking.",
             "Free alternative: Rouge National Urban Park Finch Meander trail lot, about 1.1 km from the zoo entrance by road; meant for trail users."],
   "reservation": {"required": false, "text": "", "url": "", "lead_days": 0},
@@ -160,7 +160,7 @@
  {"id": "cobourg", "name": "Cobourg (Victoria Park beach, harbour, downtown)",
   "match": {"lat": 43.9585, "lon": -78.164, "radius_km": 1.5},
   "season": {"from": "01-01", "to": "12-31", "off_season": "free", "note": "downtown rates all year; waterfront high season May 15 to Sep 14, low season Sep 15 to May 14 (first 3 h free, then $2.50/h, $20/day)"},
-  "source": "https://media-001-ca.cdn.govstack.com/cobourg-008-ca/media/hitb4zod/municipalparkingbrochure2026_4fold_85x14_updated28jul2026.pdf", "source_date": "2026 brochure (updated 2026-07-28)", "confidence": "curated",
+  "source": "https://media-001-ca.cdn.govstack.com/cobourg-008-ca/media/hitb4zod/municipalparkingbrochure2026_4fold_85x14_updated28jul2026.pdf", "source_date": "2026 brochure (updated 2026-07-28)", "confidence": "curated", "rate_year": 2026,
   "rules": [
    "Waterfront lots and streets, high season May 15 to Sep 14: $5/h or $40/day Daily Waterfront Pass; no free parking.",
    "Waterfront low season Sep 15 to May 14: first 3 h free, then $2.50/h, $20/day.",
@@ -204,7 +204,7 @@
  {"id": "sandbanks", "name": "Sandbanks Provincial Park (Outlet, Dunes and Sandbanks beaches)",
   "match": {"lat": 43.905, "lon": -77.245, "radius_km": 5.0},
   "season": {"from": "01-01", "to": "12-31", "off_season": "free", "note": "day-use permit needed all year; reservations matter most in summer"},
-  "source": "https://www.ontarioparks.ca/fees/dayuse/2026", "source_date": "2026 (fees effective 2026-04-01 to 2027-03-31)", "confidence": "curated",
+  "source": "https://www.ontarioparks.ca/fees/dayuse/2026", "source_date": "2026 (fees effective 2026-04-01 to 2027-03-31)", "confidence": "curated", "rate_year": 2026,
   "rules": [
    "Ontario Parks daily vehicle permit, Sandbanks priced at the top tier DU4 $21.00 incl. HST (Ontario seniors $16.75); tier is not on the fee page, $21 is the long-standing Sandbanks price.",
    "Reserve the daily vehicle permit online from 07:00 five days before the visit; the park sells out on summer weekends and holidays and turns away cars without a permit.",
@@ -314,7 +314,7 @@
  {"id": "bronte-creek", "name": "Bronte Creek Provincial Park (day use, 1219 Burloak Dr)",
   "match": {"lat": 43.4065, "lon": -79.7712, "radius_km": 1.8},
   "season": {"from": "01-01", "to": "12-31", "off_season": "free", "note": "day-use area open all year 08:00 to 19:00 (fall hours)"},
-  "source": "https://www.ontarioparks.ca/fees/dayuse/2026", "source_date": "2026 (fees effective 2026-04-01 to 2027-03-31)", "confidence": "curated",
+  "source": "https://www.ontarioparks.ca/fees/dayuse/2026", "source_date": "2026 (fees effective 2026-04-01 to 2027-03-31)", "confidence": "curated", "rate_year": 2026,
   "rules": [
    "Ontario Parks daily vehicle permit; Bronte Creek's tier is not published on the fee page, priced at the top tier DU4 $21.00 incl. HST (tiers DU1 to DU4 are $12.25 to $21.00).",
    "Day visitors must use the day-use entrance on Burloak Dr. The park caps daily visitors; reserve a permit from 07:00 five days ahead for summer weekends and holidays (busiest 10:00 to 16:00).",
@@ -328,7 +328,7 @@
  {"id": "sibbald-point", "name": "Sibbald Point Provincial Park (Lake Simcoe)",
   "match": {"lat": 44.328, "lon": -79.3221, "radius_km": 2.5},
   "season": {"from": "01-01", "to": "12-31", "off_season": "free", "note": "day use open all year"},
-  "source": "https://blog.ontarioparks.ca/?p=32788", "source_date": "2026 (blog undated; 2026 fee table unchanged from 2025)", "confidence": "curated",
+  "source": "https://blog.ontarioparks.ca/?p=32788", "source_date": "2026 (blog undated; 2026 fee table unchanged from 2025)", "confidence": "curated", "rate_year": 2026,
   "rules": [
    "Day use costs $21 per vehicle per day (Ontario Parks blog; matches tier DU4 in the 2026 fee table).",
    "Reserve the daily vehicle permit up to 5 days ahead (from 07:00) for summer weekends; seasonal permit holders still reserve, at no cost."],
@@ -413,7 +413,7 @@
  {"id": "spencer-gorge", "name": "Spencer Gorge: Dundas Peak, Tew Falls and Webster's Falls (HCA, Hamilton)",
   "match": {"lat": 43.2785, "lon": -79.9795, "radius_km": 1.5},
   "season": {"from": "01-01", "to": "12-31", "off_season": "free", "note": "reservations required 2026-09-26 to 2026-11-08 (fall colours)"},
-  "source": "https://conservationhamilton.ca/spencer-gorge-reservations/", "source_date": "2026 (2026 pricing)", "confidence": "curated",
+  "source": "https://conservationhamilton.ca/spencer-gorge-reservations/", "source_date": "2026 (2026 pricing)", "confidence": "curated", "rate_year": 2026,
   "rules": [
    "Reservation required Sep 26 to Nov 8, 2026 (bookings opened Sep 17): 2-hour blocks for Dundas Peak and Tew Falls (590 Harvest Rd lot) or Webster's Falls (28 Fallsview Rd lot), or a 4-hour block for both. Personal bookings only; no buses.",
    "Non-members: vehicle fee $11.00 + $5.50 per passenger + $10.00 reservation fee; $11 extra parking fee for the 4-hour experience ($32 for the driver). HCA members pay only the $10 reservation fee. The lot price is for the driver; each passenger adds $5.50.",

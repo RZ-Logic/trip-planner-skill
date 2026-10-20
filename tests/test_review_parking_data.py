@@ -1,5 +1,5 @@
 """Offline regression tests for the parking ranking, check-line and curated parking data findings of the 2026-10
-review (ext-11, -14, -15, -16, data-integrity-1, -4, -7, -9, parking-3, -4, -8, -10, docs-contract-5,
+review (ext-11, -14, -15, -16, data-integrity-1, -4, -7, -9, -11, parking-3, -4, -8, -10, docs-contract-5,
 security-tos-9).
 
 Every HTTP call is mocked or blocked; nothing here touches the network.
@@ -25,11 +25,15 @@ import unittest
 import urllib.error
 from unittest import mock
 
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+HERE = os.path.dirname(os.path.abspath(__file__))
+if HERE not in sys.path:
+    sys.path.insert(0, HERE)
+ROOT = os.path.dirname(HERE)
 sys.path.insert(0, os.path.join(ROOT, "plugins", "trip-planner", "skills", "trip-planner", "scripts"))
 import drive_common as dc  # noqa: E402
 import drive_plan as dp  # noqa: E402
 import parking as pk  # noqa: E402
+import test_car_profile as tcp  # noqa: E402   CarCase (drive_plan runs with a stub EV planner)
 
 DEST = (43.6453, -79.3806)   # Union Station, Toronto
 
@@ -54,6 +58,13 @@ def curated_lot(pid, name, when, stay_min, holidays=()):
     lots, _r, _res, _s = pk.curated(float(m["lat"]), float(m["lon"]), when, stay_min, set(holidays), 5000, [])
     return [x for x in lots if x["name"] == name][0]
 
+
+
+def curated_lot_all(pid, when, stay_min, holidays=()):
+    """Every curated lot of a place, priced for the stay, searched from the place's own match point."""
+    m = place(pid)["match"]
+    lots, _r, _res, _s = pk.curated(float(m["lat"]), float(m["lon"]), when, stay_min, set(holidays), 5000, [])
+    return lots
 
 class CuratedData(unittest.TestCase):
     def test_wellington_beach_paid_on_weekday_holidays(self):   # ext-14
@@ -167,6 +178,20 @@ class CuratedData(unittest.TestCase):
         self.assertEqual(curated_lot("bluffers-park", b, dt.datetime(2027, 7, 7, 10), 240)["cost"], 0.0)   # before 17:00
         self.assertEqual(curated_lot("bluffers-park", b, dt.datetime(2027, 7, 10, 10), 240)["cost"], 12.0)  # a Saturday
 
+    def test_rate_year_note(self):   # data-integrity-11
+        # a place-level rate_year (fees published for 2026) reaches every priced lot of the place
+        lot = curated_lot("sandbanks", "Outlet Beach day-use lot", dt.datetime(2027, 7, 17, 10), 240)
+        self.assertIn("2026 rates; check the 2027 rates", lot["notes"])
+        check = pk._public(lot)["check"]
+        self.assertIsNotNone(check)
+        self.assertEqual(check["why"], "2026 price")
+        self.assertIsNone(pk._public(curated_lot("sandbanks", "Outlet Beach day-use lot", dt.datetime(2026, 7, 18, 10),
+                                                 240))["check"])
+        pinery = [x for x in curated_lot_all("pinery", dt.datetime(2027, 7, 17, 10), 240) if x.get("cost")]
+        self.assertTrue(pinery)
+        for x in pinery:
+            self.assertIn("2026 rates; check the 2027 rates", x["notes"], x["name"])
+
 
 class PriceRule(unittest.TestCase):
     def test_off_season_rule(self):   # data-integrity-1
@@ -271,6 +296,24 @@ class Docs(unittest.TestCase):
                   os.path.join(sk, "references", "driving.md"), os.path.join(sk, "references", "manual-method.md")):
             with open(p, encoding="utf-8") as f:
                 self.assertFalse("scrapling" in f.read().lower(), p)   # assertFalse: never print the whole file
+
+
+class HomeRate(unittest.TestCase):
+    def test_expired_home_rate_warns(self):   # data-integrity-11
+        # the OEB rate period in costs.json ends 2026-10-31; after it the estimate is flagged, before it nothing
+        self.assertIn("2026-10-31", dp.home_rate_note(dt.date(2026, 11, 2)))
+        self.assertIsNone(dp.home_rate_note(dt.date(2026, 10, 20)))
+        self.assertIsNone(dp.home_rate_note(dt.date(2026, 10, 31)))
+
+
+class HomeRatePlan(tcp.CarCase):
+    def test_ev_plan_past_the_rate_period_warns(self):   # data-integrity-11
+        res, _text = self.run_plan("--vehicle", "ev", "--depart", "2026-11-02 10:00", ev=True)
+        self.assertTrue(any("2026-10-31" in w and "oeb.ca" in w for w in res["warnings"]), res["warnings"])
+        res, _text = self.run_plan("--vehicle", "ev", "--depart", "2026-10-21 10:00", ev=True)
+        self.assertFalse(any("2026-10-31" in w for w in res["warnings"]), res["warnings"])
+        res, _text = self.run_plan("--depart", "2026-11-02 10:00")   # a petrol car never uses the home rate
+        self.assertFalse(any("2026-10-31" in w for w in res["warnings"]), res["warnings"])
 
 
 if __name__ == "__main__":

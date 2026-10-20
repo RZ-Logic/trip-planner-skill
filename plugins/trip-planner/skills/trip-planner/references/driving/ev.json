@@ -135,7 +135,7 @@
   "final_margin_note": "the last stop adds 5 points over the reserve so arrival is not at the bare minimum"
  },
  "home_rate": {"cad_per_kwh": 0.14, "text": "home charging about $0.14/kWh all-in (OEB TOU off-peak 9.8 c/kWh plus delivery, regulatory and HST, less the 23.5% Ontario Electricity Rebate)",
-  "effective": "2025-11-01 to 2026-10-31", "confidence": "medium", "source": "https://www.oeb.ca/consumer-information-and-protection/electricity-rates"},
+  "effective": "2025-11-01 to 2026-10-31", "valid_to": "2026-10-31", "confidence": "medium", "source": "https://www.oeb.ca/consumer-information-and-protection/electricity-rates"},
  "temp_normals_c": {"station": "Toronto Lester B. Pearson Intl A, 1991 to 2020 Canadian Climate Normals (daily mean)",
   "months": [-5.0, -4.4, 0.6, 7.0, 13.7, 19.2, 22.1, 21.1, 16.9, 10.0, 4.1, -1.6],
   "source": "https://climate.weather.gc.ca/climate_normals/ (via https://en.wikipedia.org/wiki/Climate_of_Toronto)", "confidence": "high"},

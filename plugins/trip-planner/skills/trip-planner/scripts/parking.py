@@ -28,7 +28,8 @@ Extensions used by the open-data parsers (all optional):
   season); "off_season": "unknown" (no published price off season: the lot is price unknown with a check line,
   and the rule's max stay does not bind); "off_season_max_stay_min": n (a time limit that still applies off
   season);
-  "rate_year": 2026 (rates published for that year; later years get a note); "tax": 0.13 (published rates
+  "rate_year": 2026 (rates published for that year; later years get a note; a place-level rate_year applies
+  to every priced lot of the place); "tax": 0.13 (published rates
   exclude HST); "per_person": {"adult", "child", "senior"} or true (admission per person: the cost is one
   adult unless the party is known); "per_passenger": $ (vehicle price covers the driver, plus $ for each
   passenger); "first_hour": $ (the first hour costs this, later hours the hourly rate; the day maximum
@@ -1642,6 +1643,8 @@ def curated(lat, lon, arrive, stay_min, holidays, radius_m, warnings, party=None
                 rule.setdefault("off_season", season.get("off_season", "free"))
                 if season.get("off_season_max_stay_min"):
                     rule.setdefault("off_season_max_stay_min", season["off_season_max_stay_min"])
+            if rule and p.get("rate_year") and not rule.get("free"):   # the place's fee year covers its priced lots
+                rule.setdefault("rate_year", p["rate_year"])
             # a lot's booking applies in its own season; a park lot ignores the town's paid season
             lot_in_season = (not rule.get("season") or _in_season(arrive.date(), rule["season"])) \
                 and (place_in_season or kind == "park")

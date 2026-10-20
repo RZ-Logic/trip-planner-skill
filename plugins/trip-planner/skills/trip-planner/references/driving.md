@@ -246,7 +246,8 @@ priced.
   confidence), marked as an estimate. US networks (Electrify America, EVgo) get the generic
   estimate. A price a US station lists is in US dollars (DC and Level 2): it is shown as US$ and
   converted to CAD at the same Bank of Canada rate for the cost.
-- **Home energy:** kWh used x $0.14 all-in (OEB time-of-use, estimate).
+- **Home energy:** kWh used x $0.14 all-in (OEB time-of-use, estimate for 2025-11-01 to
+  2026-10-31); a WARNING appears once the OEB rate period has ended.
 
 **Parking.**
 - **Sources, in order:**

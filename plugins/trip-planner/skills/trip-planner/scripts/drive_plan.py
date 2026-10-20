@@ -102,6 +102,14 @@ def costs():
     return dc.load_data("costs")
 
 
+def home_rate_note(day):
+    """A warning once the trip day is past the OEB rate period the home electricity estimate is from, else None."""
+    vt = costs()["electricity"].get("valid_to")
+    if vt and day > dt.date(*map(int, vt.split("-"))):
+        return ("home electricity rate is the OEB estimate in effect to %s; check oeb.ca for the current rate" % vt)
+    return None
+
+
 def _mod(name):
     """Sibling module written by another part of the planner, or None when it is missing or broken."""
     try:
@@ -2197,6 +2205,9 @@ def _plan(args):
         warnings.append("ev_charging.py is missing, so no charging stops were planned; energy is priced at the home "
                         "rate")
     home_rate = costs()["electricity"]["home_rate"]
+    rate_note = home_rate_note(depart.date()) if ev else None
+    if rate_note:   # the home rate prices every EV plan's energy
+        warnings.append(rate_note)
     shared = {}
     api_key = dc.env_key("NLR_API_KEY") or "DEMO_KEY"
 

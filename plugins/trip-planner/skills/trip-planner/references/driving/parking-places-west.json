@@ -1248,6 +1248,7 @@
    "source": "https://blog.ontarioparks.ca/wasaga-beach/",
    "source_date": "2026 (operating dates from the park page, fee from the park blog)",
    "confidence": "curated",
+   "rate_year": 2026,
    "price_confidence": "high",
    "rules": [
     "Ontario Parks daily vehicle permit $21.00 (Ontario seniors $16.75); not valid in town lots and not transferable between beach areas.",
@@ -3021,6 +3022,7 @@
    "source": "https://blog.ontarioparks.ca/visit-pinery/",
    "source_date": "2026",
    "confidence": "curated",
+   "rate_year": 2026,
    "price_confidence": "high",
    "rules": [
     "Daily vehicle permit $21.00 (Ontario seniors $16.75), valid in all day-use lots; open all year.",
@@ -3178,6 +3180,7 @@
    "source": "https://www.algonquinpark.on.ca/visit/general_park_info/fees-day-use.php",
    "source_date": "2026",
    "confidence": "curated",
+   "rate_year": 2026,
    "price_confidence": "high",
    "rules": [
     "Daily vehicle permit $21.00 for any stop on Hwy 60 (trails, beaches, Visitor Centre, picnic areas); driving straight through needs no permit.",
@@ -3302,6 +3305,7 @@
    "source": "https://www.algonquinpark.on.ca/visit/general_park_info/fees-day-use.php",
    "source_date": "2026",
    "confidence": "curated",
+   "rate_year": 2026,
    "price_confidence": "high",
    "rules": [
     "Daily vehicle permit $21.00 for any stop on Hwy 60 (trails, beaches, Visitor Centre, picnic areas); driving straight through needs no permit.",

@@ -2807,6 +2807,7 @@ def _plan(args):
         sources.insert(0, "407 ETR %s rate chart" % yr)
     if parking and parking.get("sources"):
         sources.append("parking: %s" % "; ".join(parking["sources"]))
+    sources += parking_attributions(parking)
     if review_source(parking):
         sources.append(review_source(parking))
     sources.append(routing_source(fast.get("engine")))
@@ -3097,6 +3098,16 @@ def routing_source(engine):
     if engine in ("valhalla", "osrm"):
         return "routing: %s, map data %s" % (name, OSM_CREDIT)
     return "routing: %s" % name
+
+
+def parking_attributions(parking):
+    """The licence statement of each city's open data behind a lot the text shows (the first SHOWN_LOTS), once
+    each, in order: a lot from a city layer or Green P carries its city's "attribution" (parking.json)."""
+    out = []
+    for x in ((parking or {}).get("options") or [])[:SHOWN_LOTS]:
+        if x.get("attribution") and x["attribution"] not in out:
+            out.append(x["attribution"])
+    return out
 
 
 def review_source(parking):

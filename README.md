@@ -313,14 +313,14 @@ The plan's numbers come from deterministic scripts. The model asks what's missin
 
 **Code:** MIT, see [`LICENSE`](./LICENSE). Use it, fork it, add your region; the acknowledgement is a link back.
 
-**Data:** bundled data keeps its original licence, not MIT. [`references/sources.md`](plugins/trip-planner/skills/trip-planner/references/sources.md) lists each source with its date.
+**Data:** bundled data keeps its original licence, not MIT. [`NOTICE`](plugins/trip-planner/skills/trip-planner/NOTICE) ships with the skill and gives each source's licence, its attribution statement as published and the files or feeds it covers; [`references/sources.md`](plugins/trip-planner/skills/trip-planner/references/sources.md) lists each source with its date.
 
 - **Car fuel ratings** (`vehicles-index.json` and the class medians): contains information licensed under the Open Government Licence – Canada.
 - **Coordinates of curated parking lots, 407 interchanges, border crossings and fuel-market towns:** © OpenStreetMap contributors, available under the [Open Database Licence 1.0](https://www.openstreetmap.org/copyright). These fields stay under the ODbL.
-- **Transit coverage grids** (`gtha.json`, `ontario.json`) are derived from open GTFS feeds. GO Transit and UP Express data is provided with the permission of Metrolinx. Contains public sector data made available under the City of Hamilton's Open Data Licence. Contains information licensed under the Open Government Licence – Town of Oakville, and the Open Government Licence – Toronto.
+- **Transit coverage grids** (`gtha.json`, `ontario.json`) are derived from each agency's open GTFS feed. [`NOTICE`](plugins/trip-planner/skills/trip-planner/NOTICE) lists every feed with its agency's licence and attribution statement, and the feeds whose licence was not found.
 - **Climate normals:** weather data by [Open-Meteo.com](https://open-meteo.com/) (CC BY 4.0), with modified Copernicus Climate Change Service information 2026. **USD/CAD rate:** Bank of Canada, unchanged.
 - **Fares, timetables and prices** copied from operators' public pages are facts; each keeps its source URL in the data file.
-- **Data fetched while planning** (Ontario fuel prices under the Open Government Licence – Ontario, Toronto and other city open data, OpenStreetMap services, Open-Meteo forecasts) is cached only on your machine and keeps its own licence.
+- **Data fetched while planning** (Ontario fuel prices under the Open Government Licence – Ontario, Toronto and other city open data, OpenStreetMap services, Open-Meteo forecasts) is cached only on your machine and keeps its own licence. A drive's `SOURCES` line prints the attribution statement of each city whose parking lots it shows.
 - **Privacy: which hosts get your locations.**
   - Geocoders (Nominatim, Photon) get the address you type. Reverse lookups of a `lat,lon` place (its label, town or country) send at most 3 decimals (about 100 m) at street level or coarser; set `TRIP_HOME` and a drive labels your home with no lookup.
   - Routing engines (Valhalla, OSRM, TomTom with a key) and Transitous get the full start and end points; Open-Meteo gets points along the route (4 decimals).

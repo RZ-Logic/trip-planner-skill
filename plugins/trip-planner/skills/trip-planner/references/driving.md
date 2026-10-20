@@ -103,8 +103,9 @@ Addresses work like `trip_hubs.py` (the same `ADDRESS NOT PRECISE` rule). Pass `
    undocumented URL form), and the walk from the lot.
 10. `WARNINGS`: every source that failed or was estimated. Disclose them.
 11. `SOURCES`: data dates and credits. Quote the fuel survey week and the parking sources, and keep the
-    OpenStreetMap credit (Valhalla or OSRM routes, Nominatim and Photon places) and the Open-Meteo
-    credit (CC BY 4.0) when you quote the drive.
+    OpenStreetMap credit (Valhalla or OSRM routes, Nominatim and Photon places), the Open-Meteo
+    credit (CC BY 4.0) and the city open data statement printed for the lots shown (Toronto's for
+    Green P) when you quote the drive. The skill's NOTICE file lists every data licence.
 
 ## How the numbers are made
 

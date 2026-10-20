@@ -32,6 +32,8 @@
   "occupancy_url": "https://ckan0.cf.opendata.inter.prod-toronto.ca/api/3/action/datastore_search?resource_id=2d1bf001-eebf-4f02-a7d3-a51f8acd884e&limit=1000&sort=_id%20desc",
   "occupancy_max_age_h": 168,
   "occupancy_source": "https://open.toronto.ca/dataset/parking-occupancy/",
+  "licence_url": "https://www.toronto.ca/city-government/data-research-maps/open-data/open-data-licence/",
+  "attribution": "Contains information licensed under the Open Government Licence – Toronto.",
   "full_pct": 85,
   "occupancy_min_carparks": 50,
   "occupancy_exempt_re": "\\(parks\\)|\\bpark (?:drive|road)\\b|bluffer|remembrance drive|unwin avenue|marine parade",
@@ -127,6 +129,7 @@
    "filter": {"LOT_TYPE": ["Public"]},
    "defaults": {"per_min": 60},
    "source": "https://navburl-burlington.opendata.arcgis.com/",
+   "licence_url": "https://opendata.burlington.ca/opendata-terms-of-use/City%20of%20Burlington%20-%20Open%20Data%20Terms%20of%20Use.pdf",
    "source_name": "Burlington open data (downtown lots)"
   },
   {
@@ -142,6 +145,7 @@
    "filter": {"TYPE": ["Paid parking"]},
    "defaults": {"holidays_free": true},
    "source": "https://navburl-burlington.opendata.arcgis.com/",
+   "licence_url": "https://opendata.burlington.ca/opendata-terms-of-use/City%20of%20Burlington%20-%20Open%20Data%20Terms%20of%20Use.pdf",
    "source_name": "Burlington open data (on-street)"
   },
   {
@@ -169,6 +173,8 @@
    },
    "defaults_source": "https://www.hamilton.ca/home-neighbourhood/getting-around/parking/municipal-car-parks (\"Most car parks operate from Monday to Saturday (excluding Sunday and holidays)\")",
    "source": "https://spatialsolutions.hamilton.ca/webgis/rest/services/Parking_Inventory/ParkingInventory_FA/FeatureServer",
+   "licence_url": "https://www.hamilton.ca/city-council/data-maps/open-data/open-data-licence-terms-and-conditions",
+   "attribution": "Contains public sector Data made available under the City of Hamilton’s Open Data Licence",
    "source_name": "Hamilton parking inventory (city GIS)"
   },
   {
@@ -194,6 +200,8 @@
    },
    "defaults_source": "https://hamilton.ca/home-neighbourhood/getting-around/parking/parking-meters-pay-machines ($2/h; Mon, Tue, Wed, Sat 8 am to 6 pm; Thu, Fri 9 am to 9 pm; some downtown meters free after 6 pm or on Saturdays)",
    "source": "https://spatialsolutions.hamilton.ca/webgis/rest/services/Parking_Inventory/ParkingInventory_FA/FeatureServer",
+   "licence_url": "https://www.hamilton.ca/city-council/data-maps/open-data/open-data-licence-terms-and-conditions",
+   "attribution": "Contains public sector Data made available under the City of Hamilton’s Open Data Licence",
    "source_name": "Hamilton parking meters (city GIS)"
   },
   {
@@ -215,6 +223,8 @@
    "filter": {"STATUS": ["a"]},
    "defaults": {"max_stay_applies": "paid"},
    "source": "https://open.ottawa.ca/datasets/ottawa::pay-and-display-machines",
+   "licence_url": "https://open.ottawa.ca/pages/open-data-licence",
+   "attribution": "Contains information licensed under the Open Government Licence – City of Ottawa.",
    "source_name": "Ottawa open data (pay machines)",
    "exclude": {"RATE_DESC": "motorcy"},
    "kind_rules": [{"field": "GROUP_ID", "match": "^LOT", "kind": "lot", "name": "City lot pay machine, {LOCATE_DESC}"}]
@@ -245,6 +255,8 @@
    },
    "defaults_source": "https://maps.ottawa.ca/arcgis/rest/services/Parking/MapServer/0 (RATE_DESC of the downtown machines: 96 of 165 active ByWard and downtown machines in the 2026-10-10 cache run to 7:30 pm, 54 stop at 5:30 pm; priced to 19:30 so a paid block is never shown free)",
    "source": "https://open.ottawa.ca/datasets/ottawa::paid-parking-spaces",
+   "licence_url": "https://open.ottawa.ca/pages/open-data-licence",
+   "attribution": "Contains information licensed under the Open Government Licence – City of Ottawa.",
    "source_name": "Ottawa open data (paid on-street spaces)"
   },
   {
@@ -260,6 +272,8 @@
    "kind_map": {"Surface": "lot", "Enclosed": "garage"},
    "url_link": "https://ottawa.ca/en/parking-roads-and-travel/parking/city-parking-lots-and-garages",
    "source": "https://open.ottawa.ca/",
+   "licence_url": "https://open.ottawa.ca/pages/open-data-licence",
+   "attribution": "Contains information licensed under the Open Government Licence – City of Ottawa.",
    "source_name": "Ottawa open data (city lots, no rates)"
   },
   {
@@ -312,6 +326,7 @@
    },
    "overrides_source": "https://www.mississauga.ca/wp-content/uploads/2025/10/09121617/Schedule-06A-Paid-Off-Street-Parking-Lots.pdf (Traffic By-law Schedule 6A rev. 2025-10-08: lots 31 to 33, 8:00am to 6:00pm Mon to Fri) and https://www.mississauga.ca/services-and-programs/transportation-and-streets/parking/paid-parking/parking-garages/ (free on weekends and weekdays after 6 p.m.)",
    "source": "https://data.mississauga.ca/",
+   "licence_url": "http://www5.mississauga.ca/research_catalogue/CityofMississauga_TermsofUse.pdf",
    "source_name": "Mississauga open data (city parking facilities)",
    "confirmed": "2026-10-10"
   },
@@ -338,6 +353,8 @@
    },
    "defaults_source": "https://oakville.ca/transportation-roads/parking/parking-permits/overnight-downtown-parking-permit (municipal lots free 6 p.m. to 2 a.m.)",
    "source": "https://portal-exploreoakville.opendata.arcgis.com/",
+   "licence_url": "https://www.oakville.ca/town-hall/plans-strategies/open-data/open-data-licence/",
+   "attribution": "Contains information licensed under the Open Government Licence – Town of Oakville.",
    "source_name": "Oakville open data (2018 lot rates, stale)"
   },
   {
@@ -359,6 +376,7 @@
    },
    "defaults": {"evening_from": "18:00", "max_stay_applies": "paid"},
    "source": "https://opendata.london.ca/",
+   "licence_url": "https://london.ca/government/council-civic-administration/open-data",
    "source_name": "London open data (2018 master meters, stale)"
   },
   {
@@ -373,6 +391,8 @@
    "fields": {"name": "MAP_LABEL", "address": "ADDRESS", "url": "URL"},
    "filter": {"SUB_DESCRIPTION": ["Parking Lot Public"]},
    "source": "https://opendatakingston.cityofkingston.ca/",
+   "licence_url": "https://cityofkingston.ca/media/wtpgpkb0/gis_license_opendata.pdf",
+   "attribution": "Contains information licensed under the Open Data Licence – City of Kingston.",
    "source_name": "Kingston open data (lots, no rates)"
   },
   {
@@ -386,6 +406,8 @@
    "url": "https://utility.arcgis.com/usrsvcs/servers/606e2cb0c3f34ba5beb0f23cb942cbc4/rest/services/Park_and_Ride_Lots/FeatureServer/1",
    "fields": {"name": "Park and ride lot"},
    "source": "https://opendatakingston.cityofkingston.ca/",
+   "licence_url": "https://cityofkingston.ca/media/wtpgpkb0/gis_license_opendata.pdf",
+   "attribution": "Contains information licensed under the Open Data Licence – City of Kingston.",
    "source_name": "Kingston open data (park and ride)"
   },
   {
@@ -399,6 +421,8 @@
    "url": "https://services9.arcgis.com/oMFQlUUrLd1Uh1bd/arcgis/rest/services/Niagara_Falls_Parking_Lots_WGS_1984/FeatureServer/0",
    "fields": {"name": "Name", "address": "Address", "url": "url"},
    "source": "https://niagarafalls.ca/",
+   "licence_url": "https://niagaraopendata.ca/pages/open-government-license-2-0-niagara-falls",
+   "attribution": "Contains information licensed under the Open Government Licence – Niagara Falls.",
    "source_name": "Niagara Falls open data (city lots, rates in a PDF per lot)"
   }
  ]

@@ -15,4 +15,4 @@ Standard library Python 3.8+, no API keys needed (TomTom, NLR and Ontario 511 ke
 mode downloads public GTFS timetables and uses the free OSRM, Valhalla, Nominatim and Transitous services,
 plus open parking, fuel-price, weather and charger data for driving.
 
-See the repository README for install instructions, examples and data attribution. MIT licensed.
+See the repository README for install instructions and examples. The code is MIT licensed; bundled data keeps its own licence, listed with each attribution statement in [`skills/trip-planner/NOTICE`](skills/trip-planner/NOTICE).

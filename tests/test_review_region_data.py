@@ -521,5 +521,116 @@ class DocContract(unittest.TestCase):
                 self.assertTrue(re.search(r"stand-in|example above", row), row)
 
 
+
+NOTICE_PATH = os.path.join(SKILL_DIR, "NOTICE")
+
+
+def notice_blocks():
+    """NOTICE as its blank-line separated entries: [{"covers": str, "attribution": str or None, "text": str}]
+    for each entry with a 'Covers:' line ([] when the file is missing)."""
+    if not os.path.exists(NOTICE_PATH):
+        return []
+    out = []
+    for block in re.split(r"\n\s*\n", read_abs(NOTICE_PATH)):
+        cov = re.search(r"^\s*Covers: (.+)$", block, re.M)
+        if cov:
+            att = re.search(r"^\s*Attribution: (.+)$", block, re.M)
+            out.append({"covers": cov.group(1), "attribution": att.group(1) if att else None, "text": block})
+    return out
+
+
+def notice_feeds():
+    """{(region file stem, feed id)} named on NOTICE 'Covers:' lines ('gtha.json feeds go, upx')."""
+    got = set()
+    for b in notice_blocks():
+        for stem, ids in re.findall(r"\b([a-z]+)\.json feeds? ([a-z0-9-]+(?:, [a-z0-9-]+)*)", b["covers"]):
+            got.update((stem, i) for i in ids.split(", "))
+    return got
+
+
+def notice_layers():
+    """{parking.json city layer id: the attribution of the NOTICE entry that covers it (None: no statement)}."""
+    got = {}
+    for b in notice_blocks():
+        for ids in re.findall(r"parking\.json city_layers ([a-z0-9_]+(?:, [a-z0-9_]+)*)", b["covers"]):
+            for i in ids.split(", "):
+                got[i] = b["attribution"]
+    return got
+
+
+class DataNotice(unittest.TestCase):
+    """data-integrity-2, security-tos-2: the zip, plugin and copy installs shipped GTFS-, OGL- and OSM-derived
+    data under one MIT licence with none of the attribution statements the README said apply, and the README
+    named only four of the GTFS licensors. security-tos-6: city parking layers were cited by name and URL
+    without the licence statement each city asks for."""
+
+    def test_zip_includes_the_notice(self):
+        arcs = [arc for _full, arc in load_build_zip().zip_entries()]
+        self.assertIn("trip-planner/NOTICE", arcs)
+
+    def test_every_gtfs_coverage_grid_names_its_feed_in_the_notice(self):
+        named = notice_feeds()
+        missing = []
+        for path in sorted(glob.glob(os.path.join(SKILL_DIR, "references", "regions", "*.json"))):
+            stem = os.path.splitext(os.path.basename(path))[0]
+            with open(path, encoding="utf-8") as fh:
+                feeds = json.load(fh).get("feeds") or []
+            missing += [(stem, f["id"]) for f in feeds if f.get("coverage") and not f.get("manual")
+                        and (stem, f["id"]) not in named]
+        self.assertEqual(missing, [])
+
+    def test_every_city_layer_has_its_attribution_or_is_listed_without_one(self):
+        c = drive_plan.dc.load_data("parking")
+        listed = notice_layers()
+        for layer in c["city_layers"]:
+            self.assertIn(layer["id"], listed, "%s is not in NOTICE" % layer["id"])
+            # the layer's statement is the one NOTICE gives for it; a layer whose city sets none has none
+            self.assertEqual(layer.get("attribution"), listed[layer["id"]], layer["id"])
+            if layer.get("attribution"):
+                self.assertTrue(layer.get("licence_url", "").startswith("http"), layer["id"])
+        t = c["toronto"]
+        self.assertTrue(t.get("attribution"), "Green P has no attribution")
+        self.assertIn(t["attribution"], read_abs(NOTICE_PATH) if os.path.exists(NOTICE_PATH) else "")
+
+    def test_green_p_lots_carry_the_toronto_attribution(self):
+        pk = drive_plan._mod("parking")
+        t = pk.cfg()["toronto"]
+        cp = t["new_carparks"][0]
+        lots, _srcs = pk.toronto_bundled_lots(cp["lat"], cp["lon"], dt.datetime(2026, 10, 14, 12, 0), 120, set(),
+                                              300, None, [])
+        self.assertTrue(lots)
+        self.assertEqual({x.get("attribution") for x in lots}, {t.get("attribution")})
+        self.assertIsNotNone(t.get("attribution"))
+
+    def test_sources_line_prints_the_attribution_of_a_layer_with_a_shown_lot(self):
+        import test_drive_plan as tdp   # module only: its TestCase classes stay out of this file's namespace
+        pk = drive_plan._mod("parking")
+        here = (43.2557, -79.8711)
+        box = {"min_lat": 43.2, "max_lat": 43.3, "min_lon": -79.9, "max_lon": -79.8}
+        shown = {"id": "test_lots", "city": "Testville", "kind": "lot", "downtown": True, "confidence": "official",
+                 "bbox": box, "url": "https://example.test/arcgis/rest/services/Lots/FeatureServer/0",
+                 "fields": {"name": "NAME", "hourly": "RATE"}, "source": "https://example.test/",
+                 "source_name": "Testville open data", "licence_url": "https://example.test/licence",
+                 "attribution": "Contains information licensed under the Testville Licence."}
+        quiet = dict(shown, id="quiet_lots", source_name="Quietville open data",
+                     attribution="Contains information licensed under the Quietville Licence.")
+        feats = {"test_lots": [{"attributes": {"NAME": "Testville Main Street lot", "RATE": "2.00"},
+                                "geometry": {"x": here[1] + 0.001, "y": here[0]}}], "quiet_lots": []}
+        cfg = dict(pk.cfg(), city_layers=[shown, quiet])
+        with tdp.Env(), mock.patch.dict(sys.modules, {"parking": pk}), \
+                mock.patch.object(pk, "cfg", return_value=cfg), \
+                mock.patch.object(pk, "curated", return_value=([], [], [], [])), \
+                mock.patch.object(pk, "toronto_lots", return_value=([], [])), \
+                mock.patch.object(pk, "osm_lots", return_value=([], [])), \
+                mock.patch.object(pk, "_arcgis_query", side_effect=lambda layer, *a: feats[layer["id"]]):
+            res = drive_plan.plan(tdp.args_for(*tdp.BASE, "--dest", "%f,%f" % here, "--depart", "2026-10-14 10:30",
+                                               "--park-and-ride", "off"))
+            text = drive_plan.render(res)
+        self.assertEqual([x["name"] for x in res["parking"]["options"]], ["Testville Main Street lot"])
+        src = next(ln for ln in text.splitlines() if ln.startswith("SOURCES"))
+        self.assertIn("Contains information licensed under the Testville Licence.", src)
+        self.assertNotIn("Quietville Licence", src)   # its layer had no lot to show
+
+
 if __name__ == "__main__":
     unittest.main()

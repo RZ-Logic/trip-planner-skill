@@ -1961,6 +1961,8 @@ def city_lots(lat, lon, arrive, stay_min, holidays, radius_m, height_m, warnings
                                max_height=mh)
                 if link and re.match(r"https?://", str(link)):
                     lot["_website"] = str(link)   # the lot's own page in the layer
+                if layer.get("attribution"):
+                    lot["attribution"] = layer["attribution"]   # the city's licence statement, for SOURCES
                 if conf == "stale":
                     lot["_stale_text"] = "old price (%s)" % (notes[-1] if notes else "stale data")
                 lots.append(lot)
@@ -2288,6 +2290,8 @@ def toronto_lots(lat, lon, arrive, stay_min, holidays, radius_m, height_m, warni
                            max_height=mh, often_full=full)
             lot["cost_text"] += " (2019 data)"    # free and unknown results come from the same stale data
             lot["_greenp"] = {"id": _cp_id(cp.get("id")), "address": (cp.get("address") or "").strip()}
+            if t.get("attribution"):
+                lot["attribution"] = t["attribution"]   # Toronto's open data licence statement, for SOURCES
             if gone:
                 lot["maybe_closed"] = True
             lots.append(lot)
@@ -2344,6 +2348,8 @@ def new_carpark_lots(lat, lon, arrive, stay_min, holidays, radius_m, height_m, o
         else:
             lot["cost_text"] = "price unknown, opened after 2019"
         lot["_greenp"] = {"id": cid, "address": (cp.get("address") or "").strip(), "current": bool(rule)}
+        if t.get("attribution"):
+            lot["attribution"] = t["attribution"]   # listed from Toronto's occupancy open data
         if cp.get("url"):
             lot["_website"] = cp["url"]
         out.append(lot)
@@ -3016,9 +3022,10 @@ def find_parking(lat, lon, arrive, stay_min, opts, warnings):
     A lot's "per_person" flag marks admission priced per person (one adult unless the party is given),
     "unverified" marks an OpenStreetMap fee=no lot that no official source confirms, "maybe_closed" a Green P
     2019 carpark missing from the current occupancy data and not in toronto.open (ranked after the other priced
-    lots, ahead of facility lots and unknown prices; see rank_key), "greenp_id" the Green P carpark number, and
-    "check" what to verify before going (check_hint); the top-level "check" lists the first three of the top five
-    that need it, plus #1 and the first lot that may have closed when they fall past three (check_list).
+    lots, ahead of facility lots and unknown prices; see rank_key), "greenp_id" the Green P carpark number,
+    "attribution" the licence statement of the city open data the lot came from (parking.json), and "check"
+    what to verify before going (check_hint); the top-level "check" lists the first three of the top five that
+    need it, plus #1 and the first lot that may have closed when they fall past three (check_list).
     The search widens to 1500 m when no walkable lot is priced, fits the stay and is not flagged."""
     opts = opts or {}
     c = cfg()
@@ -3121,7 +3128,8 @@ def main(argv=None):
     print("     " + res["caveat"])
     for w in warnings:
         print("WARNING    " + w)
-    print("SOURCES    " + "; ".join(res["sources"]))
+    licences = list(dict.fromkeys(o["attribution"] for o in res["options"] if o.get("attribution")))
+    print("SOURCES    " + "; ".join(res["sources"] + licences))
 
 
 if __name__ == "__main__":

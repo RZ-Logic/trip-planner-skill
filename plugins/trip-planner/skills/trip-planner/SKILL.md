@@ -1,7 +1,7 @@
 ---
 name: trip-planner
 description: Plans trips combining an Uber or Lyft ride with transit by checking every hub in ride range. Use when ride-hail is too pricey, transit alone too slow, or for park and ride, GO or late-night trips. Compares ride-only, ride plus transit and transit-only on arrival time and cost, with fares, backups and the latest time to book, in any city with public timetable data. Also use for day trips and getaways to small towns, beaches and parks, and for drives in your own car. For drives it compares the fastest and the toll-free route (407 ETR toll against minutes saved), gives a leave-by time for a deadline, prices parking near the door for the stay (verified prices ahead of similar unverified ones), plans EV charging stops, and checks parking at a station and taking transit.
-license: MIT
+license: "MIT (code); bundled data: see NOTICE"
 compatibility: Python 3.8+ standard library only. Live mode needs network access to download GTFS timetables, plus OSRM or Valhalla driving routes, Nominatim geocoding and the Transitous router (all free, no keys). The driving mode also reads open parking, fuel-price, weather and charger data (free); TOMTOM_API_KEY, ON511_API_KEY, NLR_API_KEY and GOOGLE_PLACES_API_KEY are optional. Without network or code execution, follow references/manual-method.md (drives: references/driving.md).
 metadata:
   author: Rizwan Ahmed
@@ -255,7 +255,7 @@ python3 ${CLAUDE_SKILL_DIR}/scripts/drive_plan.py --origin "ORIGIN" --dest "DEST
   route Google would not pick by itself; Waze and Apple Maps may not follow it); give the one for the
   route you recommend.
 - **`SOURCES`**: keep it at the end of the answer; it carries the OpenStreetMap credit for routing and
-  geocoding and Open-Meteo's CC BY 4.0 credit for the forecast.
+  geocoding, Open-Meteo's CC BY 4.0 credit for the forecast and the city open data statement of each lot shown.
 - **Disclose every `WARNING`**: failed sources, cached replies used because a service did not answer,
   unverified prices, data from other years.
 - **`NETWORK BLOCKED`**: ask the user to allow the listed domains (`--check-network`). With addresses
@@ -285,3 +285,4 @@ Answer with one recommendation, then a short table:
 - `references/driving.md`, `references/manual-method.md`, `references/sources.md` (sources and usage
   rules), `references/regions/gtha.md` and `ontario.md` (hubs, fares, seasons, taxis; the `.json` files
   hold feeds, ride pricing and timetables), `references/adding-a-region.md`.
+- NOTICE: the code is MIT; bundled data keeps its own licence (each source's licence and attribution).

@@ -729,7 +729,7 @@
      "lon": -81.66693,
      "kind": "lot",
      "rule": {
-      "flat": 15.0,
+      "daily_max": 15.0,
       "season": [
        "05-15",
        "09-15"
@@ -1266,7 +1266,7 @@
      "lon": -80.044791,
      "kind": "park",
      "rule": {
-      "flat": 21.0,
+      "daily_max": 21.0,
       "season": [
        "04-06",
        "10-12"
@@ -1287,7 +1287,7 @@
      "lon": -80.052053,
      "kind": "park",
      "rule": {
-      "flat": 21.0,
+      "daily_max": 21.0,
       "season": [
        "04-06",
        "10-12"
@@ -1308,7 +1308,7 @@
      "lon": -80.059739,
      "kind": "park",
      "rule": {
-      "flat": 21.0,
+      "daily_max": 21.0,
       "season": [
        "04-06",
        "10-12"
@@ -3039,7 +3039,7 @@
      "lon": -81.802509,
      "kind": "park",
      "rule": {
-      "flat": 21.0
+      "daily_max": 21.0
      },
      "capacity": null,
      "notes": "beach day-use lot; $21 daily vehicle permit",
@@ -3052,7 +3052,7 @@
      "lon": -81.815211,
      "kind": "park",
      "rule": {
-      "flat": 21.0
+      "daily_max": 21.0
      },
      "capacity": null,
      "notes": "beach day-use lot",
@@ -3065,7 +3065,7 @@
      "lon": -81.828465,
      "kind": "park",
      "rule": {
-      "flat": 21.0
+      "daily_max": 21.0
      },
      "capacity": null,
      "notes": "beach day-use lot",
@@ -3078,7 +3078,7 @@
      "lon": -81.848102,
      "kind": "park",
      "rule": {
-      "flat": 21.0
+      "daily_max": 21.0
      },
      "capacity": null,
      "notes": "",

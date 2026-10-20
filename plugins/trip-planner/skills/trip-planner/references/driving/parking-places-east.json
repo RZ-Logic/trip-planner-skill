@@ -30,7 +30,7 @@
     "rule": {"no_parking": [{"days": [0, 1, 2, 3, 4, 5, 6], "hours": ["00:00", "06:00"], "all_days": true}], "hours_note": "no parking 00:00 to 06:00 (all Niagara Parks lots)", "hourly": 8.0, "max_stay_min": 1080},
     "capacity": null, "notes": "6345 Dufferin Isle Rd; $8 per hour pay and display, year-round. OSM w/25262351.", "source": "https://www.niagaraparks.com/visit/plan/parking/"},
    {"name": "White Water Walk lot", "lat": 43.110825, "lon": -79.060986, "kind": "lot",
-    "rule": {"hourly": 8.0, "max_stay_min": 1080},
+    "rule": {"no_parking": [{"days": [0, 1, 2, 3, 4, 5, 6], "hours": ["00:00", "06:00"], "all_days": true}], "hours_note": "no parking 00:00 to 06:00 (all Niagara Parks lots)", "hourly": 8.0, "max_stay_min": 1080},
     "capacity": null, "notes": "4330 River Rd; $8 per hour pay and display. OSM w/1087952347 (OSM note: free for White Water Walk customers; not on the Niagara Parks page).", "source": "https://www.niagaraparks.com/visit/plan/parking/"},
    {"name": "Whirlpool Aero Car lot", "lat": 43.117632, "lon": -79.06883, "kind": "lot",
     "rule": {"no_parking": [{"days": [0, 1, 2, 3, 4, 5, 6], "hours": ["00:00", "06:00"], "all_days": true}], "hours_note": "no parking 00:00 to 06:00 (all Niagara Parks lots)", "free": true},
@@ -66,7 +66,7 @@
     "rule": {"hourly": 5.25, "paid_hours": ["10:00", "20:00"], "max_stay_min": 480},
     "capacity": null, "notes": "Town paid parking map: $5.25/h, 8 h maximum in the lots behind Queen St. OSM w/363773665 (unnamed).", "source": "https://services8.arcgis.com/ZEY4OJK2EqLv96rt/arcgis/rest/services/NOTL_Pad_Parking_Data/FeatureServer/0"},
    {"name": "Fort George lot (Parks Canada)", "lat": 43.251479, "lon": -79.064721, "kind": "park",
-    "rule": {"flat": 9.5},
+    "rule": {"daily_max": 9.5},
     "capacity": null, "notes": "Parks Canada daily parking fee $9.50 per vehicle (fees as of 2026-09-08); about 700 m walk to Queen St. OSM w/363598110.", "source": "https://parks.canada.ca/lhn-nhs/on/fortgeorge/visit/tarifs-fees"}]},
 
  {"id": "jordan-vineland", "name": "Jordan Village and Vineland wineries (Town of Lincoln)",
@@ -212,10 +212,10 @@
   "reservation": {"required": true, "text": "Book the daily vehicle permit at reservations.ontarioparks.ca from 07:00, 5 days ahead; seasonal pass holders must still book.", "url": "https://reservations.ontarioparks.ca/", "lead_days": 5},
   "lots": [
    {"name": "Outlet Beach day-use lot", "lat": 43.893485, "lon": -77.220209, "kind": "park",
-    "rule": {"flat": 21.0},
+    "rule": {"daily_max": 21.0},
     "capacity": null, "notes": "Ontario Parks daily vehicle permit (one per car, all occupants); permit tier assumed DU4. OSM w/233914739.", "source": "https://www.ontarioparks.ca/fees/dayuse/2026"},
    {"name": "Dunes Beach day-use lot", "lat": 43.90986, "lon": -77.271467, "kind": "park",
-    "rule": {"flat": 21.0},
+    "rule": {"daily_max": 21.0},
     "capacity": null, "notes": "Ontario Parks daily vehicle permit; OSM w/829430445 (operator Ontario Parks).", "source": "https://www.ontarioparks.ca/fees/dayuse/2026"}]},
 
  {"id": "wellington-pec", "name": "Wellington (Prince Edward County) and Wellington Rotary Beach",
@@ -228,7 +228,7 @@
   "reservation": {"required": false, "text": "", "url": "", "lead_days": 0},
   "lots": [
    {"name": "Wellington Rotary Beach lot", "lat": 43.950011, "lon": -77.340517, "kind": "lot",
-    "rule": {"flat": 20.0, "paid_days": [5, 6], "season": ["07-01", "09-30"], "off_season": "free"},
+    "rule": {"periods": [{"days": [5, 6], "hours": ["00:00", "24:00"], "flat": 20.0, "entry": true, "holidays": true}], "season": ["07-01", "09-30"], "off_season": "free"},
     "capacity": null, "notes": "2025 rule ($20 cash on summer weekends and holidays), not confirmed for 2026; free otherwise. OSM w/785908851 (fee=no).", "source": "https://www.countylive.ca/?p=77570"}]},
 
  {"id": "kingston-downtown", "name": "Kingston downtown (Springer Market Square, waterfront)",
@@ -322,7 +322,7 @@
   "reservation": {"required": false, "text": "A permit reservation guarantees entry on busy days; book at reservations.ontarioparks.ca from 07:00, 5 days ahead.", "url": "https://reservations.ontarioparks.ca/", "lead_days": 5},
   "lots": [
    {"name": "Bronte Creek day-use parking", "lat": 43.408382, "lon": -79.767924, "kind": "park",
-    "rule": {"flat": 21.0},
+    "rule": {"daily_max": 21.0},
     "capacity": null, "notes": "Daily vehicle permit (tier unpublished, priced at DU4). Lots A to F inside the day-use area; this point is one of the central lots. OSM w/25465297.", "source": "https://www.ontarioparks.ca/fees/dayuse/2026"}]},
 
  {"id": "sibbald-point", "name": "Sibbald Point Provincial Park (Lake Simcoe)",
@@ -335,7 +335,7 @@
   "reservation": {"required": false, "text": "Reserve the daily vehicle permit at reservations.ontarioparks.ca, up to 5 days ahead; recommended on summer weekends and holidays.", "url": "https://reservations.ontarioparks.ca/", "lead_days": 5},
   "lots": [
    {"name": "Sibbald Point beach day-use lot", "lat": 44.329833, "lon": -79.320283, "kind": "park",
-    "rule": {"flat": 21.0},
+    "rule": {"daily_max": 21.0},
     "capacity": null, "notes": "Ontario Parks daily vehicle permit. Gate at 26071 Park Rd, Sutton West. OSM w/850164291.", "source": "https://blog.ontarioparks.ca/?p=32788"}]},
 
  {"id": "rattray-marsh", "name": "Rattray Marsh Conservation Area and Jack Darling Memorial Park (Mississauga)",

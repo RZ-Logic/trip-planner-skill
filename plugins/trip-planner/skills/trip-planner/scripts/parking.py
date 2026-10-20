@@ -206,6 +206,8 @@ FIRST_HOUR_RE = re.compile(r"(?P<pre>US\s*\$|CA?\$|C\$|\$)\s*(?P<a>\d+(?:\.\d+)?
 FREE_FIRST_RE = re.compile(r"first\s+(?P<n>\d+|one|two|half)?\s*(?P<u>hours?|hrs?|h|min(?:ute)?s?)\s*(?:is\s+)?free", re.I)
 EVENING_RE = re.compile(r"\b(eve|evening|night|overnight)\b", re.I)
 CLAUSE_SEP = re.compile(r"[,;|]|//")    # what ends a clause of rate text ("$2/hr Mon-Fri 8am-6pm; $1/hr Sat ...")
+# what may stand between "free" and its days: "free Sat-Sun", "free on weekends", "free evenings and weekends"
+FREE_GAP_RE = re.compile(r"^[\s:,\-]*(?:on\s+)?(?:(?:eve|evenings?|nights?|overnight)\s*(?:,|and|&)\s*)?(?:on\s+)?$", re.I)
 
 
 def _clock(tok, ap_hint=None):
@@ -446,8 +448,9 @@ def parse_rate_text(text):
     "$3/h, $12 max, free after 6pm", "$20 per day, $10 after 5pm", "$5 first hour, $2 each additional hour",
     "$2.25/hour, max 3 hours", "$2/hr Mon-Fri 8am-6pm; $1/hr Sat 9am-5pm" (each price before its window),
     "$12 Day Max, $5 Night Max" (a night maximum without hours is noted, not used), "$2/hr Mon-Fri, Sat-Sun free"
-    (a paid day list, then the free one). Unknown parts are left out; an empty dict means nothing was understood,
-    or that the text calls every paid day free ("$2/hr, free Mon-Sun")."""
+    (a paid day list, then the free one), "$2/hr 8am-6pm, free evenings and weekends". Unknown parts are left
+    out; an empty dict means nothing was understood, or that the text calls every paid day free ("$2/hr, free
+    Mon-Sun")."""
     if not text or not str(text).strip() or str(text).strip().lower() in ("n/a", "na", "none", "-"):
         return {}, []
     text = _strip_french(str(text))
@@ -466,6 +469,7 @@ def parse_rate_text(text):
     last = None
     skip = set()
     free_days = set()     # weekdays the text calls free ("$2/hr, free Sat-Sun")
+    free_evenings = False  # "free evenings and weekends"
     night_max = []        # "$10 overnight", "$5 Night Max" with no window: never the day maximum
     last_p, last_p_end = None, 0   # the latest window and where its clock range ends in the text
     for i, (kind, a, b, val) in enumerate(toks):
@@ -517,9 +521,11 @@ def parse_rate_text(text):
                         rule["holidays_free"] = True
                     skip.add(i + 2)
             # "free Sat-Sun", "free on weekends and holidays": unpaid days (with no clock window after them)
-            elif nxt and nxt[0] == "days" and re.match(r"^[\s:,\-]*(?:on\s+)?$", text[b:nxt[1]], re.I) \
+            elif nxt and nxt[0] == "days" and FREE_GAP_RE.match(text[b:nxt[1]]) \
                     and not (i + 2 < len(toks) and toks[i + 2][0] == "hours"
                              and re.match(r"^[\s:,\-]*$", text[nxt[2]:toks[i + 2][1]])):
+                if re.search(r"\b(?:eve|evening|night|overnight)s?\b", text[b:nxt[1]], re.I):
+                    free_evenings = True
                 free_days |= nxt[3][0]
                 if nxt[3][1]:
                     rule["holidays_free"] = True
@@ -760,6 +766,9 @@ def parse_rate_text(text):
             paid = set(rule["paid_days"]) if rule.get("paid_days") is not None else None
         if paid is not None and free_said and paid <= free_said:
             return {}, notes + ["free days cover every paid day; price not used"]
+    if free_evenings and not (rule.get("paid_hours") or rule.get("periods")):
+        # with a paid window ("$2/hr 8am-6pm") the evening is already unpaid; without one its hours are unknown
+        notes.append("free evenings (hours not given)")
     roll = rule.pop("_roll_max", None)
     if roll:
         if rule.get("periods"):

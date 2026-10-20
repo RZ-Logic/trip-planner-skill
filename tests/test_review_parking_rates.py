@@ -99,5 +99,19 @@ class PaidDaysThenFreeDays(unittest.TestCase):       # parking-2
         self.assertIsNone(pk.osm_charge_rule({"fee": "yes", "charge": "$2/hr, free Mon-Sun"})[0])
 
 
+class FreeEveningsAndWeekends(unittest.TestCase):    # parking-verifier-1
+    def test_not_inverted(self):
+        for text, rate in (("$2/hr 8am-6pm, free evenings and weekends", 2.0),
+                           ("$3/hr 9am-6pm, free nights and weekends", 3.0)):
+            self.assertEqual(price(text, WED10, 180), rate * 3, text)       # HEAD: 0.0
+            self.assertEqual(price(text, SAT10, 180), 0.0, text)            # HEAD: 6.0 / 9.0
+            self.assertEqual(price(text, WED10.replace(hour=19), 120), 0.0, text)
+
+    def test_evening_hours_not_given_are_noted(self):
+        rule, notes = pk.parse_rate_text("$3/hr, free evenings and weekends")
+        self.assertEqual(rule.get("paid_days"), [0, 1, 2, 3, 4])
+        self.assertIn("free evenings (hours not given)", notes)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -279,7 +279,8 @@ priced.
   at most the maximum), block prices ("$7 for 3 hours": one charge per started block; next to an hourly
   rate, "$15/24 hours" stays a cap; a stay across midnight is charged in units counted from arrival,
   not restarted at midnight), prices written before their window ("$2/hr Mon-Fri 8am-6pm;
-  $1/hr Sat 9am-5pm"), free days and windows ("free Sat-Sun", "$2/hr Mon-Fri, Sat-Sun free", "free
+  $1/hr Sat 9am-5pm"; in "$3/hr 8am-6pm, $1/hr evenings" the later rate with no hours is noted, not
+  used), free days and windows ("free Sat-Sun", "$2/hr Mon-Fri, Sat-Sun free", "free
   after 6pm and weekends", "free evenings and weekends"), OpenStreetMap day forms in rate text
   ("Mo-Fr"), and OpenStreetMap opening hours with day forms, several rules, "off" and public holidays
   ("Mo-Fr 07:00-19:00; Sa 08:00-17:00; Su off", past midnight too): a lot closed during the stay does

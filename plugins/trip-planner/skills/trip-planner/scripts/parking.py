@@ -743,7 +743,10 @@ def parse_rate_text(text):
             rule["paid_hours"] = p["hours"]
             if "days" in p:
                 rule["paid_days"] = p["days"]
-            if "hourly" in p and "hourly" not in rule:
+            if "hourly" in p:
+                # "$3/hr 8am-6pm, $1/hr evenings": the window's own rate, not the later one with no hours
+                if "hourly" in rule and rule["hourly"] != p["hourly"]:
+                    notes.append("second rate %s/h ignored" % dc.money(rule["hourly"]))
                 rule["hourly"], rule["per_min"] = p["hourly"], p.get("per_min", 60)
         else:
             # one price for every listed window is also the base rate ("$2/hr Mon-Fri 8am-6pm, Sat 9am-5pm")

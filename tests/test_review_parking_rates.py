@@ -1,5 +1,5 @@
 """Offline regression tests for the parking rate-text parser and pricing findings of the 2026-10 review
-(parking-1, -2, -5, -6, -7, -9, parking-verifier-1, -2, tests-ci-eng-7).
+(parking-1, -2, -5, -6, -7, -9, parking-verifier-1, -2, tests-ci-eng-7), and the follow-up review of those fixes.
 
 Every HTTP call is mocked (Overpass through parking._overpass); nothing here touches the network.
 
@@ -264,6 +264,15 @@ class TwelveHourTimes(unittest.TestCase):            # parking-11
         self.assertEqual(pk.parse_hours("9:00", "5:00 pm"), (540, 1020))
         self.assertEqual(pk.parse_hours("10:00", "10:00"), (600, 600))     # equal times keep the 24 h reading
         self.assertEqual(pk.parse_hours("8:00", "midnight"), (480, 1440))
+
+
+class WindowRateBeforeOtherRate(unittest.TestCase):  # follow-up of parking-1
+    def test_one_window_keeps_its_own_rate(self):
+        for text, cost in (("$3/hr 8am-6pm, $1/hr evenings", 6.0), ("$4/hr 7am-7pm Mon-Fri, $2/hr all other times", 8.0),
+                           ("$5/hr Mon-Fri 9am-5pm, $2/hr", 10.0)):
+            rule, notes = pk.parse_rate_text(text)
+            self.assertEqual(pk.price_rule(rule, WED10, 120, set())[0], cost, text)   # before: 2.0, 4.0, 4.0
+            self.assertTrue(any("second rate" in n for n in notes), text)
 
 
 if __name__ == "__main__":

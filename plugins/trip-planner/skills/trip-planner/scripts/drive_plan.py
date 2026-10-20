@@ -1756,6 +1756,26 @@ def _parking_cost(p):
     return 0.0
 
 
+def pr_parking_cost(lots, best):
+    """(cost, note) of the destination parking for the park-and-ride trigger and the driving baseline: #1's price
+    when it needs no check; when #1's price is unknown or has a check line (OpenStreetMap, old or unverified data),
+    the higher of it and the cheapest walkable lot that fits the stay with a price needing no check, so an unchecked
+    '$5' or 'free' at #1 cannot switch park and ride off or zero the parking. note: None, or why #1's price was not
+    used."""
+    if not best:
+        return None, None
+    cost = best.get("cost")
+    if cost is not None and not best.get("check"):
+        return cost, None
+    ok = [x["cost"] for x in lots or [] if x is not best and x.get("cost") is not None and not x.get("check")
+          and x.get("fits_stay", True) and not x.get("beyond_walk")]
+    if not ok or (cost is not None and cost >= min(ok)):
+        return cost, None
+    why = (best.get("check") or {}).get("why") or "price unknown"
+    at = "" if cost is None else " (free)" if cost == 0 else " (%s)" % dc.money(cost)
+    return min(ok), "the cheapest lot with a checked price; #1%s needs a check: %s" % (at, why)
+
+
 def _crosses(start, end, a_hm, b_hm):
     """True when [start, end) overlaps the daily window a_hm to b_hm ('02:00', '05:00') on any day."""
     a = dt.time(*[int(x) for x in a_hm.split(":")])
@@ -2607,7 +2627,7 @@ def _plan(args):
     gtha_boxes = next((a["boxes"] for a in dc.load_data("traffic")["areas"] if a["name"] == "GTHA"), [])
     in_gtha = dc.in_any(d_lat, d_lon, gtha_boxes)
     downtown = th.in_bbox(d_lat, d_lon, pr_cfg["downtown_toronto"])
-    best_cost = best.get("cost") if best else None
+    best_cost, park_note = pr_parking_cost((parking or {}).get("options"), best)
     trigger = None
     if args.park_and_ride == "on":
         trigger = "asked for"
@@ -2615,7 +2635,8 @@ def _plan(args):
         if downtown:
             trigger = "the destination is in downtown Toronto"
         elif best_cost is not None and best_cost > pr_cfg["trigger_parking_cad"]:
-            trigger = "parking near the destination costs %s for the stay" % dc.money(best_cost)
+            trigger = "parking near the destination costs %s for the stay%s" % (
+                dc.money(best_cost), " (%s)" % park_note if park_note else "")
     res["park_and_ride"] = None
     if trigger:
         en_r = energy[id(rec_r)]
@@ -2648,6 +2669,7 @@ def _plan(args):
                                 "drive_leave": rdep if arrive_by else None, "day": day, "traffic_factor": tf,
                                 "safety_min": slack_min, "vot": args.value_of_time})
         pr["trigger"] = trigger
+        pr["park_note"] = park_note
         res["park_and_ride"] = pr
 
     # ---- incidents
@@ -3068,6 +3090,8 @@ def clip(text, n):
 def pr_lines(pr, res):
     by = res["mode"] == "arrive_by"
     first = "run because %s" % pr.get("trigger")
+    if pr.get("park_note") and pr["park_note"] not in (pr.get("trigger") or ""):
+        first += "; parking counted at %s (%s)" % (dc.money(pr["park_cost"]), pr["park_note"])
     if pr.get("traffic_factor"):
         first += "; hub drives planned like the drive (x%.2f traffic allowance, %g min spare)" % (
             pr["traffic_factor"], pr.get("safety_min") or 0)

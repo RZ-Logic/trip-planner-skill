@@ -232,9 +232,10 @@ python3 ${CLAUDE_SKILL_DIR}/scripts/drive_plan.py --origin "ORIGIN" --dest "DEST
   or SpotHero (their terms forbid it) and never use stealth or bot-evasion modes; at a bot check, search
   instead.
 - **`PARK AND RIDE`** runs by itself for GTHA destinations downtown or with parking over $15 for the
-  stay (`--park-and-ride on` forces it). It plans only the way there and doubles the outbound fare for
-  the total, so call that an estimate. Before recommending a station: get the time they expect to come
-  back; find the trip back to the car with `trip_hubs.py --origin DESTINATION --dest STATION --depart
+  stay (a checked price when #1's has a check line; `--park-and-ride on` forces it). If your check puts a
+  GTHA destination's parking over $15 and it did not run, rerun with `--park-and-ride on`. It plans only
+  the way there and doubles the outbound fare for the total, so call that an estimate. Before
+  recommending a station: get the time they expect to come back; find the trip back to the car with `trip_hubs.py --origin DESTINATION --dest STATION --depart
   RETURN_TIME` (origin: the trip's destination; destination: the station where the car is parked) and
   read its transit-only baseline, or the operator's planner; check the last departure and the lot's
   access hours; give a return backup.

@@ -33,7 +33,7 @@ python3 scripts/drive_plan.py --origin "ORIGIN" --dest "DESTINATION" --depart "Y
 | `--fuel-price 1.85` | override the Ontario survey price ($/L) |
 | `--ev-model NAME --soc 80` | EV presets: ioniq5, ev9, equinox, model-y, model-3, niro, mach-e, leaf (2026, NACS), leaf-plus (2019 to 2025, 62 kWh), leaf-40 (2018 to 2025, 40 kWh), generic. `--car` picks the LEAF preset by model year and trim; a 2011 to 2017 LEAF uses leaf-40 with its own 24 or 30 kWh pack, with a WARNING. A `--car` whose NRCan range and rating imply a battery more than 10% smaller than its preset's gets that smaller battery, with a WARNING. `--battery-kwh`, `--max-dc-kw`, `--kwh-per-100km`, `--nacs-adapter` override |
 | `--max-walk-m 800`, `--height-m 2.1` | parking walk limit; garage clearance |
-| `--park-and-ride auto\|on\|off` | also check driving to a station and taking transit (auto: GTHA destinations only, downtown Toronto or parking over $15 for the stay; on: any destination) |
+| `--park-and-ride auto\|on\|off` | also check driving to a station and taking transit (auto: GTHA destinations only, downtown Toronto or parking over $15 for the stay, a checked price when #1's has a check line; on: any destination) |
 | `--weather auto\|clear\|rain\|snow`, `--temp-c` | auto uses the Open-Meteo forecast (16 days), else month normals |
 | `--provider auto\|tomtom\|valhalla\|osrm` | routing engine (auto: TomTom with a key, else Valhalla, else OSRM) |
 | `--json` | machine-readable output, every section |
@@ -79,9 +79,13 @@ Addresses work like `trip_hubs.py` (the same `ADDRESS NOT PRECISE` rule). Pass `
    Below the options come place rules (season, reservations), then the line saying posted signs
    override the data.
 6. `PARK AND RIDE`: runs automatically only for GTHA destinations, when the destination is downtown
-   Toronto or parking costs over $15 for the stay (`--park-and-ride on` forces it anywhere). When no
-   hub beats driving it says so. It is the `trip_hubs.py --access car` search: drive to a station or park and
-   ride lot, park (GO station parking is free, first come), take transit. Each option is costed there
+   Toronto or parking costs over $15 for the stay (`--park-and-ride on` forces it anywhere). When #1's
+   price is unknown or has a check line (OpenStreetMap, old or unconfirmed data), the trigger and the
+   "parking" in the driving total use the cheapest walkable lot that fits the stay with a checked price,
+   when that is dearer, and the first line says so. If verifying puts a GTHA destination's parking over
+   $15 and the section did not run, rerun with `--park-and-ride on`. When no hub beats driving it says
+   so. It is the `trip_hubs.py --access car` search: drive to a station or park and ride lot, park (GO
+   station parking is free, first come), take transit. Each option is costed there
    and back against driving there and back (the drive back priced at its own 407 time band and direction)
    plus parking.
 7. `CHARGING` (EV only): the starting charge ("assumed", with a WARNING, when `--soc` is not given:

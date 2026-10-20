@@ -23,6 +23,7 @@ import re
 import shutil
 import sys
 import tempfile
+import types
 import unittest
 from contextlib import redirect_stdout
 from unittest import mock
@@ -149,6 +150,85 @@ class ParkRideDriveBaseline(unittest.TestCase):
         rec = next(r for r in res["routes"] if r["letter"] == res["recommended"])
         self.assertAlmostEqual(res["park_and_ride"]["drive_rt"], round(rec["money"] + 22.0, 2), places=2)
         self.assertEqual(sum(1 for c in calls if c[0] == "reverse"), len(res["routes"]))   # no extra return built
+
+
+# ---------------------------------------------------------------------- docs-contract-verifier-1
+
+def lot(name, cost, confidence="official", check=None, unverified=False, walk_m=290):
+    return {"name": name, "lat": 43.3270, "lon": -79.7990, "walk_m": walk_m, "walk_min": 4, "search_min": 2,
+            "cost": cost, "cost_text": "free" if not cost else "%s for the stay" % dc.money(cost), "basis": "",
+            "kind": "lot", "source": "test data", "source_url": "", "confidence": confidence, "free": cost == 0.0,
+            "fits_stay": True, "max_stay_min": None, "capacity": 100, "often_full": False, "reservation": None,
+            "notes": "", "unverified": unverified, "check": check}
+
+
+def lots_parking(lots):
+    m = types.ModuleType("parking")
+
+    def find_parking(lat, lon, arrive, stay_min, opts, warnings):
+        return {"options": [dict(x) for x in lots], "place_rules": [], "reservations": [], "sources": ["test"],
+                "radius_m": 800, "caveat": "x"}
+    m.find_parking = find_parking
+    return m
+
+
+class ParkRideVerifiedParking(unittest.TestCase):
+    """docs-contract-verifier-1: the park-and-ride trigger and the driving baseline took lot #1's price as is, so an
+    unverified OpenStreetMap '$5' at #1 kept park and ride off in Burlington (GTHA) though the only checked lot
+    costs $18, and an unverified 'free' #1 counted the parking as $0 in 'vs driving + parking'."""
+
+    ARGV = tdp.BASE + ["--dest", "43.325500,-79.799000", "--depart", "2026-10-14 08:00", "--stay-hours", "9"]
+
+    def run_lots(self, lots, *extra):
+        with tdp.Env(), mock.patch.dict(sys.modules, {"parking": lots_parking(lots)}), \
+                mock.patch.object(th, "plan", return_value={"access": "car", "pareto": [], "others": []}):
+            return dp.plan(tdp.args_for(*(self.ARGV + list(extra))))
+
+    def test_osm_price_at_1_does_not_switch_park_and_ride_off(self):
+        res = self.run_lots([lot("Unnamed lot", 5.0, "osm", {"why": "price per OpenStreetMap, unverified"}),
+                             lot("City lot 4", 18.0)])
+        pr = res["park_and_ride"]
+        self.assertIsNotNone(pr)
+        self.assertIn("$18.00", pr["trigger"])
+        self.assertIn("unverified", pr["trigger"])
+        self.assertEqual(pr["trigger"], "parking near the destination costs $18.00 for the stay (the cheapest lot "
+                                        "with a checked price; #1 ($5.00) needs a check: price per OpenStreetMap, "
+                                        "unverified)")
+        self.assertEqual(pr["park_cost"], 18.0)
+        rec = next(r for r in res["routes"] if r["letter"] == res["recommended"])
+        self.assertEqual(rec["tolls"], 0)
+        self.assertAlmostEqual(pr["drive_rt"], round(2 * rec["money"] + 18.0, 2), places=2)
+
+    def test_unverified_free_at_1_is_not_counted_as_zero(self):
+        res = self.run_lots([lot("Unnamed lot", 0.0, "osm", {"why": "free per OpenStreetMap, unverified"},
+                                 unverified=True), lot("City lot 4", 12.0)], "--park-and-ride", "on")
+        pr = res["park_and_ride"]
+        rec = next(r for r in res["routes"] if r["letter"] == res["recommended"])
+        self.assertEqual(pr["park_cost"], 12.0)
+        self.assertEqual(rec["tolls"], 0)
+        self.assertAlmostEqual(pr["drive_rt"], round(2 * rec["money"] + 12.0, 2), places=2)
+        self.assertIn("run because asked for; parking counted at $12.00 (the cheapest lot with a checked price; "
+                      "#1 (free) needs a check: free per OpenStreetMap, unverified)", dp.render(res))
+
+    def test_checked_price_at_1_is_used_as_is(self):
+        res = self.run_lots([lot("City lot 4", 22.0), lot("City lot 9", 30.0)])
+        pr = res["park_and_ride"]
+        self.assertIn("$22.00", pr["trigger"])
+        self.assertNotIn("unverified", pr["trigger"])
+        self.assertEqual(pr["park_cost"], 22.0)
+
+    def test_pr_parking_cost_rules(self):
+        osm5 = lot("Unnamed lot", 5.0, "osm", {"why": "price per OpenStreetMap, unverified"})
+        far = dict(lot("Far lot", 9.0), beyond_walk=True)
+        unfit = dict(lot("Short lot", 7.0), fits_stay=False)
+        self.assertEqual(dp.pr_parking_cost([osm5, far, unfit], osm5), (5.0, None))   # nothing checked to use
+        dear = lot("City lot", 4.0)
+        self.assertEqual(dp.pr_parking_cost([osm5, dear], osm5), (5.0, None))         # #1 is already dearer
+        unknown = lot("Unknown lot", None, check={"why": "price unknown"})
+        cost, note = dp.pr_parking_cost([unknown, lot("City lot", 14.0)], unknown)
+        self.assertEqual(cost, 14.0)
+        self.assertIn("price unknown", note)
+        self.assertEqual(dp.pr_parking_cost([], None), (None, None))
 
 
 if __name__ == "__main__":

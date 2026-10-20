@@ -93,6 +93,28 @@ verified findings. They are fixed in batches below, test first; IDs in brackets 
   90% default is used. A listed price takes the DC rate when Level 2 and DC share a comma or "and" list,
   and an idle fee is no longer read as the charging rate. [ev-vehicles-5, ev-vehicles-6, ev-vehicles-7]
 
+### Batch 4: parking and curated data
+
+- **Parking money.** "2 hours free", "free for the first 2 hours" and "1st hour" are read, and a
+  first-hour price stays within the day maximum. Billing increments and block prices no longer restart at
+  midnight. A rate that prices only some hours ("$5 after 6pm") shows price unknown outside them instead
+  of free. [parking-9, parking-6, parking-7]
+- **Curated lots.** Wellington Rotary Beach is priced on weekday statutory holidays as on summer
+  weekends. Daily park fees (Fort George, Sandbanks, Bronte Creek, Sibbald Point, Tobermory, Wasaga Beach,
+  Pinery) are charged per day of a multi-day stay. White Water Walk keeps the Niagara Parks overnight ban.
+  Cobourg's waterfront lots carry their low-season rate (new off_season_rule key). Spencer Gorge charges
+  its reservation fees and 4 h limit only from Sep 26 to Nov 8 and is price unknown outside it (the
+  off-window fee is not published). [ext-14, ext-15, ext-16, data-integrity-1, data-integrity-4, parking-8]
+- **Verification and ranking.** Low-confidence prices get a "price not confirmed" check line. Curated lots
+  that only OpenStreetMap calls free are shown as unverified free. A verified price ranks ahead of an old
+  or unverified one unless that one is at least 25% cheaper; the docs describe this instead of
+  "best-verified lots first". [ext-11, data-integrity-7, parking-4, docs-contract-2]
+- **Offline Toronto.** Offline, downtown Toronto lists the bundled post-2019 Green P carparks with 2026
+  rates, and an empty offline result says the offline data has no parking there. [parking-3]
+- **Rural fares.** Distance- and zone-based rural fares (HSAT, PC Connect, GOST, LINX, Corridor 11,
+  Middlesex Route 4) print as "about X" with the operator's fare scale; LINX Route 4 gets its own $2 fare.
+  [data-integrity-6]
+
 ## 0.9.8 (2026-10-12)
 
 **Review:** a code, test and security review by Sonnet and Opus agents raised 80 findings. Verifiers

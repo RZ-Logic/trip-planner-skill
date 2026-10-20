@@ -196,9 +196,11 @@ python3 ${CLAUDE_SKILL_DIR}/scripts/drive_plan.py --origin "ORIGIN" --dest "DEST
 (Outside Claude Code, use the `scripts/` folder next to this file.)
 
 - **Pin down first:** `--arrive-by` for a deadline; `--stay-hours` (prices parking); `--round-trip`
-  for a day trip; `--transponder` if they have a 407 transponder (default: camera charges apply);
-  `--tz ZONE` when the origin is on another clock than Ontario's (a WARNING says when Toronto time was
-  assumed). Across a time-zone line all times are on the origin's clock: say so.
+  for a day trip; `--transponder` if they have a 407 transponder (default: camera charges apply); without
+  one, ask whether they already drove the 407 this month (`--407-this-month`: the $5 account fee is then
+  not added, which can change the 407 verdict); `--tz ZONE` when the origin is on another clock than
+  Ontario's (a WARNING says when Toronto time was assumed). Across a time-zone line all times are on the
+  origin's clock: say so.
   `TRIP_HOME='lat,lon;home'` labels a home end without any geocoder lookup (`references/driving.md`).
 - **The car.** If the user has not named it, check for a saved one (`car.json`, path in
   `references/driving.md`) or run once. If `CAR` says "not given" or "assumes", ask once for the year,

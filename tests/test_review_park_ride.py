@@ -355,5 +355,22 @@ class ParkRideTimeout(unittest.TestCase):
             self.assertEqual(th.http_get("https://example.invalid/main", timeout=1), b"ok")
 
 
+# ---------------------------------------------------------------------- docs-contract-6
+
+SKILL_MD = os.path.join(ROOT, "plugins", "trip-planner", "skills", "trip-planner", "SKILL.md")
+
+
+class SkillDocs(unittest.TestCase):
+    """docs-contract-6: without a transponder the $5 account fee is added unless --407-this-month is passed, and it
+    can flip the 407 verdict, but SKILL.md's 'Pin down first' never had the agent ask about it."""
+
+    def test_pin_down_asks_about_407_this_month(self):
+        with open(SKILL_MD, encoding="utf-8") as f:
+            lines = f.read().splitlines()
+        start = next(i for i, ln in enumerate(lines) if ln.startswith("- **Pin down first:**"))
+        end = next((i for i in range(start + 1, len(lines)) if lines[i].startswith("- **")), len(lines))
+        self.assertIn("--407-this-month", " ".join(lines[start:end]))
+
+
 if __name__ == "__main__":
     unittest.main()

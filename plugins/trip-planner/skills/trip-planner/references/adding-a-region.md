@@ -58,7 +58,10 @@ history as a fallback URL.
 ```
 
 Rules:
-- `name` in each feed is the label shown in output and the key for `flat_fares`.
+- `name` in each feed is the label shown in output and the key for `flat_fares`. A key
+  `"<agency> <route>"` (for example `"Niagara Region Transit 603"`) prices that route on its own; legs on
+  it are a separate fare from the agency's other routes. Fares in two currencies on one journey (a
+  cross-border trip) are listed per currency and never added; the journey's fare total is then unknown.
 - Region `bbox` decides when the file is used: when the origin is inside it (its rate card, time
   zone and fares lead) or the destination is inside it (its feeds load too). Feed `bbox` (from the
   catalog or the feed's `stops.txt`) decides which feeds load for a trip.
@@ -82,6 +85,10 @@ Rules:
   (Milton Transit): a card rider pays them in cash, and a leg boarded on their paper transfer follows
   the cash rules at the next change. Without this block, multi-agency fares print
   `(before transfer discounts)`.
+- Feeds priced from their own GTFS fare table follow its `transfers` (empty = unlimited; 0, 1 or 2
+  changes per fare) and `transfer_duration` (seconds from the first boarding; values under 30 minutes
+  are taken as a unit error and ignored). A `transfers` value the script cannot read charges every leg
+  and prints `(before transfer discounts)`.
 - Mark a broken feed with `"skip": true` and a `notes` explanation; the script warns when it matters.
 
 ### Keys for long trips and rural areas (see `ontario.json`)

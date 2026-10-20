@@ -1269,7 +1269,7 @@ def load_fares(gz):
             continue
         try:
             attrs[col(r, idx, "fare_id")] = (float(col(r, idx, "price")), col(r, idx, "currency_type"),
-                                             col(r, idx, "transfers"))
+                                             col(r, idx, "transfers"), col(r, idx, "transfer_duration"))
         except ValueError:
             continue
     rules = {}
@@ -1299,6 +1299,55 @@ def fare_lookup(model, route_id, oz, dz):
             if a and (best is None or a[0] < best[0]):
                 best = a
     return best
+
+
+# A transfer_duration shorter than this is read as a unit error and ignored: Niagara Region Transit's feed
+# publishes 120 and 1440 (minutes, not the seconds GTFS asks for).
+MIN_TRANSFER_DURATION_S = 1800
+
+
+def transfer_terms(a):
+    """GTFS fare_attributes transfers and transfer_duration -> (allowed transfers or None for unlimited,
+    seconds or None for no limit, understood). transfers '' is unlimited, 0, 1 or 2 that many; anything
+    else pays every leg and is flagged as not understood."""
+    t = (a[2] if len(a) > 2 else "").strip()
+    d = (a[3] if len(a) > 3 else "").strip()
+    try:
+        secs = int(float(d)) if d else None
+    except ValueError:
+        secs = None
+    if secs is not None and secs < MIN_TRANSFER_DURATION_S:
+        secs = None
+    if t == "":
+        return None, secs, True
+    try:
+        n = int(t)
+    except ValueError:
+        return 0, None, False
+    return (n, secs, True) if n >= 0 else (0, None, False)
+
+
+def gtfs_group_fare(model, glegs, zone):
+    """One feed's consecutive legs priced from its GTFS fare table: one fare per run of up to transfers + 1
+    legs boarded within transfer_duration of the run's first boarding, each run priced from its first
+    leg's route and its first to last zone. Returns (price tuple or None, understood)."""
+    total, ok, i = None, True, 0
+    while i < len(glegs):
+        first = glegs[i]
+        a = fare_lookup(model, first["route_id"], zone[first["from_idx"]], zone[first["to_idx"]])
+        if a is None:
+            return None, ok
+        allow, secs, understood = transfer_terms(a)
+        ok = ok and understood
+        j = i + 1
+        while (j < len(glegs) and (allow is None or j - i <= allow)
+               and (secs is None or glegs[j]["depart"] - first["depart"] <= secs)):
+            j += 1
+        if j - i > 1:
+            a = fare_lookup(model, first["route_id"], zone[first["from_idx"]], zone[glegs[j - 1]["to_idx"]]) or a
+        total = (total[0] + a[0], a[1], a[2]) if total else a
+        i = j
+    return total, ok
 
 
 def holiday_substitute(gz, d, mode):
@@ -2023,9 +2072,11 @@ def pair_fare(pairs, a, b):
 
 def journey_fare(net, legs, flat=None, payment="card", card_discount=None, rules=None, day=None):
     """Sum fares by feed group. The region's curated flat fare wins when present (charged once per
-    consecutive group); otherwise the feed's GTFS fare table (one fare per group when the feed allows
-    unlimited transfers), less the region's card discount for that feed when paying by card. With the
-    region's transfer rules, free and refunded transfers are taken off (see apply_transfers).
+    consecutive group; a route with its own price is a group of its own); otherwise the feed's GTFS fare
+    table (one fare per run of legs its transfers and transfer_duration allow, see gtfs_group_fare), less
+    the region's card discount for that feed when paying by card. With the region's transfer rules, free
+    and refunded transfers are taken off (see apply_transfers). Fares in two currencies are not added up:
+    the total is then None and complete False.
     Returns (total or None, currency, parts, complete)."""
     groups = []
     same = (rules or {}).get("same_agency") or {}
@@ -2035,14 +2086,17 @@ def journey_fare(net, legs, flat=None, payment="card", card_discount=None, rules
         # one fare covers a run of one feed only within that agency's transfer window: a bus caught long after
         # the first one is a new fare (apply_transfers then decides whether a transfer still covers it)
         win = next((same[n].get("window_min") for n in (lg["agency"], lg["feed"]) if n in same), None)
-        if groups and groups[-1][0] == lg["feed"] and (win is None or lg["depart"] - groups[-1][1][0]["depart"]
-                                                         <= win * 60):
+        # a route with its own price ("Niagara Region Transit 603", the WEGO pass) is a separate fare from the
+        # agency's other routes, so a local bus next to it does not take over its price
+        routed = "%s %s" % (lg["agency"], lg["route"]) in (flat or {})
+        if (groups and groups[-1][0] == lg["feed"] and groups[-1][2] == routed
+                and (win is None or lg["depart"] - groups[-1][1][0]["depart"] <= win * 60)):
             groups[-1][1].append(lg)
         else:
-            groups.append((lg["feed"], [lg]))
-    total, cur, parts, complete = 0.0, None, [], True
-    for feed, glegs in groups:
-        price, source = None, None
+            groups.append((lg["feed"], [lg], routed))
+    total, cur, parts, complete, mixed = 0.0, None, [], True, False
+    for feed, glegs, _routed in groups:
+        price, source, understood = None, None, True
         by_route = [(flat or {}).get("%s %s" % (lg["agency"], lg["route"])) for lg in glegs]
         # a route-level price ("Niagara Region Transit 602") wins when every leg of the group has one
         f = by_route[0] if all(by_route) else ((flat or {}).get(feed) or (flat or {}).get(glegs[0]["agency"]))
@@ -2057,19 +2111,7 @@ def journey_fare(net, legs, flat=None, payment="card", card_discount=None, rules
                 price, source = (float(amount), f.get("currency", ""), ""), "region table, %s" % payment
         model = net.fares.get(feed)
         if price is None and model:
-            unlimited = all(a[2] == "" for a in model["attrs"].values())
-            if unlimited:
-                price = fare_lookup(model, glegs[0]["route_id"], net.stop_zone[glegs[0]["from_idx"]],
-                                    net.stop_zone[glegs[-1]["to_idx"]])
-            else:
-                acc = None
-                for lg in glegs:
-                    a = fare_lookup(model, lg["route_id"], net.stop_zone[lg["from_idx"]], net.stop_zone[lg["to_idx"]])
-                    if a is None:
-                        acc = None
-                        break
-                    acc = (acc[0] + a[0], a[1], a[2]) if acc else a
-                price = acc
+            price, understood = gtfs_group_fare(model, glegs, net.stop_zone)
             if price is not None:
                 source = "GTFS"
                 disc = (card_discount or {}).get(feed)
@@ -2080,6 +2122,8 @@ def journey_fare(net, legs, flat=None, payment="card", card_discount=None, rules
                       "currency": None if price is None else price[1], "source": source,
                       "depart": glegs[0]["depart"], "first_stop": glegs[0]["from"], "last_stop": glegs[-1]["to"],
                       "routes": {lg["route"] for lg in glegs}})
+        if not understood:
+            parts[-1]["transfers_unknown"] = True   # fare_text adds "(before transfer discounts)"
     if rules:
         apply_transfers(parts, rules, payment, day)
     for p in parts:
@@ -2095,6 +2139,8 @@ def journey_fare(net, legs, flat=None, payment="card", card_discount=None, rules
             continue
         total += charged
         cur = cur or p.get("currency")
+        if p.get("currency") and cur and p["currency"] != cur:
+            mixed = True
         p["fare"] = round(charged, 2)
         if full is None:
             p["source"] = "transfer rule"
@@ -2105,6 +2151,8 @@ def journey_fare(net, legs, flat=None, payment="card", card_discount=None, rules
             p.pop("note", None)
     if not parts:
         return None, None, parts, True
+    if mixed:   # fares in two currencies cannot be added without an exchange rate the skill does not have
+        return None, None, parts, False
     return (round(total, 2) if total or complete else None), cur, parts, complete
 
 
@@ -3797,15 +3845,23 @@ def fare_text(o, cur_ride, has_region, rules_on=False):
                 each.append("%s %s" % (p["agency"], p["note"]))
             else:
                 each.append("%s %.2f" % (p["agency"], p["fare"]))
-        bits.append("transit fare %.2f %s (%s)" % (sum(p["fare"] for p in known), o.get("fare_currency") or "",
-                                                    "; ".join(each)))
+        curs = []   # free transfer legs carry no currency
+        for p in known:
+            if p.get("currency") and p["currency"] not in curs:
+                curs.append(p["currency"])
+        if len(curs) > 1:   # no exchange rate: one subtotal per currency, no total
+            sums = " + ".join("%.2f %s" % (sum(p["fare"] for p in known if p.get("currency") == c), c) for c in curs)
+            bits.append("transit fare %s (%s; not added up: different currencies)" % (sums, "; ".join(each)))
+        else:
+            bits.append("transit fare %.2f %s (%s)" % (sum(p["fare"] for p in known), o.get("fare_currency") or "",
+                                                        "; ".join(each)))
     for p in missing:
         where = p.get("fare_url") or ("see region notes" if has_region else "check the agency's website")
         bits.append("%s fare not in the data (%s)" % (p["agency"], where))
     txt = " + ".join(bits)
     if o.get("ride_cost") is not None and o.get("fare_complete") and (o.get("fare_currency") or cur_ride) == cur_ride:
         txt += ", total ~%.0f %s" % (o["ride_cost"] + o["transit_fare"], cur_ride)
-    if not rules_on and len(o["fare_parts"]) > 1:
+    if (not rules_on and len(o["fare_parts"]) > 1) or any(p.get("transfers_unknown") for p in o["fare_parts"]):
         txt += " (before transfer discounts)"
     return txt
 

@@ -104,5 +104,82 @@ class GtfsFarePath(unittest.TestCase):
         self.assertEqual(th.journey_fare(net, legs, payment="cash")[0], 13.30)
 
 
+# ------------------------------------------------------------------------------------------- hubs-pricing-io-3
+class GtfsTransferAllowance(unittest.TestCase):
+    def fare(self, transfers, departs, duration=""):
+        attrs = ("fare_id,price,currency_type,payment_method,transfers,transfer_duration\n"
+                 "F,3.00,USD,0,%s,%s\n" % (transfers, duration))
+        net = fake_net("metro", fare_model(attrs), ["", ""])
+        return th.journey_fare(net, [leg("metro", "Metro", str(k), d) for k, d in enumerate(departs)])
+
+    def test_one_transfer_covers_two_legs(self):
+        self.assertEqual(self.fare("1", ["10:00", "10:30"], "7200")[0], 3.00)               # was 6.00
+        self.assertEqual(self.fare("1", ["10:00", "10:30", "11:00"], "7200")[0], 6.00)      # was 9.00
+
+    def test_two_transfers_cover_three_legs(self):
+        self.assertEqual(self.fare("2", ["10:00", "10:30", "11:00"])[0], 3.00)              # was 9.00
+
+    def test_no_transfers_still_pays_each_leg(self):
+        self.assertEqual(self.fare("0", ["10:00", "10:30"])[0], 6.00)
+
+    def test_transfer_duration_ends_the_fare(self):
+        self.assertEqual(self.fare("", ["10:00", "11:00"], "7200")[0], 3.00)
+        self.assertEqual(self.fare("", ["10:00", "14:00"], "7200")[0], 6.00)                # was 3.00
+
+    def test_duration_in_minutes_is_not_read_as_seconds(self):
+        # Niagara Region Transit's feed publishes transfer_duration 120 (minutes); 120 s would charge every change
+        self.assertEqual(self.fare("", ["10:00", "10:30"], "120")[0], 3.00)
+
+    def test_unreadable_transfers_pays_each_leg_and_says_so(self):
+        total, cur, parts, complete = self.fare("x", ["10:00", "10:30"])
+        self.assertEqual(total, 6.00)
+        o = {"transit_fare": total, "fare_currency": cur, "fare_parts": parts, "fare_complete": complete}
+        self.assertIn("(before transfer discounts)", th.fare_text(o, "USD", False, rules_on=True))   # was absent
+
+
+# ---------------------------------------------------------------------------------------------------- ext-4
+NIAGARA = "Niagara Region Transit (incl. WEGO)"
+# the Niagara feed's own fare table (cached 2026-10): fare 1 local 3.50, fare 2 WEGO 17.00, both unlimited transfers
+NIAGARA_FARES = ("fare_id,price,currency_type,payment_method,transfers,transfer_duration\n"
+                 "2,17.00,CAD,0,,1440\n1,3.50,CAD,0,,120\n")
+NIAGARA_RULES = "fare_id,route_id,origin_id,destination_id,contains_id\n1,104,,,\n2,602,,,\n2,603,,,\n"
+
+
+class WegoPassBesideLocalBus(unittest.TestCase):
+    def fare(self, *routes):
+        net = fake_net(NIAGARA, fare_model(NIAGARA_FARES, NIAGARA_RULES), [""])
+        legs = [leg(NIAGARA, "Niagara Region Transit", r, 36000 + 1800 * k, 0, 0) for k, r in enumerate(routes)]
+        return th.journey_fare(net, legs, ONTARIO["flat_fares"], "card", ONTARIO.get("card_discount"),
+                               ONTARIO["transfer_rules"], DAY)
+
+    def test_local_bus_then_wego_pays_both(self):
+        total, _cur, parts, complete = self.fare("104", "603")
+        self.assertEqual((total, complete), (19.5, True))                                   # was 3.50
+        self.assertEqual([(p["fare"], p["source"]) for p in parts], [(3.5, "GTFS"), (16.0, "region table, card")])
+
+    def test_wego_then_local_bus_pays_both(self):
+        self.assertEqual(self.fare("603", "104")[0], 19.5)                                  # was 17.00 (GTFS)
+
+    def test_two_wego_lines_are_one_pass(self):
+        self.assertEqual(self.fare("602", "603")[0], 16.0)
+
+
+# ---------------------------------------------------------------------------------------------------- ext-12
+class MixedCurrencies(unittest.TestCase):
+    def test_fares_in_two_currencies_are_not_added(self):
+        class Net:
+            fares, fare_urls, stop_zone = {}, {}, [""]
+        flat = {"AgencyCA": {"card": 5.0, "currency": "CAD"}, "AgencyUS": {"card": 3.0, "currency": "USD"}}
+        legs = [leg("ca", "AgencyCA", "1", "10:00", 0, 0), leg("us", "AgencyUS", "2", "10:40", 0, 0)]
+        total, cur, parts, complete = th.journey_fare(Net, legs, flat)
+        self.assertEqual((total, cur, complete), (None, None, False))                     # was (8.0, 'CAD', True)
+        self.assertEqual([(p["fare"], p["currency"]) for p in parts], [(5.0, "CAD"), (3.0, "USD")])
+        txt = th.fare_text({"transit_fare": total, "fare_currency": cur, "fare_parts": parts, "fare_complete": complete,
+                            "ride_cost": 20.0}, "CAD", True)
+        self.assertIn("5.00 CAD + 3.00 USD", txt)
+        self.assertIn("not added up: different currencies", txt)
+        self.assertNotIn("total ~", txt)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -75,6 +75,24 @@ verified findings. They are fixed in batches below, test first; IDs in brackets 
   destination, not the reverse. trip_hubs output credits OpenStreetMap on a SOURCES line.
   [hubs-pricing-io-6, hubs-engine-6, ext-2, hubs-pricing-io-10]
 
+### Batch 3: driving and EV
+
+- **Stops on the clock.** Border waits and EV charging stops are placed on the drive's clock at the
+  crossing or charger, so the 407 band and later traffic factors use the time after the stop (a 30 min
+  wait before the 407 no longer prices the earlier, cheaper band). A crossing missing from the toll list
+  has no position and is still only added to the arrival. [drive-core-3]
+- **Links follow the recommendation.** A recommended route the router would not pick by itself (the
+  "without 407" border route, the forced 407 option, an alternative) gets a Google via point, and a
+  toll-free route that keeps a toll bridge no longer gets avoid=tolls. [drive-core-5]
+- **Park and ride.** The station cheapest there and back is always listed, tagged "(cheapest there and
+  back)". On one-way trips the comparison prices the drive back at its own 407 band and direction and no
+  longer doubles a one-way border toll. [ext-8, drive-core-4]
+- **EV charging.** When 80% cannot bridge a gap after a stop, stops may charge up to 95% where the next
+  leg needs it (noted as slower than shown); when even that fails the advice is Level 2 on the way, not
+  "leave with more charge". CHARGING shows the starting charge, marked "assumed" with a WARNING when the
+  90% default is used. A listed price takes the DC rate when Level 2 and DC share a comma or "and" list,
+  and an idle fee is no longer read as the charging rate. [ev-vehicles-5, ev-vehicles-6, ev-vehicles-7]
+
 ## 0.9.8 (2026-10-12)
 
 **Review:** a code, test and security review by Sonnet and Opus agents raised 80 findings. Verifiers

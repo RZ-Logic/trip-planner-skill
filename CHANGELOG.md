@@ -205,6 +205,37 @@ verified findings. They are fixed in batches below, test first; IDs in brackets 
   is gone, and the Bay St row is labelled as the stand-in example. [docs-contract-9, docs-contract-7,
   docs-contract-11]
 
+### Follow-up: review of the fixes
+
+A fresh review of the seven batches (7 area reviewers, then 3 verifiers that reproduced every finding)
+confirmed 31 problems in the fixes themselves; all are fixed below, test first.
+
+- **EV.** A drive back that works only by charging above 80% says so and names the charge. The drive back
+  is checked at its own forecast temperature before it is called charge-free (a drive back needing more
+  than one charge is still planned at the outbound temperature). "AWD" again means the versions named
+  AWD (no Performance, GT or Rally mixed in; the plain Model S/X row kept). A no-gain fast stop is skipped
+  only when that saves time. A listed time rate that mentions parking is used.
+- **Driving.** An unlisted border crossing no longer gets a "toll-free" route hundreds of km around it.
+  Parking across a clock change is priced for the real time parked. With --tz, the 407 band and city
+  traffic rows are read on Toronto time. A toll-free recommendation that keeps a bridge offers the route
+  with tolls as its second link. Old engine toll flags on the free 407 East, 412 and 418 are ignored.
+- **Hub finder.** Midnight-wrapped stop times are read correctly on the first and last night of a service
+  week; the no-service warning names night-before or next-day trips correctly; numeric options refuse
+  inf. A GTFS free transfer applies only onto routes its rules cover. The approximate-fare bound comes
+  from hubs cheaper than riding all the way. Holidays come only from the trip's own region files. A leg
+  that rode free on a credited-back fare starts no transfer window. One WEGO pass covers WEGO lines on
+  both sides of a local bus.
+- **Network and text.** Geocoding works when the cache folder cannot be created. A fully stored trip plans
+  offline even when certificates cannot be verified. TLS FAILED means a failed certificate check only; a
+  cut-off handshake is NETWORK BLOCKED, and mixed failures give NETWORK BLOCKED with the certificate fix.
+  An empty-host NETWORK BLOCKED says what blocks offline planning. US trips near the boxes no longer list
+  Ontario feed hosts. Names keep ZWJ and ZWNJ.
+- **Parking.** A paid window keeps its own rate when a second rate has no hours; "first hour, $1/hr after
+  6pm" keeps its evening window; "free 24 hours on weekends" is not a free-first allowance; opening hours
+  that start with a day-less rule keep the other days; "free Mon-Fri 6pm-8am" no longer unprices the lot;
+  zero-padded overnight windows ("07:00-01:00") run to 1am. The README and the batch 4 entry state the
+  ranking rule as the code applies it (an old or unverified price ranks as if 25% dearer).
+
 **Not fixed, waiting on owner decisions:** data-integrity-2 (data licence notices), docs-contract-1 and
 parking-12 (OSM names and website URLs shown to the agent), architecture-product-1 (non-commercial
 routing and weather hosts), architecture-product-5 (Onex and Megabus provenance), gem-G2A (PRESTO credits

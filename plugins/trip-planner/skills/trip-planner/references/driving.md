@@ -354,8 +354,9 @@ until its operator page or a search shows it is open.
    printed figures are now stale. Label checked prices as checked, not as script output.
 
 **Park and ride.** `trip_hubs.py --access car` checks every station and park and ride lot within
-driving range. It drives you there (fuel cost per km, no pickup wait, 4 minutes to park and reach the
-platform), then runs the usual transit scan. Hubs qualify when they have parking:
+driving range. It drives you there (fuel cost per km, or for an EV its energy at the home charging
+rate, no pickup wait, 4 minutes to park and reach the platform), then runs the usual transit scan.
+Hubs qualify when they have parking:
 
 - GO stations: free first come, except the stations listed in `gtha.json`;
 - TTC commuter lots: about $5 to $7 on weekdays (2025 press report; the TTC page lists no prices),

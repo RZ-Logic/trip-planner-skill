@@ -2650,7 +2650,10 @@ def _plan(args):
     res["park_and_ride"] = None
     if trigger:
         en_r = energy[id(rec_r)]
-        per_km = (en_r["cost"] / rec_r["km"]) if rec_r.get("km") else 0.14
+        if en_r.get("kind") == "ev" and en_r.get("kwh") is not None and rec_r.get("km"):
+            per_km = en_r["kwh"] / rec_r["km"] * home_rate   # the short drive to the station is charged at home
+        else:
+            per_km = (en_r["cost"] / rec_r["km"]) if rec_r.get("km") else 0.14
         one_way = en_r["cost"] + route_tolls(rec_r, args.transponder)
         if args.round_trip:
             drive_rt = rec["money"]

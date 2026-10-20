@@ -456,5 +456,31 @@ class AddsNothingTest(unittest.TestCase):
         self.assertEqual(self.stops(0.75), ["Early 150", "Mid 50"])
 
 
+class ParkRideRateTest(tcp.CarCase):
+    """gem-G6A: an EV's park-and-ride per-km rate (the short drive to the station) is its energy at the home
+    charging rate, not the long drive's public fast charging; the full drive's cost keeps the public charging."""
+
+    def test_ev_rate_excludes_public_charging(self):
+        seen = {}
+
+        def fake_pr(o, d, when, arrive_by, cost_per_km, hub_stay_h, one_way, *a, **kw):
+            seen["per_km"], seen["one_way"] = cost_per_km, one_way
+            return {"ran": False}
+
+        def pc(poly, km, dep, car, soc, t, w, opts=None):
+            return {"needed": True, "feasible": True, "stops": [], "arrive_soc": 0.3, "kwh_used": 98.9,
+                    "kwh_100km": 22.0, "public_cost": 34.43, "home_energy_cost": 6.86, "extra_s": 1800.0,
+                    "source": "test"}
+        self.evc.plan_charging = pc
+        with tdp.Env(), mock.patch.dict(sys.modules, {"ev_charging": self.evc}), \
+                mock.patch.object(dc, "fetch", side_effect=tcp.fetch_stub), \
+                mock.patch.object(dp, "park_and_ride", side_effect=fake_pr):
+            res = dp.plan(tdp.args_for(*(tcp.BASE[:-2] + ["--park-and-ride", "on", "--vehicle", "ev"])))
+        rec = next(r for r in res["routes"] if r["letter"] == res["recommended"])
+        home_rate = dp.costs()["electricity"]["home_rate"]
+        self.assertAlmostEqual(seen["per_km"], 98.9 / rec["km"] * home_rate)
+        self.assertGreaterEqual(seen["one_way"], 34.43 + 6.86 - 1e-9)
+
+
 if __name__ == "__main__":
     unittest.main()

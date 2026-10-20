@@ -791,6 +791,8 @@ def parse_rate_text(text):
         free_said = set(free_days)
         for k, t in enumerate(toks):      # days written right after "free" in the same clause
             if t[0] == "days" and k and toks[k - 1][0] == "free" and not CLAUSE_SEP.search(text[toks[k - 1][2]:t[1]]):
+                if k + 1 < len(toks) and toks[k + 1][0] == "hours" and re.match(r"^[\s:,\-]*$", text[t[2]:toks[k + 1][1]]):
+                    continue      # "free Mon-Fri 6pm-8am": a free window on those days, read above
                 free_said |= t[3][0]
         nonfree = [p for p in rule.get("periods") or [] if not p.get("free") and not (p.get("days") is None and p.get("holidays"))]
         if nonfree:

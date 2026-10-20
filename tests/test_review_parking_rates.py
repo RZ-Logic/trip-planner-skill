@@ -305,5 +305,14 @@ class OpeningHoursDaylessFirst(unittest.TestCase):   # follow-up of parking-5
         self.assertTrue(osm_lot(mon10, 120, charge="$3/hr", opening_hours="07:00-23:00; Su 09:00-18:00")["fits_stay"])
 
 
+class FreeWindowOnPaidDays(unittest.TestCase):       # follow-up of parking-2
+    def test_free_days_with_hours_are_a_window_not_free_days(self):
+        for text in ("$2/hr Mon-Fri 8am-6pm, free Mon-Fri 6pm-8am", "$2/hr Mon-Fri 8am-6pm, free Mon-Fri after 6pm"):
+            rule, notes = pk.parse_rate_text(text)
+            self.assertNotIn("free days cover every paid day; price not used", notes, text)   # before: rule {}
+            self.assertEqual(pk.price_rule(rule, WED10, 120, set())[0], 4.0, text)
+            self.assertEqual(pk.price_rule(rule, WED10.replace(hour=20), 120, set())[0], 0.0, text)
+
+
 if __name__ == "__main__":
     unittest.main()

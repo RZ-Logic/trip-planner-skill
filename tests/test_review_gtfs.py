@@ -18,6 +18,7 @@ _os.environ.setdefault("TRIP_PLANNER_QUIET", "1")   # no progress lines on stder
 import datetime as dt
 import io
 import json
+import math
 import os
 import sys
 import tempfile
@@ -354,6 +355,20 @@ class FootpathTests(unittest.TestCase):
                                                      "B,B2,2,300\n"})
         self.assertEqual(foot, {idx["Transfer B"]: [(idx["Transfer B across street"], 300)]})
         self.assertEqual(self.footpaths(None)[0], {})
+
+    def test_poleward_pairs_within_the_radius_always_get_a_footpath(self):
+        # hubs-engine-11: the grid is sized for the most poleward stop, not the mean latitude (here 50 N)
+        net = th.Network()
+        south = net.add_stop("south", 30.0, -80.0, "f", "")
+        dl = 390 / (111320 * math.cos(math.radians(60.0)))   # about 390 m east-west at 60 N
+        for k in range(40):
+            lon = -100.0 + k * 0.0005
+            a = net.add_stop("bay%d" % k, 60.0, lon, "f", "")
+            b = net.add_stop("platform%d" % k, 60.0, lon + dl, "f", "")
+            with self.subTest(k=k):
+                self.assertLessEqual(th.haversine_m(60.0, lon, 60.0, lon + dl), 400)
+                foot = th.build_footpaths(net, [south, a, b], 400, 120)
+                self.assertIn(b, dict(foot.get(a, [])))
 
 
 class ArgValidationTests(unittest.TestCase):

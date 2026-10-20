@@ -2119,8 +2119,8 @@ def build_footpaths(net, used, radius_m, min_change_s):
     used_set = set(used)
     foot = {}
     grid = None
-    if radius_m > 0:
-        ref = sum(net.stop_lat[i] for i in used) / max(1, len(used))
+    if radius_m > 0:   # cells sized for the most poleward stop, so the 3 x 3 search covers radius_m east-west
+        ref = max([abs(net.stop_lat[i]) for i in used] or [0.0])
         grid = Grid(net.stop_lat, net.stop_lon, used, radius_m, ref)
     for i in (used if grid else ()):
         lst = {}

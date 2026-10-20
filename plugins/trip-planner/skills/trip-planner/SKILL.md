@@ -107,6 +107,7 @@ Read the output in this order:
 8. `SECOND OPINION`: Transitous's best trip from the origin and each top hub, `agrees` (within 3
    minutes) or the difference. Compare routes before recommending against it, and keep its link to
    https://transitous.org/sources/ when you quote it.
+9. `SOURCES`: the OpenStreetMap credit for geocoding, driving times and station parking.
 
 The plan uses the region's pickup wait (printed on `RIDE COST MODEL`; none with `--access car`; from a
 place the region file marks as having no ride-hail, the first ride is a local taxi with a 30 minute wait
@@ -167,6 +168,7 @@ Always include:
 - The backup departure if they miss the planned one.
 - Coverage: "checked N hubs within X km using FEEDS".
 - Gaps: agencies without data, on-demand services not checked, prices that are estimates.
+- The `SOURCES` credit line, at the end, when the output has one.
 
 Never call an option the fastest or cheapest, or say transit-only was checked, when a WARNING says
 data for that area was missing.

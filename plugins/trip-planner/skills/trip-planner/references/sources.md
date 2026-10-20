@@ -68,7 +68,7 @@ Operator trip planners (for example GO, MiWay) are authoritative for that operat
 | Source | URL | Key | Notes |
 |---|---|---|---|
 | OSRM demo | https://router.project-osrm.org/table/v1/driving/... | No | Coordinates are lon,lat. Free-flow times (no traffic). Max about 1 request per second. |
-| FOSSGIS OSRM | https://routing.openstreetmap.de/routed-car/table/v1/driving/... | No | Same API; fallback. 1 request per second, attribution required. |
+| FOSSGIS OSRM | https://routing.openstreetmap.de/routed-car/table/v1/driving/... | No | Same API; fallback. 1 request per second, attribution required (`trip_hubs.py` prints it on the `SOURCES` line, with the OpenStreetMap credit for its geocoding, OSRM and Overpass data). |
 | Valhalla (FOSSGIS) | https://valhalla1.openstreetmap.de/sources_to_targets | No | POST JSON; models turn costs, slightly slower times than OSRM. |
 | OSRM route (manual method) | https://router.project-osrm.org/route/v1/driving/LON1,LAT1;LON2,LAT2?overview=false&alternatives=3 | No | One route's free-flow `duration` (seconds) and `distance` (metres) per alternative. For a toll-free route use Valhalla's `/route` with `"costing_options":{"auto":{"exclude_tolls":true}}`. |
 | Nominatim | https://nominatim.openstreetmap.org/search | No | 1 request per second, identifying User-Agent, cache results. Often returns only the street for suburban house numbers. |

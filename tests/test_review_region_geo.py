@@ -1,6 +1,7 @@
 """Regression tests for the review fixes in region selection, ride areas, geocoding and discovery (trip_hubs.py):
-region files never claim a point in another country (US border cities), and the first ride from a place with no
-ride-hail is a taxi.
+region files never claim a point in another country (US border cities), the first ride from a place with no
+ride-hail is a taxi, the Transitous second opinion uses the plan's safety margin, Photon's house match stays near
+Nominatim's street, discovered feeds that cannot be near the trip are not downloaded, and OpenStreetMap is credited.
 
 Offline: synthetic feeds and regions, every network call mocked, a fixed clock.
 Run: PYTHONPATH=tools/ci TRIP_PLANNER_NO_NETWORK=1 python -m unittest tests.test_review_region_geo -v
@@ -28,7 +29,7 @@ from unittest import mock
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from test_engine import pin_clock, th  # noqa: E402  (test_engine adds the scripts folder)
 from test_regressions import add_files  # noqa: E402
-from test_v098_hubs import feed, ok_network, run  # noqa: E402  (functions only: never import TestCase classes)
+from test_v098_hubs import feed, ok_network, osrm_reply, run  # noqa: E402  (functions only: never import TestCase classes)
 
 DAY = dt.date(2026, 10, 15)   # Thursday
 BASE = ["--region", "none", "--no-discover", "--routing", "estimate"]
@@ -390,6 +391,46 @@ class DiscoveryDownloads(unittest.TestCase):
             res, fetched = self.discover(rows, files, "43.5000,-79.8000", "43.8000,-79.4000")
         self.assertEqual(sorted(set(fetched)), ["https://files.example/0.zip", "https://files.example/1.zip"])
         self.assertTrue(any(w.startswith("over the") and "Far Two" in w for w in res["warnings"]), res["warnings"])
+
+
+# --------------------------------------------------------------------------------------- hubs-pricing-io-10
+class OsmAttribution(unittest.TestCase):
+    """A run that used an OpenStreetMap-based service (geocoding, OSRM, Overpass) credits OpenStreetMap."""
+
+    def trip(self, routing, origin="43.4990,-79.8000"):
+        p = feed([("A", "Hub A", 43.5000, -79.8000), ("C", "Dest C", 43.5500, -79.8000)], [("1", "WK", "t1", "C")],
+                 [("t1", "10:00:00", "10:00:00", "A", 1, 0, 0), ("t1", "10:20:00", "10:20:00", "C", 2, 0, 0)])
+        args = ["--origin", origin, "--dest", "43.5500,-79.8000", "--depart", "2026-10-15 09:50",
+                "--feed", "t=" + p, "--region", "none", "--no-discover", "--routing", routing]
+        place = [{"lat": "43.4990", "lon": "-79.8000", "addresstype": "building",
+                  "display_name": "Milton GO Station, Milton, Ontario, Canada"}]
+
+        def http_get(url, *a, **k):
+            return json.dumps(place).encode() if "nominatim" in url else osrm_reply(url)
+        with mock.patch.object(th, "http_get", side_effect=http_get),                 mock.patch.object(th, "check_network", side_effect=ok_network):
+            return run(args), run(args, as_json=False)
+
+    def test_osrm_run_prints_the_openstreetmap_credit(self):
+        res, txt = self.trip("auto")
+        self.assertIn("OpenStreetMap contributors", res["attribution"])
+        self.assertIn("ODbL", res["attribution"])
+        self.assertIn("router.project-osrm.org", res["attribution"])
+        self.assertNotIn("geocoding", res["attribution"])   # both ends were lat,lon
+        lines = txt.splitlines()
+        src = [i for i, ln in enumerate(lines) if ln.startswith("SOURCES  Map data (c) OpenStreetMap contributors")]
+        self.assertEqual(len(src), 1, txt)
+        self.assertFalse(any(ln.startswith("WARNING") for ln in lines[:src[0]]), txt)   # before the warnings
+
+    def test_no_osm_service_no_credit_line(self):
+        res, txt = self.trip("estimate")
+        self.assertIsNone(res["attribution"])
+        self.assertNotIn("SOURCES", txt)
+
+    def test_address_run_credits_the_geocoders(self):
+        res, _txt = self.trip("estimate", origin="Milton GO Station")
+        self.assertIn("OpenStreetMap contributors", res["attribution"])
+        self.assertIn("geocoding: Nominatim/Photon", res["attribution"])
+        self.assertNotIn("OSRM", res["attribution"])
 
 
 if __name__ == "__main__":

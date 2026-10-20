@@ -73,6 +73,8 @@ MOBILITYDB_CSV_URLS = [
 ]
 TRANSITOUS_URL = "https://api.transitous.org/api/v6/plan"
 TRANSITOUS_SOURCES_URL = "https://transitous.org/sources/"   # attribution its usage policy asks to show
+# the credit OpenStreetMap's licence asks for wherever its data is shown (geocoding, OSRM, Overpass)
+OSM_CREDIT = "Map data (c) OpenStreetMap contributors, ODbL 1.0 (https://www.openstreetmap.org/copyright)"
 
 DEFAULT_PRICING = {
     "label": "generic ride-hail estimate",
@@ -2816,6 +2818,7 @@ def plan(args):
         raise SystemExit("the origin and destination are the same place (%.0f m apart), so there is no trip to plan. "
                          "Check the two addresses." % haversine_m(o_lat, o_lon, d_lat, d_lon))
     infos = {}   # town-level reverse geocoding, once per point and run: country checks, discovery, border checks
+    osrm_hosts, overpass_used = set(), False   # OpenStreetMap-based services that answered, for the SOURCES line
 
     def place_info(lat, lon):
         k = ("%.3f" % lat, "%.3f" % lon)
@@ -3314,6 +3317,7 @@ def plan(args):
                     res = osrm_table(base, (d_lat, d_lon), [(e["lat"], e["lon"]) for e in pick])
                 except Exception:  # noqa: BLE001
                     continue
+                osrm_hosts.add(urllib.parse.urlsplit(base).netloc)
                 for e, r in zip(pick, res):
                     if r:
                         e.update(ride_free_s=r[0], ride_km=r[1] / 1000.0, osrm=True)
@@ -3360,6 +3364,7 @@ def plan(args):
             box = box_around(o_lat, o_lon, STATION_RADIUS_FACTOR * radius_m + STATION_PARKING_M + 200)
             elements = overpass_parking(box, warnings)
             lots = None if elements is None else osm_lots(elements)
+            overpass_used = elements is not None
         holidays = {h["date"] for r in regions for h in r.get("holidays") or []
                     if isinstance(h, dict) and h.get("stat", True)}
         clusters, parking_summary = hub_parking(net, clusters, blocks, lots, stay_min, day, holidays)
@@ -3463,6 +3468,7 @@ def plan(args):
             warnings.append(msg)
         else:
             osrm_ok = True
+            osrm_hosts.add(urllib.parse.urlsplit(base).netloc)
             if res[0]:
                 ride_all.update(ride_s=res[0][0] * f_all, ride_km=res[0][1] / 1000.0, source=osrm_label(f_all),
                                 free_s=res[0][0])
@@ -4037,6 +4043,7 @@ def plan(args):
         "hubs_routed": None if routed is None else {"osrm": routed[0], "estimate": routed[1]},
         "all_options": sorted(options, key=rank) if args.all else None,
         "crosscheck": crosscheck,
+        "attribution": osm_attribution(args, infos, osrm_hosts, overpass_used),
     })
     if car:
         common.update({"access": "car", "parking_summary": parking_summary,
@@ -4044,6 +4051,20 @@ def plan(args):
                                "traffic_factor": tf, "traffic_basis": ("planning allowance, %s" % tf_basis)
                                if tf_basis else "--traffic-factor"}})
     return common
+
+
+def osm_attribution(args, infos, osrm_hosts, overpass_used):
+    """The OpenStreetMap credit and the OSM-based services this run used, or None when it used none."""
+    used = []
+    if not (LATLON_RE.match(args.origin) and LATLON_RE.match(args.dest)):
+        used.append("geocoding: Nominatim/Photon")
+    if any(i["country"] or i["names"] for i in infos.values()):
+        used.append("place names: Nominatim")
+    if osrm_hosts:
+        used.append("driving times: OSRM (%s)" % ", ".join(sorted(osrm_hosts)))
+    if overpass_used:
+        used.append("station parking: Overpass")
+    return ("%s; %s" % (OSM_CREDIT, "; ".join(used))) if used else None
 
 
 # --------------------------------------------------------------------------- output
@@ -4432,6 +4453,8 @@ def render(res):
                           o["ride_source"], leg_name(o["legs"][0]) if o["legs"] else "-"))
         out.append("")
     out += second_opinion_lines(res.get("crosscheck"))
+    if res.get("attribution"):
+        out.append("SOURCES  " + res["attribution"])
     for w in res["warnings"]:
         out.append("WARNING " + w)
     if car:

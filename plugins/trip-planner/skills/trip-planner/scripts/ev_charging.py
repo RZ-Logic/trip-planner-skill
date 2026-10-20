@@ -674,6 +674,15 @@ def plan_charging(poly, route_km, depart, car, soc_start, temp_c, warnings, opts
             half = c["detour_km"] / 2.0
             arr = soc - (c["km"] - pos + half) * per_km
             target = _target(c, cands, per_km, reserve, cap, route_km, m)
+            if target - arr < MIN_ADD and c["good"]:
+                # a good charger picked over a nearer slower one, where the stop adds nothing: skip it when
+                # adding the same charge at the farther charger (a stop anyway) is no slower
+                alt = _farther(c, cands, pos, soc, per_km, reserve, cap, route_km, m)
+                if alt is not None and _skip_saves(car, c, alt, (cap - arr) * usable, temp_c, m):
+                    c = alt
+                    half = c["detour_km"] / 2.0
+                    arr = soc - (c["km"] - pos + half) * per_km
+                    target = _target(c, cands, per_km, reserve, cap, route_km, m)
             if target - arr < MIN_ADD:   # a stop that adds nothing: the next leg cannot be done from here
                 target = cap
             if target - arr < MIN_TOPUP:
@@ -1088,6 +1097,25 @@ def _pick(cands, pos, soc, per_km, reserve, max_soc, route_km, m):
     # among stations within 15 km of the farthest, take the fastest (then most ports)
     near = [c for c in pool if c["km"] >= far - 15]
     return max(near, key=lambda c: ((c["max_kw"] or 0), c["ports"], c["km"]))
+
+
+def _farther(c, cands, pos, soc, per_km, reserve, max_soc, route_km, m):
+    """The charger _pick would take among those beyond `c`, at any power, or None."""
+    reach = [x for x in _useful(cands, pos, soc, per_km, reserve, max_soc, m) if x["km"] > c["km"]]
+    if not reach:
+        return None
+    ok = [x for x in reach if _onward(x, cands, per_km, reserve, max_soc, route_km, m)] or reach
+    ok = [x for x in ok if x["detour_min"] <= 10] or ok
+    far = max(x["km"] for x in ok)
+    return max([x for x in ok if x["km"] >= far - 15], key=lambda x: ((x["max_kw"] or 0), x["ports"], x["km"]))
+
+
+def _skip_saves(car, c, alt, kwh, temp_c, m):
+    """True when adding `kwh` at `alt` (a stop anyway, so no second plug-in) takes no longer than a stop at `c`
+    for it."""
+    stop = charge_minutes(car, kwh, c["max_kw"], temp_c) + c["detour_min"]
+    later = charge_minutes(car, kwh, alt["max_kw"], temp_c) - m["plug_in_min"]
+    return later <= stop
 
 
 def _target(c, cands, per_km, reserve, max_soc, route_km, m):

@@ -438,5 +438,23 @@ class DriveAndHybridWordTest(unittest.TestCase):
         self.assertEqual(got["confidence"], "medium")
 
 
+class AddsNothingTest(unittest.TestCase):
+    """ev-vehicles-9: a good charger near the start where the stop adds nothing (reached near the 80% limit) is
+    skipped when adding that charge at the next charger is no slower; from a lower start it saves time and is
+    kept (the StopThatAddsNothing fixture of test_v098_ev_car, from 0.75 to 0.82)."""
+
+    def stops(self, soc):
+        recs = [t98.dc_at(1, "Early 150", 20, 150.0, 4), t98.dc_at(2, "Mid 50", 200, 50.0, 2)]
+        r, w = t98.run(350, recs, ev.car_profile("ioniq5"), soc)
+        self.assertTrue(r["feasible"], (soc, w))
+        return [s["name"] for s in r["stops"]]
+
+    def test_skip_early_fast_stop_when_it_saves_nothing(self):
+        for soc in (0.80, 0.82):
+            with self.subTest(soc=soc):
+                self.assertEqual(self.stops(soc), ["Mid 50"])
+        self.assertEqual(self.stops(0.75), ["Early 150", "Mid 50"])
+
+
 if __name__ == "__main__":
     unittest.main()

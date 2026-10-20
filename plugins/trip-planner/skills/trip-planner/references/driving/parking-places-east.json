@@ -151,10 +151,10 @@
   "reservation": {"required": false, "text": "", "url": "", "lead_days": 0},
   "lots": [
    {"name": "Green P Carpark 703, Bluffer's Park", "lat": 43.707124, "lon": -79.234353, "kind": "lot",
-    "rule": {"no_parking": [{"days": [0, 1, 2, 3, 4, 5, 6], "hours": ["00:00", "06:00"], "all_days": true}], "hours_note": "no parking 00:00 to 06:00", "hourly": 4.0, "per_min": 30, "daily_max": 12.0, "paid_days": [5, 6], "paid_hours": ["09:00", "20:00"], "season": ["05-01", "10-31"], "off_season": "free"},
-    "capacity": null, "notes": "Weekend rule only: weekdays free before 17:00 then up to $6 to 21:00, and holidays are priced like weekends (the rule cannot express either). Often full by late morning on summer weekends. OSM w/43106472.", "source": "https://parking.greenp.com/?p=13341"},
+    "rule": {"no_parking": [{"days": [0, 1, 2, 3, 4, 5, 6], "hours": ["00:00", "06:00"], "all_days": true}], "hours_note": "no parking 00:00 to 06:00", "hourly": 4.0, "per_min": 30, "daily_max": 12.0, "periods": [{"days": [5, 6], "hours": ["09:00", "20:00"], "holidays": true}, {"days": [0, 1, 2, 3, 4], "hours": ["17:00", "21:00"], "hourly": null, "max": 6.0}], "season": ["05-01", "10-31"], "off_season": "free"},
+    "capacity": null, "notes": "Weekends and holidays $2 per 30 min 09:00 to 20:00, $12 max; weekdays free before 17:00, then up to $6 to 21:00, priced at the $6 maximum (an upper bound: the evening hourly rate is not published here). Often full by late morning on summer weekends. OSM w/43106472.", "source": "https://parking.greenp.com/?p=13341"},
    {"name": "Green P Carpark 702, Bluffer's Park west", "lat": 43.706725, "lon": -79.235912, "kind": "lot",
-    "rule": {"no_parking": [{"days": [0, 1, 2, 3, 4, 5, 6], "hours": ["00:00", "06:00"], "all_days": true}], "hours_note": "no parking 00:00 to 06:00", "hourly": 4.0, "per_min": 30, "daily_max": 12.0, "paid_days": [5, 6], "paid_hours": ["09:00", "20:00"], "season": ["05-01", "10-31"], "off_season": "free"},
+    "rule": {"no_parking": [{"days": [0, 1, 2, 3, 4, 5, 6], "hours": ["00:00", "06:00"], "all_days": true}], "hours_note": "no parking 00:00 to 06:00", "hourly": 4.0, "per_min": 30, "daily_max": 12.0, "periods": [{"days": [5, 6], "hours": ["09:00", "20:00"], "holidays": true}, {"days": [0, 1, 2, 3, 4], "hours": ["17:00", "21:00"], "hourly": null, "max": 6.0}], "season": ["05-01", "10-31"], "off_season": "free"},
     "capacity": null, "notes": "Same rates as 703. OSM w/43074016.", "source": "https://parking.greenp.com/?p=13341"}]},
 
  {"id": "cobourg", "name": "Cobourg (Victoria Park beach, harbour, downtown)",
@@ -349,8 +349,8 @@
   "reservation": {"required": false, "text": "", "url": "", "lead_days": 0},
   "lots": [
    {"name": "Jack Darling Memorial Park lot", "lat": 43.525432, "lon": -79.602736, "kind": "lot",
-    "rule": {"hourly": 1.0, "paid_days": [5, 6], "paid_hours": ["08:00", "21:00"], "season": ["05-01", "09-15"], "off_season": "free", "max_stay_min": 240},
-    "capacity": null, "notes": "Weekend rule; holidays are also paid (rule cannot express it). About 1 km walk to the marsh boardwalk. OSM r/2383520.", "source": "https://www.mississauga.ca/wp-content/uploads/2018/09/21173104/Schedule-07B-Parking-Machines-in-Mississauga-Transitway-Stations-City-Parks-Marinas-Golf-Course.pdf"}]},
+    "rule": {"hourly": 1.0, "periods": [{"days": [5, 6], "hours": ["08:00", "21:00"], "holidays": true}], "season": ["05-01", "09-15"], "off_season": "free", "max_stay_min": 240},
+    "capacity": null, "notes": "Weekend and holiday rule. About 1 km walk to the marsh boardwalk. OSM r/2383520.", "source": "https://www.mississauga.ca/wp-content/uploads/2018/09/21173104/Schedule-07B-Parking-Machines-in-Mississauga-Transitway-Stations-City-Parks-Marinas-Golf-Course.pdf"}]},
 
  {"id": "conservation-halton-kelso", "name": "Kelso Conservation Area (Conservation Halton, Milton)",
   "match": {"lat": 43.505, "lon": -79.942, "radius_km": 1.5},

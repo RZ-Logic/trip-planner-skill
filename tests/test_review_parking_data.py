@@ -1,5 +1,6 @@
 """Offline regression tests for the parking ranking, check-line and curated parking data findings of the 2026-10
-review (ext-11, -14, -15, -16, data-integrity-1, -4, -7, parking-3, -4, -8, docs-contract-5, security-tos-9).
+review (ext-11, -14, -15, -16, data-integrity-1, -4, -7, -9, parking-3, -4, -8, -10, docs-contract-5,
+security-tos-9).
 
 Every HTTP call is mocked or blocked; nothing here touches the network.
 
@@ -148,6 +149,23 @@ class CuratedData(unittest.TestCase):
         self.assertIn("Far town lot", saving[0])
         self.assertNotIn("Far OSM lot", saving[0])
         self.assertNotIn("Far OSM lot", [o["name"] for o in res["options"]])
+
+    def test_weekend_holiday_lots(self):   # data-integrity-9, parking-10
+        # "weekends and holidays": a holiday on a weekday is paid like a weekend
+        b = "Green P Carpark 703, Bluffer's Park"
+        canada_day = curated_lot("bluffers-park", b, dt.datetime(2027, 7, 1, 10), 240, {"2027-07-01"})
+        self.assertEqual(canada_day["cost"], 12.0)
+        self.assertNotIn("cannot express", canada_day["notes"])
+        self.assertEqual(curated_lot("bluffers-park", "Green P Carpark 702, Bluffer's Park west",
+                                     dt.datetime(2027, 7, 1, 10), 240, {"2027-07-01"})["cost"], 12.0)
+        self.assertEqual(curated_lot("rattray-marsh", "Jack Darling Memorial Park lot", dt.datetime(2027, 5, 24, 10), 240,
+                                     {"2027-05-24"})["cost"], 4.0)
+        # weekday evening "up to $6" 17:00 to 21:00: charged at the $6 maximum, which the note calls an upper bound
+        wed = curated_lot("bluffers-park", b, dt.datetime(2027, 7, 7, 18), 180)
+        self.assertEqual(wed["cost"], 6.0)
+        self.assertIn("upper bound", wed["notes"])
+        self.assertEqual(curated_lot("bluffers-park", b, dt.datetime(2027, 7, 7, 10), 240)["cost"], 0.0)   # before 17:00
+        self.assertEqual(curated_lot("bluffers-park", b, dt.datetime(2027, 7, 10, 10), 240)["cost"], 12.0)  # a Saturday
 
 
 class PriceRule(unittest.TestCase):

@@ -693,7 +693,7 @@ def trip_geometry(o_lat, o_lon, d_lat, d_lon, args):
     """Ride radius, destination zone, the trip's bounding box and the 'near' list used to pick feeds."""
     od_m = haversine_m(o_lat, o_lon, d_lat, d_lon)
     # hubs much past 70% of the way rarely beat riding all the way, and flood the driving-time budget
-    radius_m = args.radius_km * 1000 if args.radius_km else min(40000.0, max(3000.0, 0.7 * od_m))
+    radius_m = args.radius_km * 1000 if args.radius_km is not None else min(40000.0, max(3000.0, 0.7 * od_m))
     dest_zone_m = max(3000.0, args.dest_walk_m * 2)   # feeds within twice the walking distance of the destination
     # a final ride can start well short of the destination, so feeds that reach that far count too
     reach_m = max(dest_zone_m, final_ride_radius(od_m, args))
@@ -2115,12 +2115,14 @@ class Grid:
 
 def build_footpaths(net, used, radius_m, min_change_s):
     """Walking transfers between different stops. A transfer never takes less than the minimum change
-    time; transfers.txt can forbid a pair or demand more time."""
-    ref = sum(net.stop_lat[i] for i in used) / max(1, len(used))
-    grid = Grid(net.stop_lat, net.stop_lon, used, radius_m, ref)
+    time; transfers.txt can forbid a pair or demand more time. radius_m 0: no walking, only transfers.txt pairs."""
     used_set = set(used)
     foot = {}
-    for i in used:
+    grid = None
+    if radius_m > 0:
+        ref = sum(net.stop_lat[i] for i in used) / max(1, len(used))
+        grid = Grid(net.stop_lat, net.stop_lon, used, radius_m, ref)
+    for i in (used if grid else ()):
         lst = {}
         for j in grid.near(net.stop_lat[i], net.stop_lon[i]):
             if j != i:
@@ -4861,7 +4863,7 @@ def render(res):
 def discover(args):
     warnings = []
     o_lat, o_lon, _ = resolve_place(args.origin, "origin", warnings, strict=False)
-    radius = (args.radius_km or 25) * 1000
+    radius = (args.radius_km if args.radius_km is not None else 25) * 1000
     box = box_around(o_lat, o_lon, radius)
     if args.dest:
         d_lat, d_lon, _ = resolve_place(args.dest, "destination", warnings, strict=False)
@@ -4949,6 +4951,21 @@ def print_timetable(regions, fid):
 
 # --------------------------------------------------------------------------- main
 
+def _num_arg(lo=None, lo_open=False, cast=float):
+    """argparse type: a number at least lo (above lo when lo_open). A copy of drive_plan's, which imports this file."""
+    def check(s):
+        try:
+            v = cast(s)
+        except ValueError:
+            raise argparse.ArgumentTypeError("%r is not a number" % s)
+        if v != v:   # NaN
+            raise argparse.ArgumentTypeError("%r is not a number" % s)
+        if lo is not None and (v < lo or (lo_open and v == lo)):
+            raise argparse.ArgumentTypeError("must be %s %g" % ("above" if lo_open else "at least", lo))
+        return v
+    return check
+
+
 def build_parser():
     """The command-line parser (drive_plan.py builds park-and-ride runs with it)."""
     ap = argparse.ArgumentParser(description="Find every transit hub worth taking a ride to (GTFS based).")
@@ -4961,14 +4978,16 @@ def build_parser():
     ap.add_argument("--region", default="auto", help="region file id in references/regions, 'auto' or 'none'")
     ap.add_argument("--feed", action="append", help="extra GTFS feed: id=URL, a URL or a local zip path (repeatable)")
     ap.add_argument("--no-discover", action="store_true", help="do not auto-discover feeds when no region file fits")
-    ap.add_argument("--radius-km", type=float, help="max ride distance to a hub (default 70%% of the trip, at most "
-                    "40 km; rail stations count up to 1.3 times that)")
+    ap.add_argument("--radius-km", type=_num_arg(0, lo_open=True), help="max ride distance to a hub (default 70%% "
+                    "of the trip, at most 40 km; rail stations count up to 1.3 times that)")
     ap.add_argument("--dest-walk-m", type=int, default=1500, help="max walk from last stop to destination")
     ap.add_argument("--origin-walk-m", type=int, default=1200, help="max walk to a stop for the transit-only baseline")
-    ap.add_argument("--footpath-m", type=int, default=400, help="max walk between stops when transferring")
+    ap.add_argument("--footpath-m", type=_num_arg(0, cast=int), default=400, help="max walk between stops when "
+                    "transferring (0: none, only the feed's transfers.txt pairs)")
     ap.add_argument("--min-change-min", type=float, default=2.0, help="min time for any transfer (same stop or a "
                     "short walk)")
-    ap.add_argument("--pickup-wait-min", type=float, help="minutes from booking to pickup (default from region, else 6)")
+    ap.add_argument("--pickup-wait-min", type=_num_arg(0), help="minutes from booking to pickup (default from "
+                    "region, else 6)")
     ap.add_argument("--safety-min", type=float, help="spare minutes planned at the hub, at the first "
                     "stop of transit only, and before an arrive-by deadline; tighter connections show as STRETCH "
                     "(default 3; 5 with --access car, as drive_plan.py)")

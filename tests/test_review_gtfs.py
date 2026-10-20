@@ -334,5 +334,51 @@ class ServiceWarningTests(unittest.TestCase):
         self.assertNotIn("test", net.idle_stops)
 
 
+class FootpathTests(unittest.TestCase):
+    """hubs-engine-10, hubs-pricing-io-12: --footpath-m 0 means no walking transfers, only transfers.txt pairs."""
+
+    TRIPS = [("1", "WK", "t1", "to B"), ("2", "WK", "t2", "to C"), ("3", "WK", "t3", "to C slow")]
+    TIMES = [("t1", "10:00:00", "10:00:00", "A", 1, 0, 0), ("t1", "10:10:00", "10:10:00", "B", 2, 0, 0),
+             ("t2", "10:15:00", "10:15:00", "B2", 1, 0, 0), ("t2", "10:25:00", "10:25:00", "C", 2, 0, 0),
+             ("t3", "10:05:00", "10:05:00", "D", 1, 0, 0), ("t3", "10:40:00", "10:40:00", "C", 2, 0, 0)]
+
+    def footpaths(self, extra):
+        net = th.Network()
+        th.load_feed(net, "t", "test", feed(self.TRIPS, self.TIMES, extra), DAY, hms(9, 0), hms(13, 0))
+        used = sorted({c[2] for c in net.conns} | {c[3] for c in net.conns})
+        idx = {name: i for i, name in enumerate(net.stop_name)}
+        return th.build_footpaths(net, used, 0, 120), idx
+
+    def test_footpath_zero_keeps_only_transfers_txt_pairs(self):
+        foot, idx = self.footpaths({"transfers.txt": "from_stop_id,to_stop_id,transfer_type,min_transfer_time\n"
+                                                     "B,B2,2,300\n"})
+        self.assertEqual(foot, {idx["Transfer B"]: [(idx["Transfer B across street"], 300)]})
+        self.assertEqual(self.footpaths(None)[0], {})
+
+
+class ArgValidationTests(unittest.TestCase):
+    """hubs-pricing-io-12: the parser rejects a zero ride radius and negative walks or waits."""
+
+    ARGS = ["--origin", "43.4990,-79.8000", "--dest", "43.5500,-79.8000"]
+
+    def test_bad_numbers_are_rejected_by_the_parser(self):
+        for extra in (["--radius-km", "0"], ["--radius-km", "-3"], ["--footpath-m", "-1"],
+                      ["--pickup-wait-min", "-5"], ["--footpath-m", "1.5"], ["--radius-km", "nan"]):
+            with self.subTest(extra=extra), redirect_stderr(io.StringIO()):
+                self.assertRaises(SystemExit, th.build_parser().parse_args, self.ARGS + extra)
+        args = th.build_parser().parse_args(self.ARGS + ["--footpath-m", "0", "--pickup-wait-min", "0"])
+        self.assertEqual((args.footpath_m, args.pickup_wait_min), (0, 0.0))
+        self.assertEqual(th.build_parser().parse_args(self.ARGS + ["--radius-km", "2.5"]).radius_km, 2.5)
+
+    def test_footpath_zero_plans(self):
+        p = feed(FootpathTests.TRIPS, FootpathTests.TIMES)
+        res = run(self.ARGS + ["--depart", "2026-10-15 09:45", "--feed", "t=" + p, "--footpath-m", "0",
+                               "--radius-km", "5", "--origin-walk-m", "800"] + BASE)
+        self.assertEqual(res["radius_km"], 5.0)
+        # no walk from B to B2, so not t1 + t2 (10:25) but the slow t3 from Hub D
+        self.assertEqual((res["transit_only"] or {}).get("arrive"), hms(10, 40))
+        self.assertFalse([lg for lg in res["transit_only"]["legs"] if lg.get("to") == "Transfer B across street"])
+
+
 if __name__ == "__main__":
     unittest.main()

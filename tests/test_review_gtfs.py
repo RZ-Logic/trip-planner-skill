@@ -412,12 +412,21 @@ class ArgValidationTests(unittest.TestCase):
 
     def test_bad_numbers_are_rejected_by_the_parser(self):
         for extra in (["--radius-km", "0"], ["--radius-km", "-3"], ["--footpath-m", "-1"],
-                      ["--pickup-wait-min", "-5"], ["--footpath-m", "1.5"], ["--radius-km", "nan"]):
+                      ["--pickup-wait-min", "-5"], ["--footpath-m", "1.5"], ["--radius-km", "nan"],
+                      ["--radius-km", "inf"], ["--pickup-wait-min", "inf"], ["--pickup-wait-min", "1e999"]):
             with self.subTest(extra=extra), redirect_stderr(io.StringIO()):
                 self.assertRaises(SystemExit, th.build_parser().parse_args, self.ARGS + extra)
         args = th.build_parser().parse_args(self.ARGS + ["--footpath-m", "0", "--pickup-wait-min", "0"])
         self.assertEqual((args.footpath_m, args.pickup_wait_min), (0, 0.0))
         self.assertEqual(th.build_parser().parse_args(self.ARGS + ["--radius-km", "2.5"]).radius_km, 2.5)
+
+    def test_drive_plan_rejects_infinite_numbers(self):
+        # follow-up: drive_plan keeps its own copy of the check, so inf must fail there too
+        import drive_plan as dp
+        for extra in (["--value-of-time", "inf"], ["--stay-hours", "1e999"], ["--max-walk-m", "inf"]):
+            with self.subTest(extra=extra), redirect_stderr(io.StringIO()):
+                self.assertRaises(SystemExit, dp.build_parser().parse_args, self.ARGS + extra)
+        self.assertEqual(dp.build_parser().parse_args(self.ARGS + ["--value-of-time", "45"]).value_of_time, 45.0)
 
     def test_footpath_zero_plans(self):
         p = feed(FootpathTests.TRIPS, FootpathTests.TIMES)

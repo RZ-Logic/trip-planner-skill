@@ -5006,7 +5006,7 @@ def _num_arg(lo=None, lo_open=False, cast=float):
             v = cast(s)
         except ValueError:
             raise argparse.ArgumentTypeError("%r is not a number" % s)
-        if v != v:   # NaN
+        if v != v or v in (math.inf, -math.inf):   # NaN, inf, 1e999 (isfinite overflows on a huge int)
             raise argparse.ArgumentTypeError("%r is not a number" % s)
         if lo is not None and (v < lo or (lo_open and v == lo)):
             raise argparse.ArgumentTypeError("must be %s %g" % ("above" if lo_open else "at least", lo))

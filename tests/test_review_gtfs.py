@@ -182,5 +182,33 @@ class WindowBoardingTests(unittest.TestCase):
         self.assertTrue([w for w in res["warnings"] if "have no arrivals in the time window" in w], res["warnings"])
 
 
+class StationTransfersTests(unittest.TestCase):
+    """hubs-engine-5: a transfers.txt rule naming a station (location_type 1) applies to all its child stops."""
+
+    STOPS5 = [("A", "Hub A", 43.5, -79.8), ("BS", "Big Station", 43.52, -79.8), ("P1", "Platform 1", 43.52, -79.8),
+              ("P2", "Platform 2", 43.52054, -79.8), ("C", "Dest C", 43.55, -79.8)]   # P1 and P2 are 60 m apart
+    STOPS_TXT = ("stop_id,stop_name,stop_lat,stop_lon,location_type,parent_station\n"
+                 "A,Hub A,43.5,-79.8,0,\nBS,Big Station,43.52,-79.8,1,\nP1,Platform 1,43.52,-79.8,0,BS\n"
+                 "P2,Platform 2,43.52054,-79.8,0,BS\nC,Dest C,43.55,-79.8,0,\n")
+
+    def arrival(self, transfers):
+        p = feed([("1", "WK", "t1", "P1"), ("2", "WK", "t2", "C"), ("2", "WK", "t3", "C")],
+                 [("t1", "10:00:00", "10:00:00", "A", 1, 0, 0), ("t1", "10:10:00", "10:10:00", "P1", 2, 0, 0),
+                  ("t2", "10:13:00", "10:13:00", "P2", 1, 0, 0), ("t2", "10:25:00", "10:25:00", "C", 2, 0, 0),
+                  ("t3", "10:43:00", "10:43:00", "P2", 1, 0, 0), ("t3", "10:55:00", "10:55:00", "C", 2, 0, 0)],
+                 {"stops.txt": self.STOPS_TXT,
+                  "transfers.txt": "from_stop_id,to_stop_id,transfer_type,min_transfer_time\n" + transfers},
+                 stops=self.STOPS5)
+        net, scan, idx = scan_for(p, hms(9, 0), hms(13, 0))
+        return scan.evaluate(idx["Hub A"], hms(9, 55))[0]
+
+    def test_station_level_rules_apply_to_child_stops(self):
+        self.assertEqual(self.arrival("BS,BS,2,480\n"), hms(10, 55))   # 8 min to change: the 10:13 is gone
+        self.assertGreaterEqual(self.arrival("BS,BS,3,\n"), th.INF)    # no transfers at this station
+
+    def test_a_rule_naming_the_exact_stops_wins_over_the_station_rule(self):
+        self.assertEqual(self.arrival("BS,BS,2,480\nP1,P2,2,120\n"), hms(10, 25))
+
+
 if __name__ == "__main__":
     unittest.main()

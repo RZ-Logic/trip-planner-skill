@@ -1521,11 +1521,14 @@ def load_feed(net, fid, label, path, day, t0, t_end, holidays=None, local_tz=Non
                 if start is not None and end is not None and head > 0:
                     freq.setdefault(tid, []).append((start, end, head, col(r, idx, "exact_times") == "1"))
 
-    stops_raw = {}
+    stops_raw, children = {}, {}
     idx, rows = gz.table("stops.txt")
     for r in rows:
         if not r:
             continue
+        par = col(r, idx, "parent_station")
+        if par:   # platforms of a station: transfers.txt may name the station for all of them
+            children.setdefault(par, []).append(col(r, idx, "stop_id"))
         try:
             lat, lon = float(col(r, idx, "stop_lat")), float(col(r, idx, "stop_lon"))
         except ValueError:
@@ -1648,22 +1651,35 @@ def load_feed(net, fid, label, path, day, t0, t_end, holidays=None, local_tz=Non
     # transfers.txt: forbidden transfers and minimum transfer times
     if gz.has("transfers.txt"):
         idx, rows = gz.table("transfers.txt")
+        levels = ({}, {})   # station-level rules first, then rules naming the exact stops (they win)
+
+        def ends(sid):
+            if sid in local:
+                return [local[sid]]
+            return [local[c] for c in children.get(sid, ()) if c in local]   # a station: every served child
+
         for r in rows:
             if not r:
                 continue
             if any(col(r, idx, k) for k in ("from_route_id", "to_route_id", "from_trip_id", "to_trip_id")):
                 continue  # route- or trip-specific rules are not modelled; never apply them stop-wide
-            a, b = local.get(col(r, idx, "from_stop_id")), local.get(col(r, idx, "to_stop_id"))
-            if a is None or b is None:
+            fa, fb = col(r, idx, "from_stop_id"), col(r, idx, "to_stop_id")
+            aa, bb = ends(fa), ends(fb)
+            if not aa or not bb:
                 continue
+            lvl = levels[fa in local and fb in local]
             ttype = col(r, idx, "transfer_type")
-            if ttype == "3":
-                net.xfer[(a, b)] = -1
-            elif ttype == "2":
-                try:
-                    net.xfer[(a, b)] = max(net.xfer.get((a, b), 0), int(float(col(r, idx, "min_transfer_time"))))
-                except ValueError:
-                    pass
+            for a in aa:
+                for b in bb:
+                    if ttype == "3":
+                        lvl[(a, b)] = -1
+                    elif ttype == "2":
+                        try:
+                            lvl[(a, b)] = max(lvl.get((a, b), 0), int(float(col(r, idx, "min_transfer_time"))))
+                        except ValueError:
+                            pass
+        for lvl in levels:
+            net.xfer.update(lvl)
     return info
 
 

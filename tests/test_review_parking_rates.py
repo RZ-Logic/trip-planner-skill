@@ -283,5 +283,14 @@ class FirstHourThenTimedRate(unittest.TestCase):     # follow-up of parking-9
         self.assertEqual(price("$5 1st hour, $3/hr after", WED10, 180), 11.0)   # "after" with no time is still read
 
 
+class FreeHoursOnDays(unittest.TestCase):            # follow-up of parking-9
+    def test_free_all_day_is_not_a_free_allowance(self):
+        for text in ("$2/hr Mon-Fri 9am-9pm, free 24 hours on weekends", "$2/hr Mon-Fri 9am-9pm, 24 hours free on weekends"):
+            self.assertNotIn("free_first_min", pk.parse_rate_text(text)[0], text)
+            self.assertEqual(price(text, WED10, 120), 4.0, text)            # before: 0.0 "free for the first 24 h"
+            self.assertEqual(price(text, WED10, 600), 20.0, text)
+            self.assertEqual(price(text, SAT10, 120), 0.0, text)
+
+
 if __name__ == "__main__":
     unittest.main()

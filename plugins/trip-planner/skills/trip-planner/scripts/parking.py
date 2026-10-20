@@ -214,7 +214,8 @@ FIRST_HOUR_RE = re.compile(r"(?P<pre>US\s*\$|CA?\$|C\$|\$)\s*(?P<a>\d+(?:\.\d+)?
                            r"[\s,;.]*(?:then\s+)?(?:\$\s*)?(?P<b>\d+(?:\.\d+)?)\s*(?:(?:/|per|for)?\s*(?:each\s+)?"
                            r"(?:additional|addt?'?l|extra|subsequent)\s*(?:hour|hr|h)\b"
                            r"|(?:/|per)\s*(?:hour|hr|h)\b(?:\s*(?:after|thereafter)\b(?!\s*(?:\d|midnight|noon)))?)", re.I)
-# "first hour free", "2 hours free" (not "2 hours free parking limit"), "free for the first 2 hours"
+# "first hour free", "2 hours free" (not "2 hours free parking limit"), "free for the first 2 hours"; without
+# "first", _tokens reads the hours only when a price follows ("2 hours free, then $3/hr")
 FREE_FIRST_RE = re.compile(r"first\s+(?P<n>\d+|one|two|half)?\s*(?P<u>hours?|hrs?|h|min(?:ute)?s?)\s*(?:is\s+|are\s+)?free"
                            r"|\b(?P<n2>\d+|one|two|half)\s*(?P<u2>hours?|hrs?|h|min(?:ute)?s?)\s+free\b(?!\s*(?:parking\s*)?(?:limit|max))"
                            r"|\bfree\s+(?:for\s+)?(?:the\s+)?(?:first\s+)?(?P<n3>\d+|one|two|half)\s*(?P<u3>hours?|hrs?|h|min(?:ute)?s?)\b", re.I)
@@ -342,7 +343,10 @@ def _tokens(text):
                                                "evening": bool(EVENING_RE.search(text[m.start():end + 20]) or EVENING_RE.search(prev))}))
         used.append((m.start(), end))
     for m in FREE_FIRST_RE.finditer(text):
-        q = (m.group("n") or m.group("n2") or m.group("n3") or "1").lower()
+        if m.group("u") is None and not re.search(r"\bfirst\b", m.group(), re.I) \
+                and not re.match(r"[\s,;.]*(?:then\b|(?:US\s*|CA?|C)?\$)", text[m.end():], re.I):
+            continue   # "free 24 hours on weekends": when parking is free, not free hours before a price
+        q =(m.group("n") or m.group("n2") or m.group("n3") or "1").lower()
         n = {"one": 1, "two": 2, "half": 0.5}.get(q) or float(q)
         unit = (m.group("u") or m.group("u2") or m.group("u3")).lower()
         mins = n if unit.startswith("min") else n * 60

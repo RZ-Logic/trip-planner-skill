@@ -2493,8 +2493,8 @@ def opening_schedule(text):
     "Mo-Su 00:00-24:00" -> "always"; None when the value uses syntax this reader does not handle (months,
     sunrise, comments, "+", "||"). Rules are split on ";" and on the comma before a day ("Mo-Fr 08:00-18:00,
     Sa 09:00-12:00") and read in order: a later rule replaces the days it names, the first rule that names
-    weekdays closes the days it leaves out, a day list with no time is open all day, and an end at or before
-    its start runs past midnight."""
+    weekdays closes the days it leaves out unless a rule with no days came before it ("07:00-23:00; Su off"),
+    a day list with no time is open all day, and an end at or before its start runs past midnight."""
     t = (text or "").strip()
     if not t:
         return None
@@ -2540,6 +2540,7 @@ def opening_schedule(text):
             named = True
         if not m.group("days"):
             days = set(range(7))
+            named = True     # "07:00-23:00; Su 09:00-18:00": a rule with no days sets the whole week
         for d in days:
             week[d] = list(spans)
         if hol:

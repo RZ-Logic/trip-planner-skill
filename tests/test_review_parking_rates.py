@@ -292,5 +292,18 @@ class FreeHoursOnDays(unittest.TestCase):            # follow-up of parking-9
             self.assertEqual(price(text, SAT10, 120), 0.0, text)
 
 
+class OpeningHoursDaylessFirst(unittest.TestCase):   # follow-up of parking-5
+    def test_a_rule_with_no_days_sets_the_week(self):
+        mon10 = dt.datetime(2026, 10, 19, 10, 0)
+        s = pk.opening_schedule("07:00-23:00; Su 09:00-18:00")
+        self.assertTrue(pk.open_for_schedule(s, mon10, 120))                # before: False (Mon-Sat closed)
+        self.assertTrue(pk.open_for_schedule(s, SUN10, 120))
+        self.assertFalse(pk.open_for_schedule(s, SUN10.replace(hour=19), 60))
+        s = pk.opening_schedule("08:00-20:00; Su off")                      # before: None (hours not read)
+        self.assertTrue(pk.open_for_schedule(s, mon10, 120))
+        self.assertFalse(pk.open_for_schedule(s, SUN10, 60))
+        self.assertTrue(osm_lot(mon10, 120, charge="$3/hr", opening_hours="07:00-23:00; Su 09:00-18:00")["fits_stay"])
+
+
 if __name__ == "__main__":
     unittest.main()

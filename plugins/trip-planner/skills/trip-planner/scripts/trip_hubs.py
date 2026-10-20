@@ -50,6 +50,7 @@ OSRM_BATCH = 200       # destinations per OSRM table request (URL stays under ~5
 OSRM_MAX_REQUESTS = 5
 OSRM_FALLBACK = "https://routing.openstreetmap.de/routed-car"
 DISCOVER_MAX_FEEDS = 40   # feeds with stops near the trip; feeds without nearby stops do not count
+DISCOVER_MAX_DOWNLOADS = 60   # tuning: discovered feeds downloaded per run, loaded or not
 DISCOVER_MAX_AREA = 30.0   # square degrees; bigger bboxes are national/intercity feeds
 DISCOVER_FAR_KM = 300.0    # bbox centred farther than this from the trip is probably a bad bbox
 DISCOVER_DUP_IOU = 0.8     # same provider and this much bbox overlap = the same feed listed twice
@@ -1836,9 +1837,10 @@ def bbox_iou(a, b):
     return inter / (area(a) + area(b) - inter)
 
 
-def discover_feeds(box, rows=None, places=None):
+def discover_feeds(box, rows=None, places=None, countries=None):
     """GTFS feeds whose bounding box intersects `box`, smallest area first. Feeds with no bounding box
-    in the catalog are matched by town name (`places`, lowercase). Returns (feeds, too_big, far, duplicates)."""
+    in the catalog are matched by town name (`places`, lowercase), and only in the trip's `countries` (ISO codes)
+    when the catalog names a country. Returns (feeds, too_big, far, duplicates)."""
     rows = rows if rows is not None else load_catalog()
     qc = box_center(box)
     places = {p for p in (places or ()) if len(p) >= 3}
@@ -1871,6 +1873,8 @@ def discover_feeds(box, rows=None, places=None):
         except (KeyError, ValueError, TypeError):
             # no bounding box in the catalog: keep it only when it names a town at either end of the trip
             text = " ".join([(r.get("location.municipality") or ""), item["provider"], item["name"]]).lower()
+            if countries and item["country"] and item["country"] not in countries:
+                continue   # London, England is not London, Ontario
             if places and any(re.search(r"\b%s\b" % re.escape(p), text) for p in places):
                 item.update(area=0.0, bbox=None, center_km=0, no_bbox=True)
                 hits.append(item)
@@ -2904,8 +2908,8 @@ def plan(args):
         log("no region file covers this trip: discovering feeds in the MobilityDatabase catalog")
         o_info, d_info = place_info(o_lat, o_lon), place_info(d_lat, d_lon)
         places = o_info["names"] | d_info["names"]
-        found, too_big, far, dups = discover_feeds(query_box, places=places)
         countries = {c for c in (o_info["country"], d_info["country"]) if c}
+        found, too_big, far, dups = discover_feeds(query_box, places=places, countries=countries)
         states = {s for s in (o_info["state"], d_info["state"]) if s}
 
         def relevance(h):   # official, same country, same state/province, same town, near, small
@@ -2916,13 +2920,15 @@ def plan(args):
         too_big.sort(key=relevance)
         promo = [h for h in too_big if h["official"] and (not countries or h.get("country") in countries)
                  and (in_bbox(o_lat, o_lon, h["bbox"]) or in_bbox(d_lat, d_lon, h["bbox"]))][:3]
-        # on a long trip the limit must not be spent on one end: nearest to either end first
-        found.sort(key=lambda h: min(bbox_dist_m(o_lat, o_lon, h.get("bbox")), bbox_dist_m(d_lat, d_lon, h.get("bbox"))))
+        # on a long trip the limit must not be spent on one end: nearest to either end first, town-name matches
+        # (no location in the catalog) last
+        found.sort(key=lambda h: (bool(h.get("no_bbox")), min(bbox_dist_m(o_lat, o_lon, h.get("bbox")),
+                                                              bbox_dist_m(d_lat, d_lon, h.get("bbox")))))
         discovery = {"found": found, "too_big": too_big, "far": far, "duplicates": dups, "promoted": []}
         known = {u for f in feeds for u in f[2]}
         for h in found:
             if not any(u in known for u in h["urls"]):
-                feeds.append((unique_id(h["id"]), feed_label(h), h["urls"], True, {}))
+                feeds.append((unique_id(h["id"]), feed_label(h), h["urls"], True, {"bbox": h.get("bbox")}))
     elif region and not args.no_discover:
         # ends the region files do not serve: no transit near the destination, or an end in another country
         # than the region files' (Toronto to Buffalo): find feeds there
@@ -2936,16 +2942,17 @@ def plan(args):
                 % ("of its country covers" if foreign else "has transit near", end, reach / 1000))
             info = place_info(lat, lon)
             try:
-                found = discover_feeds(box_around(lat, lon, reach), places=info["names"])[0]
+                found = discover_feeds(box_around(lat, lon, reach), places=info["names"],
+                                       countries={info["country"]} - {None})[0]
             except (Exception, SystemExit) as e:  # noqa: BLE001  (the catalog loader exits when offline)
                 found = []
                 warnings.append("could not search the feed catalog near the %s: %s" % (end, e))
-            found.sort(key=lambda h: bbox_dist_m(lat, lon, h.get("bbox")))
+            found.sort(key=lambda h: (bool(h.get("no_bbox")), bbox_dist_m(lat, lon, h.get("bbox"))))
             known = {u for f in feeds for u in f[2]} | {u for f in region.get("feeds", []) for u in f.get("urls", [])}
             added = []
             for h in found[:DISCOVER_DEST_MAX]:
                 if not any(u in known for u in h["urls"]):
-                    feeds.append((unique_id(h["id"]), feed_label(h), h["urls"], False, {}))
+                    feeds.append((unique_id(h["id"]), feed_label(h), h["urls"], False, {"bbox": h.get("bbox")}))
                     added.append(feed_label(h))
             warnings.append(("the %s is in %s, outside the region files' country (%s); " % (end, foreign, rc)
                              if foreign else "no region file has transit near the destination; ")
@@ -3040,11 +3047,17 @@ def plan(args):
             log("warning: feed %s failed: %s" % (label, e))
             return False
 
-    n_discovered = 0
+    n_discovered = n_tried = 0
     for fid, label, urls, discovered, hol in feeds:
-        if discovered and n_discovered >= DISCOVER_MAX_FEEDS:
+        b = hol.get("bbox")   # a discovered feed's catalog box: no stop can be near the trip when it is out of reach
+        if b and not any(bbox_dist_m(lat, lon, b) <= m for lat, lon, m in near):
+            skipped_far.append(label)
+            log("skipping %s: its catalog box is out of reach of the origin and destination" % label)
+            continue
+        if discovered and (n_discovered >= DISCOVER_MAX_FEEDS or n_tried >= DISCOVER_MAX_DOWNLOADS):
             capped.append("%s=%s (%s)" % (fid, urls[0], label))
             continue
+        n_tried += bool(discovered)
         if load_one(fid, label, urls, hol):
             n_discovered += bool(discovered)
 
@@ -3077,8 +3090,10 @@ def plan(args):
         if no_bbox:
             warnings.append("matched by town name (no location data in the catalog): %s" % ", ".join(no_bbox))
         if capped:
-            warnings.append("over the %d-feed limit, not loaded: %s. Add any that matter with --feed id=URL "
-                            "(it adds to the discovered feeds)." % (DISCOVER_MAX_FEEDS, "; ".join(capped)))
+            warnings.append("over the discovery limit (%d feeds loaded or %d downloads tried; this run loaded %d of "
+                            "%d tried), not loaded: %s. Add any that matter with --feed id=URL (it adds to the "
+                            "discovered feeds)." % (DISCOVER_MAX_FEEDS, DISCOVER_MAX_DOWNLOADS, n_discovered,
+                                                    n_tried, "; ".join(capped)))
         rest = [h for h in discovery["too_big"] if h not in discovery["promoted"]]
         if rest:
             warnings.append("large (national/intercity) feeds not loaded, most relevant first: %s" % "; ".join(
@@ -4445,7 +4460,7 @@ def discover(args):
     places = set().union(*(i["names"] for i in infos))
     countries = {i["country"] for i in infos if i["country"]}
     states = {i["state"] for i in infos if i["state"]}
-    found, too_big, far, dups = discover_feeds(box, places=places)
+    found, too_big, far, dups = discover_feeds(box, places=places, countries=countries)
     too_big.sort(key=lambda h: (not h["official"], h.get("country") not in countries,
                                 h.get("subdivision") not in states, h.get("center_km", 0), h["area"]))
     if args.json:

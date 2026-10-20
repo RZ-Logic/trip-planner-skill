@@ -321,5 +321,76 @@ class PhotonFallback(unittest.TestCase):
         self.assertNotIn("lat=", next(u for u in asked if "photon" in u))   # nothing to bias toward
 
 
+# ---------------------------------------------------------------------------------------- hubs-pricing-io-8
+class DiscoveryDownloads(unittest.TestCase):
+    """Discovered feeds that cannot have a stop near the trip are not downloaded: town-name matches in another
+    country, catalog boxes out of reach of both ends, and anything past the per-run download limit."""
+    AGENCY = {"agency.txt": "agency_id,agency_name,agency_url,agency_timezone\nT,Bus,http://x,America/Toronto\n"}
+
+    def bus(self, a, b):
+        """A feed with one weekday trip from stop A at `a` to stop B at `b` (lat, lon)."""
+        p = feed([("A", "Stop A", a[0], a[1]), ("B", "Stop B", b[0], b[1])], [("1", "WK", "t1", "B")],
+                 [("t1", "09:45:00", "09:45:00", "A", 1, 0, 0), ("t1", "10:15:00", "10:15:00", "B", 2, 0, 0)])
+        add_files(p, self.AGENCY)
+        return p
+
+    def discover(self, rows, files, origin, dest):
+        fetched = []
+
+        def fetch_url(fid, url, *a, **k):
+            fetched.append(url)
+            return files[url]
+        info = {"names": {"london"}, "country": "CA", "state": "ontario"}
+        with mock.patch.object(th, "load_regions", return_value=[]),                 mock.patch.object(th, "check_network", side_effect=ok_network),                 mock.patch.object(th, "reverse_place_info", side_effect=lambda lat, lon, w: dict(info)),                 mock.patch.object(th, "load_catalog", return_value=rows),                 mock.patch.object(th, "fetch_url", side_effect=fetch_url):
+            res = run(["--origin", origin, "--dest", dest, "--depart", "2026-10-15 09:30", "--routing", "estimate"])
+        return res, fetched
+
+    def test_town_name_match_in_another_country_is_not_downloaded(self):
+        on = self.bus((42.9850, -81.2450), (43.0095, -81.2735))
+        gb = self.bus((51.5000, -0.1200), (51.5100, -0.1300))
+        here = dict(catalog_row("mdb-1", "London Transit", "https://files.example/ltc.zip",
+                                (42.90, 43.10, -81.40, -81.10)), **{"location.country_code": "CA"})
+        abroad = catalog_row("mdb-2", "London Buses", "https://files.example/tfl.zip", (0, 0, 0, 0))
+        abroad = {k: v for k, v in abroad.items() if "bounding_box" not in k}
+        abroad.update({"location.country_code": "GB", "location.municipality": "London"})
+        res, fetched = self.discover([here, abroad], {here["urls.latest"]: on, abroad["urls.latest"]: gb},
+                                     "42.9849,-81.2453", "43.0096,-81.2737")
+        self.assertNotIn("https://files.example/tfl.zip", fetched)
+        self.assertIn("London Transit", [f["name"] for f in res["feeds"]])
+        self.assertFalse(any("London Buses" in w for w in res["warnings"]), res["warnings"])
+        with mock.patch.object(th, "reverse_place_info",   # the --discover listing leaves it out too
+                               side_effect=lambda lat, lon, w: {"names": {"london"}, "country": "CA", "state": None}),                 mock.patch.object(th, "load_catalog", return_value=[here, abroad]):
+            listed = run(["--discover", "--origin", "42.9849,-81.2453"])
+        self.assertEqual([f["provider"] for f in listed["feeds"]], ["London Transit"])
+
+    def test_feed_whose_box_is_out_of_reach_is_not_downloaded(self):
+        good = self.bus((43.5005, -79.8000), (43.7995, -79.4000))
+        corner = self.bus((43.8150, -80.1700), (43.8200, -80.1650))
+        rows = [catalog_row("mdb-1", "Good Transit", "https://files.example/good.zip", (43.4, 43.9, -79.9, -79.3)),
+                catalog_row("mdb-2", "Corner Bus", "https://files.example/corner.zip", (43.81, 43.825, -80.18, -80.16))]
+        with mock.patch.object(th, "load_catalog", return_value=rows):   # the corner box is in the trip's query box
+            ns = th.argparse.Namespace(radius_km=None, dest_walk_m=1500, final_ride="auto")
+            box = th.trip_geometry(43.5000, -79.8000, 43.8000, -79.4000, ns)[3]
+            self.assertIn("Corner Bus", [h["provider"] for h in th.discover_feeds(box)[0]])
+        res, fetched = self.discover(rows, {rows[0]["urls.latest"]: good, rows[1]["urls.latest"]: corner},
+                                     "43.5000,-79.8000", "43.8000,-79.4000")
+        self.assertNotIn("https://files.example/corner.zip", fetched)
+        self.assertIn("Good Transit", [f["name"] for f in res["feeds"]])
+        self.assertTrue(any(w.startswith("discovered but skipped") and "Corner Bus" in w for w in res["warnings"]),
+                        res["warnings"])
+
+    def test_discovered_downloads_are_capped(self):
+        good = self.bus((43.5005, -79.8000), (43.7995, -79.4000))
+        far = self.bus((45.3000, -79.8000), (45.3100, -79.8100))   # 200 km north: the catalog box is wrong
+        rows = [catalog_row("mdb-%d" % i, name, "https://files.example/%d.zip" % i,
+                            (43.4 - pad, 43.9 + pad, -79.9 - pad, -79.3 + pad))
+                for i, (name, pad) in enumerate((("Good Transit", 0.0), ("Far One", 0.1), ("Far Two", 0.2)))]
+        files = {rows[0]["urls.latest"]: good, rows[1]["urls.latest"]: far, rows[2]["urls.latest"]: far}
+        with mock.patch.object(th, "DISCOVER_MAX_DOWNLOADS", 2, create=True):
+            res, fetched = self.discover(rows, files, "43.5000,-79.8000", "43.8000,-79.4000")
+        self.assertEqual(sorted(set(fetched)), ["https://files.example/0.zip", "https://files.example/1.zip"])
+        self.assertTrue(any(w.startswith("over the") and "Far Two" in w for w in res["warnings"]), res["warnings"])
+
+
 if __name__ == "__main__":
     unittest.main()

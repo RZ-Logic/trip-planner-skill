@@ -765,7 +765,8 @@ def _stop_list(stops, limit=4):
 
 def _return_plan(poly, route_km, car, arrive_soc, temp_c, m, per_km, reserve, max_soc, usable, back_opts):
     """The drive back when one charge cannot cover it: plan stops on the reversed route (chargers on the other
-    carriageway), first from the arrival charge, else after charging at the destination to max_soc.
+    carriageway), first from the arrival charge, else after charging at the destination (to the least charge that
+    reaches the first stop with its reserve, up to max_soc).
     Returns (plan summary, note, soc to leave with or None, destination charge needed, warnings)."""
     rev = list(reversed(poly))
     start = max(0.0, arrive_soc)
@@ -777,8 +778,25 @@ def _return_plan(poly, route_km, car, arrive_soc, temp_c, m, per_km, reserve, ma
         rp2 = plan_charging(rev, route_km, None, car, max_soc, temp_c, rw2, back_opts)
         if rp2["feasible"] or not rp["stops"]:
             rp, rw, charge_dest = rp2, rw2, True
+    if charge_dest and rp["feasible"] and rp["stops"]:
+        # the least destination charge that reaches the first stop with ITS reserve (20% at a single stall), and the
+        # plan from that charge, so the advice and the plan agree; whole percent, as the advice prints it
+        first = rp["stops"][0]
+        res1 = max(reserve, m["reserve"]["single_stall"]) if (first.get("ports") or 2) < 2 else reserve
+        need_back = min(max_soc, math.ceil((max_soc - first["arrive_soc"] + res1) * 100 - 1e-6) / 100.0)
+        if need_back < max_soc - 1e-9:
+            rw3 = []
+            rp3 = plan_charging(rev, route_km, None, car, need_back, temp_c, rw3, back_opts)
+            if rp3["feasible"]:
+                rp, rw = rp3, rw3
+            else:
+                need_back = max_soc
+    soc0 = (need_back if need_back is not None else max_soc) if charge_dest else start
+    # kwh_used and home_energy_cost price the drive back's battery energy, the destination top-up included, at
+    # the home rate
     summary = {"stops": rp["stops"], "public_cost": rp["public_cost"], "extra_s": rp["extra_s"],
-               "feasible": rp["feasible"], "start_soc": round(max_soc if charge_dest else start, 3),
+               "feasible": rp["feasible"], "start_soc": round(soc0, 3), "soc_start": round(soc0, 3),
+               "kwh_used": rp["kwh_used"], "home_energy_cost": rp["home_energy_cost"],
                "charge_at_destination": charge_dest, "estimated": rp["estimated"], "arrive_soc": rp["arrive_soc"]}
     n = len(rp["stops"])
     est = " (estimate, charger lists unavailable)" if rp["estimated"] else ""
@@ -794,8 +812,7 @@ def _return_plan(poly, route_km, car, arrive_soc, temp_c, m, per_km, reserve, ma
     if not charge_dest:
         txt = "%s: from the %.0f%% you arrive with, plan %s" % (head, start * 100, tail)
         return summary, txt, None, False, []
-    first = rp["stops"][0]
-    need_back = min(max_soc, max_soc - first["arrive_soc"] + reserve)   # reach the first stop with the reserve
+    need_back = soc0
     add = max(0.0, need_back - start)
     txt = ("%s: charge at the destination to at least %.0f%% (add %.0f%%, %.0f kWh: {CH%.2f}), then plan %s"
            % (head, need_back * 100, add * 100, add * usable, add * usable, tail))

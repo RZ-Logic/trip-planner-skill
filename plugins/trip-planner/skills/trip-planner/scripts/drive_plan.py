@@ -2331,7 +2331,7 @@ def _plan(args):
                 rp = {k: v for k, v in rp.items() if not k.startswith("_")}
                 warnings.extend("drive back: %s" % w for w in bw)
             if rp is not None:
-                rp.setdefault("soc_start", soc0)
+                rp.setdefault("soc_start", rp.get("start_soc", soc0))   # a destination charge, else the arrival
                 back["charging"] = rp
                 back["energy_cost"] = (rp.get("public_cost") or 0.0) + (rp.get("home_energy_cost") or 0.0)
                 back["charge_s"] = rp.get("extra_s") or 0.0
@@ -2562,8 +2562,8 @@ def _plan(args):
                                     "border_min": round((back.get("border_s") or 0) / 60.0)}
         if back.get("charging_infeasible"):
             warnings.append("the drive back from %d%% needs charging that could not be planned (see CHARGING); the "
-                            "round trip time leaves it out" % round(((energy[id(rec_r)].get("charging") or {})
-                                                                     .get("arrive_soc") or 0) * 100))
+                            "round trip time leaves it out" % round(max(0.0, (back.get("charging") or {})
+                                                                        .get("soc_start") or 0) * 100))
 
     # ---- charging
     ch = energy[id(rec_r)].get("charging")
@@ -3242,13 +3242,15 @@ def render(res):
         rp = res.get("charging_return")
         if rp:
             stops = rp.get("stops") or []
+            back_from = "%d%%%s" % (round(max(0.0, rp.get("soc_start") or 0) * 100),
+                                    " (charged at the destination)" if rp.get("charge_at_destination") else "")
             if rp.get("feasible") is False:
-                L.append("     drive back from %d%%: no reachable fast charger found for the whole way (see "
-                         "WARNINGS); charge at the destination" % round((rp.get("soc_start") or 0) * 100))
+                L.append("     drive back from %s: no reachable fast charger found for the whole way (see "
+                         "WARNINGS); charge at the destination" % back_from)
             elif stops:
-                L.append("     drive back from %d%%: %d stop%s%s, %s extra, public charging ~%s (in the round trip "
+                L.append("     drive back from %s: %d stop%s%s, %s extra, public charging ~%s (in the round trip "
                          "total): %s" % (
-                             round((rp.get("soc_start") or 0) * 100), len(stops), "" if len(stops) == 1 else "s",
+                             back_from, len(stops), "" if len(stops) == 1 else "s",
                              " (estimate)" if rp.get("estimated") else "", dc.fmt_dur(rp.get("extra_s") or 0),
                              dc.money(rp.get("public_cost") or 0),
                              "; ".join("%s at km %.0f, %d min" % (s.get("name"), s.get("km_along") or 0,

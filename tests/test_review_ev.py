@@ -155,5 +155,70 @@ class InfeasibleRouteTest(unittest.TestCase):
         self.assertFalse(any("cannot be driven on the fast chargers" in w for w in res["warnings"]))
 
 
+class ReturnPlanTest(unittest.TestCase):
+    """ext-5, gem-G1S, ev-vehicles-3: when the drive back starts with a destination charge, the plan is made from
+    the charge the note advises, that charge reaches the first stop with its own reserve, and the summary carries
+    the energy for pricing."""
+
+    def plan(self, ports=4):
+        sts = [tev.nst(100, ports=ports), tev.nst(250, ports=ports)]
+        r, w = tev.plan_st(sts, 400, ev.car_profile("generic"), 0.9, return_trip=True, near=[])
+        return r, r["return_plan"]
+
+    def test_plan_starts_from_the_advised_charge(self):
+        r, rp = self.plan()
+        self.assertTrue(rp["feasible"] and rp["charge_at_destination"])
+        self.assertEqual(rp["start_soc"], r["return_soc_to_charger"])
+        self.assertGreaterEqual(rp["stops"][0]["arrive_soc"], 0.15 - 1e-9)
+        self.assertLess(rp["stops"][0]["arrive_soc"], 0.20)
+        note = [n for n in r["notes"] if n.startswith("Return trip")][0]
+        self.assertIn(dc.money(rp["public_cost"]), note)
+        self.assertIn("at least %.0f%%" % (r["return_soc_to_charger"] * 100), note)
+
+    def test_single_stall_first_charger_needs_its_reserve(self):
+        r, rp = self.plan(ports=1)
+        self.assertTrue(rp["feasible"])
+        self.assertGreaterEqual(r["return_soc_to_charger"], 0.80 - 0.329 + 0.20 - 1e-9)
+        self.assertEqual(rp["start_soc"], r["return_soc_to_charger"])
+        self.assertGreaterEqual(rp["stops"][0]["arrive_soc"], 0.20 - 1e-9)
+
+    def test_summary_carries_energy(self):
+        r, rp = self.plan()
+        for k in ("soc_start", "kwh_used", "home_energy_cost"):
+            self.assertIn(k, rp)
+        self.assertEqual(rp["soc_start"], rp["start_soc"])
+        self.assertGreater(rp["kwh_used"], 0)
+        self.assertGreater(rp["home_energy_cost"], 0)
+
+
+class ReturnRenderTest(unittest.TestCase):
+    """ev-vehicles-3: the CHARGING 'drive back from' line uses the return plan's own starting charge, and the
+    drive back's money counts its battery energy (home rate), not only the public charging."""
+    KINGSTON = (44.2312, -76.4860)
+
+    def test_drive_back_line_and_money(self):
+        with tdp.Env(), mock.patch.dict(sys.modules, {"ev_charging": real_ev(lambda km: [0.3, 0.6])}):
+            res = dp.plan(tdp.args_for(
+                "--origin", "%f,%f" % tdp.MILTON, "--dest", "%f,%f" % self.KINGSTON, "--weather", "clear",
+                "--incidents", "off", "--depart", "2026-10-16 08:00", "--vehicle", "ev", "--ev-model", "generic",
+                "--soc", "90", "--park-and-ride", "off", "--round-trip", "--stay-hours", "3", "--transponder"))
+            text = dp.render(res)
+        cr = res["charging_return"]
+        self.assertTrue(cr and cr["charge_at_destination"], cr)
+        self.assertNotIn("drive back from 20%", text)
+        self.assertIn("drive back from %d%% (charged at the destination)" % round(cr["start_soc"] * 100), text)
+        checked = 0
+        for row in res["routes"]:
+            back = row.get("return") or {}
+            rp = back.get("charging")
+            if not rp:
+                continue
+            checked += 1
+            self.assertGreater(rp["home_energy_cost"], 0)
+            self.assertAlmostEqual(back["energy_cost"], rp["public_cost"] + rp["home_energy_cost"], places=2)
+            self.assertGreater(back["energy_cost"], rp["public_cost"])
+        self.assertGreater(checked, 0)
+
+
 if __name__ == "__main__":
     unittest.main()

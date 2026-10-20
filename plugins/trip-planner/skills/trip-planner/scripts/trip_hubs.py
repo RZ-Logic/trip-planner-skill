@@ -291,16 +291,20 @@ GEOCODE_CACHE_H = 720.0   # 30 days, as drive_plan's reverse lookups (costs.json
 
 def cached_json(url, timeout, min_interval, keep=bool, max_age_h=GEOCODE_CACHE_H):
     """http_get + json.loads with a disk cache under cache_dir()/geocode (Nominatim's usage policy asks clients to
-    cache). Only replies `keep(data)` accepts are stored: an empty result or an error is asked again next time."""
-    path = os.path.join(cache_dir(), "geocode", hashlib.sha1(url.encode("utf-8")).hexdigest()[:24] + ".json")
+    cache). Only replies `keep(data)` accepts are stored: an empty result or an error is asked again next time.
+    When the cache folder cannot be created, replies are simply not cached."""
     try:
-        if time.time() - os.path.getmtime(path) < max_age_h * 3600:
+        path = os.path.join(cache_dir(), "geocode", hashlib.sha1(url.encode("utf-8")).hexdigest()[:24] + ".json")
+    except OSError:
+        path = None
+    try:
+        if path and time.time() - os.path.getmtime(path) < max_age_h * 3600:
             with open(path, encoding="utf-8") as fh:
                 return json.load(fh)
     except (OSError, ValueError):
         pass
     data = json.loads(http_get(url, timeout=timeout, min_interval=min_interval))
-    if keep(data):
+    if path and keep(data):
         try:
             os.makedirs(os.path.dirname(path), exist_ok=True)
             tmp = "%s.%d.tmp" % (path, os.getpid())

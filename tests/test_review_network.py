@@ -697,5 +697,34 @@ class HttpErrorsClosed(unittest.TestCase):
         self.assertIn("PERMISSION_DENIED", place_reviews._http_error(cm.exception))
 
 
+class GeocodeCacheFolder(unittest.TestCase):
+    """Follow-up to security-tos-7: when the cache folder cannot be created, geocoder replies are simply not cached
+    (as driving.md and drive_common.fetch say); the lookup itself still runs and answers."""
+
+    def setUp(self):
+        d = tempfile.mkdtemp()
+        self.addCleanup(_shutil.rmtree, d, True)
+        blocker = os.path.join(d, "a-file")
+        open(blocker, "w").close()
+        for p in (mock.patch.dict(os.environ, {"TRIP_PLANNER_CACHE": os.path.join(blocker, "sub")}),
+                  mock.patch("time.sleep"), mock.patch.dict(th._LAST_CALL, clear=True)):
+            p.start()
+            self.addCleanup(p.stop)
+
+    def test_address_geocodes_without_a_cache_folder(self):
+        with mock.patch.object(th, "http_get", return_value=json.dumps(BUILDING).encode()) as hg:
+            for _ in range(2):
+                self.assertEqual(th.resolve_place("1 Front St W, Toronto", "origin", [])[:2], (43.6, -79.4))
+        self.assertEqual(hg.call_count, 2)   # nothing cached, both asked
+
+    def test_reverse_place_info_without_a_cache_folder(self):
+        reply = {"address": {"town": "Milton", "country_code": "ca", "state": "Ontario"}}
+        warnings = []
+        with mock.patch.object(th, "http_get", return_value=json.dumps(reply).encode()) as hg:
+            self.assertEqual(th.reverse_place_info(43.5, -79.8, warnings)["country"], "CA")
+        self.assertEqual(hg.call_count, 1)
+        self.assertEqual(warnings, [])
+
+
 if __name__ == "__main__":
     unittest.main()

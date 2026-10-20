@@ -1,8 +1,9 @@
 """Regression tests for the review's region data findings: the Ontario region's curated fares and timetables
 (distance- and zone-based rural fares shown as approximate, route-level prices; hand-entered and projected
-timetables flagged at run time, region files past their recheck age).
+timetables flagged at run time, region files past their recheck age), the region notes against the data, and
+the docs, manifests and zip against the code (flags, labels, versions, paths, zip contents).
 
-Offline: the bundled region files, synthetic legs, plan runs with every network call mocked, a fixed clock.
+Offline: the bundled region files and docs, synthetic legs, plan runs with every network call mocked, a fixed clock.
 Run: python -m unittest tests.test_review_region_data -v
 """
 import os as _os
@@ -18,11 +19,15 @@ _os.environ["TRIP_PLANNER_CACHE"] = _os.path.join(_TMP, "cache")
 _os.environ.setdefault("TRIP_PLANNER_QUIET", "1")   # no progress lines on stderr (TRIP_PLANNER_QUIET=0 shows them)
 import copy
 import datetime as dt
+import glob
+import importlib.util
 import io
 import json
 import os
 import re
+import shutil
 import sys
+import tempfile
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
 from unittest import mock
@@ -31,6 +36,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SKILL_DIR = os.path.join(ROOT, "plugins", "trip-planner", "skills", "trip-planner")
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from test_engine import pin_clock, th  # noqa: E402  (test_engine inserts the scripts path)
+import drive_plan  # noqa: E402
 
 REGIONS = {r["id"]: r for r in th.load_regions()}
 ONTARIO = REGIONS["ontario"]
@@ -367,6 +373,117 @@ class NotesMatchData(unittest.TestCase):
         self.assertNotIn("published", label.replace("publish no", ""))
         self.assertIn("assumed", label)
         self.assertIn("assumed local taxi rate", read(ONTARIO_MD))
+
+
+def doc_files():
+    """The published docs (never review/): SKILL.md, README.md, references/**/*.md and docs/*.md."""
+    paths = [os.path.join(SKILL_DIR, "SKILL.md"), os.path.join(ROOT, "README.md")]
+    paths += sorted(glob.glob(os.path.join(SKILL_DIR, "references", "**", "*.md"), recursive=True))
+    return paths + sorted(glob.glob(os.path.join(ROOT, "docs", "*.md")))
+
+
+def source_files(*dirs):
+    return [p for d in dirs for p in sorted(glob.glob(os.path.join(d, "*.py")))]
+
+
+SCRIPTS_DIR = os.path.join(SKILL_DIR, "scripts")
+TOOLS_DIR = os.path.join(ROOT, "tools")
+FLAG_RE = re.compile(r"(?<![\w-])--[a-z][a-z0-9-]+")
+
+
+def read_abs(path):
+    with open(path, encoding="utf-8") as fh:
+        return fh.read()
+
+
+def parser_actions():
+    """Every argparse action of the two planners (trip_hubs and drive_plan)."""
+    return [a for ap in (th.build_parser(), drive_plan.build_parser()) for a in ap._actions]
+
+
+def load_build_zip():
+    """tools/build_zip.py as a module (it is not a package)."""
+    spec = importlib.util.spec_from_file_location("build_zip", os.path.join(TOOLS_DIR, "build_zip.py"))
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+class DocContract(unittest.TestCase):
+    """docs-contract-9: nothing checked the docs, manifests or zip against the code, so a renamed flag or label,
+    a version bump in one file, or a stray file in the zip went unnoticed."""
+
+    def test_every_flag_in_the_docs_exists(self):
+        known = set()
+        for path in source_files(SCRIPTS_DIR, TOOLS_DIR):
+            known.update(re.findall(r"[\"'](--[a-z][a-z0-9-]+)[\"']", read_abs(path)))
+        known.update(o for a in parser_actions() for o in a.option_strings)
+        unknown = sorted((os.path.relpath(p, ROOT), f) for p in doc_files() for f in set(FLAG_RE.findall(read_abs(p)))
+                         if f not in known)
+        self.assertEqual(unknown, [])
+
+    def test_flag_choices_named_in_the_docs_exist(self):
+        actions = {o: a for a in parser_actions() for o in a.option_strings}
+        named = 0
+        for path in doc_files():
+            for flag, values in re.findall(r"`(--[a-z0-9-]+) ([a-z0-9]+(?:\|[a-z0-9]+)+)`", read_abs(path)):
+                named += 1
+                self.assertIn(flag, actions, path)
+                self.assertTrue(actions[flag].choices, flag)
+                self.assertLessEqual(set(values.split("|")), set(actions[flag].choices), (path, flag))
+        self.assertGreaterEqual(named, 2)   # --payment and --final-ride at least
+
+    def test_backticked_labels_in_skill_exist_in_the_scripts(self):
+        # every script's source, not only render(): TLS FAILED and OFFLINE live in SystemExit and WARNING text
+        src = "\n".join(read_abs(p) for p in source_files(SCRIPTS_DIR))
+        labels = set(re.findall(r"`([A-Z][A-Z0-9 &/+-]{2,})`", read_abs(os.path.join(SKILL_DIR, "SKILL.md"))))
+        self.assertIn("NOT SHOWN", labels)
+        self.assertEqual(sorted(x for x in labels if x not in src), [])
+
+    def test_version_strings_agree(self):
+        skill = read_abs(os.path.join(SKILL_DIR, "SKILL.md"))
+        versions = {"trip_hubs.VERSION": th.VERSION,
+                    "SKILL.md": re.search(r'^\s+version:\s*"([^"]+)"', skill, re.M).group(1),
+                    "README badge": re.search(r"Status-v(\d+\.\d+\.\d+)", read("README.md")).group(1),
+                    # the first numbered release heading: an "## Unreleased" heading above it is skipped
+                    "CHANGELOG": re.search(r"^## (\d+\.\d+\.\d+)", read("CHANGELOG.md"), re.M).group(1)}
+        for rel in ("plugins/trip-planner/plugin.json", "plugins/trip-planner/.claude-plugin/plugin.json"):
+            versions[rel] = json.loads(read(rel))["version"]
+        self.assertEqual(len(set(versions.values())), 1, versions)
+
+    def test_named_reference_paths_exist(self):
+        files = doc_files() + source_files(SCRIPTS_DIR)
+        missing = sorted({(os.path.relpath(p, ROOT), ref) for p in files
+                          for ref in re.findall(r"(?<![\w/])(references/[\w/.-]+\.(?:md|json))", read_abs(p))
+                          if not os.path.exists(os.path.join(SKILL_DIR, ref))})
+        links = re.findall(r"\]\(((?:plugins|docs|tools|tests)/[^)#\s]+)", read("README.md"))
+        self.assertTrue(links)
+        missing += [("README.md", ln) for ln in links if not os.path.exists(os.path.join(ROOT, ln))]
+        self.assertEqual(missing, [])
+
+    def test_zip_holds_only_the_skill_folder(self):
+        mod = load_build_zip()
+        arcs = [arc for _full, arc in mod.zip_entries()]
+        self.assertTrue(all(a.startswith("trip-planner/") for a in arcs))
+        for need in ("SKILL.md", "LICENSE", "agents/openai.yaml", "scripts/trip_hubs.py",
+                     "references/regions/ontario.json"):
+            self.assertIn("trip-planner/" + need, arcs)
+        for a in arcs:
+            self.assertFalse(re.search(r"__pycache__|\.pyc$|(^|/)\.env|/tests/", a), a)
+            # a NOTICE file is allowed beside LICENSE (third-party data credits)
+            self.assertIn(a.split("/")[1], {"SKILL.md", "LICENSE", "NOTICE", "agents", "references", "scripts"}, a)
+
+    def test_zip_skips_caches_and_stray_files(self):
+        mod = load_build_zip()
+        tmp = tempfile.mkdtemp(prefix="trip-planner-zip-")
+        self.addCleanup(shutil.rmtree, tmp, True)
+        for rel in ("SKILL.md", ".DS_Store", "scripts/a.py", "scripts/b.pyc", "scripts/__pycache__/a.cpython-38.pyc",
+                    "scripts/.pytest_cache/README.md"):
+            os.makedirs(os.path.dirname(os.path.join(tmp, rel)), exist_ok=True)
+            open(os.path.join(tmp, rel), "w").close()
+        with mock.patch.object(mod, "SKILL", tmp):
+            arcs = [arc for _full, arc in mod.zip_entries()]
+        self.assertEqual(arcs, ["trip-planner/SKILL.md", "trip-planner/scripts/a.py"])
 
 
 if __name__ == "__main__":

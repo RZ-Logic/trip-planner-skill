@@ -205,6 +205,7 @@ FIRST_HOUR_RE = re.compile(r"(?P<pre>US\s*\$|CA?\$|C\$|\$)\s*(?P<a>\d+(?:\.\d+)?
                            r"(?:additional|addt?'?l|extra|subsequent)\s*(?:hour|hr|h)\b", re.I)
 FREE_FIRST_RE = re.compile(r"first\s+(?P<n>\d+|one|two|half)?\s*(?P<u>hours?|hrs?|h|min(?:ute)?s?)\s*(?:is\s+)?free", re.I)
 EVENING_RE = re.compile(r"\b(eve|evening|night|overnight)\b", re.I)
+CLAUSE_SEP = re.compile(r"[,;|]|//")    # what ends a clause of rate text ("$2/hr Mon-Fri 8am-6pm; $1/hr Sat ...")
 
 
 def _clock(tok, ap_hint=None):
@@ -431,7 +432,9 @@ def parse_rate_text(text):
     "First hour FREE. $1 per 1/2 hour. $9 Daily.", "Mon-Fri, 8:30 -18:00, $0.50/7.5 min, $19 Max, ...
     // Sat,Sun,Holidays - Free", "$18 a day weekdays" (other days unknown, not free), "Weekdays $15, Weekends $8",
     "$3/h, $12 max, free after 6pm", "$20 per day, $10 after 5pm", "$5 first hour, $2 each additional hour",
-    "$2.25/hour, max 3 hours". Unknown parts are left out; an empty dict means nothing was understood."""
+    "$2.25/hour, max 3 hours", "$2/hr Mon-Fri 8am-6pm; $1/hr Sat 9am-5pm" (each price before its window),
+    "$12 Day Max, $5 Night Max" (a night maximum without hours is noted, not used). Unknown parts are left out;
+    an empty dict means nothing was understood."""
     if not text or not str(text).strip() or str(text).strip().lower() in ("n/a", "na", "none", "-"):
         return {}, []
     text = _strip_french(str(text))
@@ -450,6 +453,8 @@ def parse_rate_text(text):
     last = None
     skip = set()
     free_days = set()     # weekdays the text calls free ("$2/hr, free Sat-Sun")
+    night_max = []        # "$10 overnight", "$5 Night Max" with no window: never the day maximum
+    last_p, last_p_end = None, 0   # the latest window and where its clock range ends in the text
     for i, (kind, a, b, val) in enumerate(toks):
         if i in skip:
             continue
@@ -537,6 +542,7 @@ def parse_rate_text(text):
                     p["_after"] = True
                 last = None
             periods.append(p)
+            last_p, last_p_end = p, b
         elif kind == "money":
             if val["cur"] == "USD":
                 rule["currency"] = "USD"
@@ -571,6 +577,10 @@ def parse_rate_text(text):
             elif u.startswith("month"):
                 continue
             item["evening"] = val["evening"] or bool(u and (u.startswith("eve") or "night" in u))
+            # this amount itself is a night or evening price (its unit or the word right next to it)
+            night = bool(u and (u.startswith("eve") or u in ("night", "nights", "overnight"))) \
+                or bool(re.match(r"\s*(?:max(?:imum)?\s*)?(?:rate\s*)?(?:overnight|night|evening)s?\b", text[b:], re.I)) \
+                or bool(re.search(r"\b(?:overnight|night|evening)s?\s*(?:max(?:imum)?|rate)?\s*:?\s*$", text[max(0, a - 20):a], re.I))
             if i in qual_money:     # the price applies on the qualifying days only
                 days, hol = toks[qual_money[i]][3]
                 qp = {"days": sorted(days), "hours": ["00:00", "24:00"]}
@@ -593,6 +603,15 @@ def parse_rate_text(text):
                         item["_after"] = True
                     else:
                         forward = "(" in seg and len(seg) <= 45 and "," not in seg.split("(")[0]
+                        # "$2/hr Mon-Fri 8am-6pm; $1/hr Sat 9am-5pm", "$3/hr 7am-7pm, $8 flat 7pm-7am": a price
+                        # written before a window in the same clause is that window's price, unless the clause
+                        # opened with a window still waiting for its price ("Mon-Fri 8am-6pm $2/hr Sat ...")
+                        waiting = last_p is not None and not last_p.get("free") and not any(
+                            k in last_p for k in ("hourly", "flat", "max")) and not CLAUSE_SEP.search(text[last_p_end:a])
+                        if not forward and not waiting and not CLAUSE_SEP.search(seg) \
+                                and (j == i + 1 or toks[i + 1][0] == "days"):
+                            forward = True
+                            item["evening"] = night     # only this amount's own word, not a neighbour's
                     break
             if forward:
                 item["_forward"] = True
@@ -610,6 +629,8 @@ def parse_rate_text(text):
                         rule["hourly"], rule["per_min"] = item["hourly"], item["per_min"]
                 if "max" in item and item.get("roll_min"):
                     rule["_roll_max"] = (item["max"], item["roll_min"])   # turned into a rolling period below
+                elif "max" in item and night:
+                    night_max.append(item["max"])
                 elif "max" in item:
                     rule["daily_max"] = item["max"] if "daily_max" not in rule else min(rule["daily_max"], item["max"])
                 if "flat" in item:
@@ -682,8 +703,9 @@ def parse_rate_text(text):
             if "hourly" in p and "hourly" not in rule:
                 rule["hourly"], rule["per_min"] = p["hourly"], p.get("per_min", 60)
         else:
-            rates = set((p.get("hourly"), p.get("per_min")) for p in periods if not p.get("free"))
-            if "hourly" not in rule and len(rates) == 1 and None not in list(rates)[0]:
+            # one price for every listed window is also the base rate ("$2/hr Mon-Fri 8am-6pm, Sat 9am-5pm")
+            rates = set((p.get("hourly"), p.get("per_min")) for p in periods if not p.get("free") and p.get("hourly") is not None)
+            if "hourly" not in rule and len(rates) == 1:
                 rule["hourly"], rule["per_min"] = list(rates)[0]
             rule["periods"] = periods
             if cur_hol and not any(p.get("holidays") for p in periods):
@@ -703,6 +725,11 @@ def parse_rate_text(text):
         else:
             rule["paid_days"] = [d for d in (rule.get("paid_days") if rule.get("paid_days") is not None else range(7))
                                  if d not in free_days]
+    if night_max:
+        if any(k in rule for k in ("hourly", "flat", "daily_max")) or rule.get("periods"):
+            notes.append("night maximum %s not used (its hours are not given)" % dc.money(min(night_max)))
+        else:
+            rule["daily_max"] = min(night_max)     # "$10 overnight" alone: the only price given
     roll = rule.pop("_roll_max", None)
     if roll:
         if rule.get("periods"):

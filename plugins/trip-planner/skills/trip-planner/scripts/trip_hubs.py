@@ -2476,9 +2476,11 @@ def journey_fare(net, legs, flat=None, payment="card", card_discount=None, rules
         # a route-level price ("Niagara Region Transit 602") wins when every leg of the group has one
         f = by_route[0] if all(by_route) else ((flat or {}).get(feed) or (flat or {}).get(glegs[0]["agency"]))
         if f:
-            # the payment's own price; a bank-card tap costs the card price unless listed; an agency that
-            # does not take this payment (card: null) costs its fare or cash price
-            tries = [payment] + (["card"] if payment == "contactless" else []) + ["fare", "cash", "card"]
+            # the payment's own price; a bank-card tap costs the card price only when contactless is not listed
+            # at all; an explicit null (contactless or card) means the agency does not take that payment: its
+            # fare or cash price
+            tries = ([payment] + (["card"] if payment == "contactless" and "contactless" not in f else [])
+                     + ["fare", "cash", "card"])
             if f.get("pairs"):   # fares by station pair (UP Express), either direction; unlisted pair = unknown
                 f = dict(pair_fare(f["pairs"], glegs[0]["from"], glegs[-1]["to"]) or {}, currency=f.get("currency", ""))
             amount = next((f[k] for k in tries if f.get(k) is not None), None)

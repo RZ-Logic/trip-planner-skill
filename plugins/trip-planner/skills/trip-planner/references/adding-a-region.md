@@ -64,6 +64,8 @@ Rules:
   cross-border trip) are listed per currency and never added; the journey's fare total is then unknown.
   `approx` (optional) is a short caveat for a fare that is one common price on a distance or zone scale
   (rural operators); it prints as `about X (caveat)`. Prefer a route key for a route with its own price.
+  Payment keys: `card`, `contactless`, `cash`, `fare`. A missing `contactless` key prices a bank-card tap
+  at the card price; `null` means the agency does not take that payment, and the fare or cash price is used.
 - Region `bbox` decides when the file is used: when the origin is inside it (its rate card, time
   zone and fares lead) or the destination is inside it (its feeds load too). Feed `bbox` (from the
   catalog or the feed's `stops.txt`) decides which feeds load for a trip.

@@ -209,6 +209,26 @@ class RefundedFareGivesNoWindow(unittest.TestCase):
         self.assertEqual([x["charged"] for x in g], [0.0, 0.0, 9.05])
 
 
+# ---------------------------------------------------------------------------------------- hubs-pricing-io-11
+class ContactlessNull(unittest.TestCase):
+    class Net:
+        fares, fare_urls, stop_zone = {}, {}, [""]
+
+    def test_agency_that_refuses_a_bank_card_tap_costs_cash(self):
+        # Route 2 (Barrie to Wasaga Beach): not route 4, which has its own "Simcoe County Linx 4" entry
+        legs = [leg("linx", "Simcoe County Linx", "2", "10:00", 0, 0)]
+        self.assertIsNone(ONTARIO["flat_fares"]["Simcoe County Linx"]["contactless"])
+        self.assertEqual(th.journey_fare(self.Net, legs, ONTARIO["flat_fares"], "contactless")[0], 6.0)   # was 5.40
+        self.assertEqual(th.journey_fare(self.Net, legs, ONTARIO["flat_fares"], "card")[0], 5.4)
+        four = [leg("linx", "Simcoe County Linx", "4", "10:00", 0, 0)]
+        self.assertEqual(th.journey_fare(self.Net, four, ONTARIO["flat_fares"], "contactless")[0], 2.0)   # was 1.80
+
+    def test_agency_with_no_contactless_key_still_costs_the_card_price(self):
+        self.assertNotIn("contactless", GTHA["flat_fares"]["TTC"])
+        legs = [leg("ttc", "TTC", "1", "10:00", 0, 0)]
+        self.assertEqual(th.journey_fare(self.Net, legs, GTHA["flat_fares"], "contactless")[0], 3.3)
+
+
 # ------------------------------------------------------------------------------------- architecture-product-2
 def run(args, as_json=True):
     out = io.StringIO()

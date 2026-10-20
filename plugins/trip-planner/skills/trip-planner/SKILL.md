@@ -135,7 +135,8 @@ is the current minute, lead with its backup (depart) or the option with the most
 - **Live disruptions:** the operator's service alerts for the chosen route.
 - **Rural and seasonal service:** read the destination's section in `ontario.md` (seasons, days,
   holidays, booking, the last bus back). Confirm hand-entered timetables on the operator's site; a leg
-  marked "timetable assumed" (and its WARNING) is projected, not published: call it unconfirmed. Plan the return before they leave: with sparse ride-hail the
+  marked "timetable assumed" (and its WARNING) is projected, not published, and one marked "times
+  doubtful" has published times that look wrong: call either unconfirmed. Plan the return before they leave: with sparse ride-hail the
   return ride must be booked ahead.
 
 ## Step 3: Verify the top 2 or 3 options before recommending

@@ -1051,7 +1051,8 @@ def manual_feed_zip(feed):
 
 def feed_provenance(f):
     """Hand-entered timetable flags for load_feed from a region file's feed (None for a published GTFS feed):
-    services marked "assumed", dates in "assumed_dates" and dates after "observed_until" use projected times."""
+    services marked "assumed", dates in "assumed_dates" and dates after "observed_until" use projected times;
+    a trip's "check" note (published times that look wrong) is keyed by its manual_feed_zip trip id."""
     if not f.get("manual"):
         return None
     services = f["manual"].get("services") or {}
@@ -1059,7 +1060,9 @@ def feed_provenance(f):
     return {"assumed_services": {sid for sid, sv in services.items() if sv.get("assumed")},
             "assumed_dates": {parse_date(x.replace("-", "")) for x in f.get("assumed_dates") or []},
             "observed_until": parse_date(until.replace("-", "")) if until else None,
-            "note": f.get("assumed_note") or ""}
+            "note": f.get("assumed_note") or "",
+            "checks": {"r%d_t%d" % (ri, ti): safe_text(t["check"]) for ri, r in enumerate(f["manual"]["routes"])
+                       for ti, t in enumerate(r["trips"]) if t.get("check")}}
 
 
 def _assumed_on(prov, sid, d):
@@ -1403,6 +1406,7 @@ class Network:
         self.feed_stops = {}  # feed label -> coordinates of every stop in the file, served in the window or not
         self.assumed_trips = set()  # trip indexes whose times are projected (hand-entered, assumed), not published
         self.assumed_notes = {}  # feed label -> the region file's assumed_note
+        self.trip_checks = {}  # trip index -> a hand-entered trip's "check" note (published times that look wrong)
         self.warnings = []
         self.timezones = set()
 
@@ -1769,6 +1773,8 @@ def load_feed(net, fid, label, path, day, t0, t_end, holidays=None, local_tz=Non
                             net.trip_headway[ti] = hw
                         if provenance and _assumed_on(provenance, trip_sid[tid], days[offsets.index(o)]):
                             net.assumed_trips.add(ti)
+                        if provenance and tid in provenance["checks"]:
+                            net.trip_checks[ti] = provenance["checks"][tid]
                     if r0[6] and r0[6] != head:   # stop_headsign: what the sign says at this stop
                         net.stop_heads[(ti, k)] = safe_text(r0[6])
                     flag = ("b" if r0[7] in ("2", "3") else "") + ("a" if r1[8] in ("2", "3") else "")
@@ -2176,6 +2182,8 @@ class ProfileScan:
                 legs[-1]["request_alight"] = True
             if ti in net.assumed_trips:
                 legs[-1]["assumed"] = True
+            if ti in net.trip_checks:
+                legs[-1]["check"] = net.trip_checks[ti]
             info = self.alight.get(r)
             if info is None:
                 break
@@ -4202,18 +4210,23 @@ def plan(args):
             warnings.append("Transitous finds a better connection for: %s. Compare its route in SECOND OPINION; "
                             "it may use a route or walk this data lacks." % ", ".join(flagged))
 
-    # hand-entered times the region file marks as projected: one WARNING per feed used by a shown option
+    # hand-entered times the region file marks as projected: one WARNING per feed used by a shown option, and
+    # one per doubtful trip ("check" note) on a shown leg
     shown = pareto + runners + finish + ([transit_only] if transit_only else [])
-    assumed_feeds = []
+    assumed_feeds, checks = [], []
     for o in shown:
         for lg in o.get("legs") or []:
             if lg.get("assumed") and lg["feed"] not in assumed_feeds:
                 assumed_feeds.append(lg["feed"])
+            if lg.get("check") and (lg["feed"], lg["check"]) not in checks:
+                checks.append((lg["feed"], lg["check"]))
     for label in assumed_feeds:
         note = net.assumed_notes.get(label)
         warnings.append("%s: the times used on %s are assumed%s, not from a published timetable. Confirm them on "
                         "the operator's site before relying on them." % (label, day.isoformat(),
                                                                          " (%s)" % note if note else ""))
+    for label, check in checks:
+        warnings.append("%s: %s before relying on this leg." % (label, check))
 
     common.update({
         "mode": "arrive_by" if arrive_by else "depart",
@@ -4277,6 +4290,8 @@ def legs_text(legs):
                 notes.append("request stop: tell the driver you are getting off")
             if lg.get("assumed"):
                 notes.append("timetable assumed, not published: confirm")
+            if lg.get("check"):
+                notes.append("times doubtful: see WARNING")
             if lg.get("headway_min"):   # no timetable: from when to be at the stop, and the latest arrival
                 start = lg.get("be_there_by", lg["depart"])
                 when = "every %d min from %s, arrive by %s" % (lg["headway_min"], fmt_t(start), fmt_t(lg["arrive"]))
@@ -4748,6 +4763,8 @@ def print_timetable(regions, fid):
             print("  [%s] to %s: %s" % (t["service"], t.get("headsign", ""),
                                        " > ".join("%s %s" % (st[3] if len(st) < 5 else "%s/%s" % (st[3], st[4]), st[0])
                                                   for st in t["stops"])))
+            if t.get("check"):
+                print("    CHECK  " + t["check"])
     if f.get("source"):
         print("\nSOURCE  " + (", ".join(f["source"]) if isinstance(f["source"], list) else str(f["source"])))
 

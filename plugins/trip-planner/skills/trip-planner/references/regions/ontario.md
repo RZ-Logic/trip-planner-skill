@@ -26,7 +26,10 @@ is more than six months old.
   transit show under **FINISH WITH A RIDE**: transit to a drop point, then Uber or a local taxi.
 - Hand-entered timetables carry a `verified` date and a `notes` line in `ontario.json`, and the FEEDS
   line marks them `hand-entered`. A leg marked "timetable assumed" and its WARNING mean the times are
-  projected from an earlier schedule: confirm on the operator's site before relying on them.
+  projected from an earlier schedule: confirm on the operator's site before relying on them. A leg
+  marked "times doubtful" uses the operator's published times, but its WARNING names two that cannot
+  both be right (GOST's 10:38 Guelph run at Williamsford and Chatsworth; Onex's weekend 20:50 and 21:55
+  from Toronto between Milton and Kitchener): check with the operator.
 
 ## 2. Intercity services
 

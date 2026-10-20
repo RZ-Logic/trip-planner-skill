@@ -2658,7 +2658,7 @@
       "id": "gost-guelph-owen-sound",
       "name": "GOST (Guelph Owen Sound Transportation), Guelph Central - Elora/Fergus - Owen Sound",
       "holiday_service": "as_feed",
-      "notes": "Daily, 2 round trips, regular schedule on stat holidays except Christmas Day (no service 2026-12-25). Funded only to 2026-12-31; 2027 not announced. Exact cash to the driver, no booking. Hand-entered because the city's GTFS lists the 14:30 Owen Sound departure as 02:30; do not load that GTFS alongside this feed.",
+      "notes": "Daily, 2 round trips, regular schedule on stat holidays except Christmas Day (no service 2026-12-25). Funded only to 2026-12-31; 2027 not announced. Exact cash to the driver, no booking. Hand-entered because the city's GTFS lists the 14:30 Owen Sound departure as 02:30; do not load that GTFS alongside this feed. The 10:38 Guelph run's Williamsford 12:35 and Chatsworth 12:40 are as GOST publishes them (https://www.owensound.ca/roads-transportation/guelph-owen-sound-transportation/, checked 2026-10-19), though 9.6 km in 5 min is faster than the other runs; that trip carries a check note.",
       "source": [
         "https://www.owensound.ca/roads-transportation/guelph-owen-sound-transportation/",
         "https://www.owensound.ca/news-and-public-notices/posts/guelph-owen-sound-transportation-gost-service-to-continue-through-december-2026/"
@@ -2716,6 +2716,7 @@
               },
               {
                 "service": "daily",
+                "check": "the published times of the 10:38 Guelph run give Williamsford 12:35 to Chatsworth 12:40, 9.6 km in 5 min where the other runs take 10-11 min; one of them may be a misprint, so check with the operator",
                 "headsign": "Owen Sound",
                 "stops": [
                   ["Guelph Central Station (79 Carden St)", 43.54481, -80.24637, "10:38"],
@@ -6121,6 +6122,7 @@
               },
               {
                 "service": "ox_2050_we",
+                "check": "Milton 21:50 to Kitchener Sportsworld 22:10 is 20 min for 41.6 km straight-line where the daytime trips take 30 min; one of the two times may be wrong, so check with the operator",
                 "headsign": "London Western University",
                 "stops": [
                   ["Toronto - Downtown, 44 York St (at Front St, Billy Bishop shuttle loading zone)", 43.64568, -79.38257, "20:50"],
@@ -6147,6 +6149,7 @@
               },
               {
                 "service": "ox_2155_we",
+                "check": "Milton 22:55 to Kitchener Sportsworld 23:15 is 20 min for 41.6 km straight-line where the daytime trips take 30 min; one of the two times may be wrong, so check with the operator",
                 "headsign": "London Western University",
                 "stops": [
                   ["Toronto - Downtown, 44 York St (at Front St, Billy Bishop shuttle loading zone)", 43.64568, -79.38257, "21:55"],

@@ -119,7 +119,9 @@ Rules:
   `"assumed": true` on a service means every date of it uses projected times; feed-level
   `"observed_until": "YYYY-MM-DD"` means dates after it use times assumed from the observed schedule;
   `"assumed_dates": [dates]` lists single dates with projected times (holiday patterns); `"assumed_note"`
-  is the short reason the WARNING quotes. A region file's top-level `verified` date also warns once it is
+  is the short reason the WARNING quotes. A trip whose published times look wrong (faster than the road
+  allows) keeps them and gets a `"check"` note, which the planner shows as a WARNING on any leg of that
+  trip. A region file's top-level `verified` date also warns once it is
   over six months old.
 - `ride_pricing_areas`: ordered `[{"name", "boxes": [bbox, ...], "pricing": {rate card}}]`; the first area
   holding the pickup prices the ride, and `out_of_area_per_km` applies when the ride ends outside its

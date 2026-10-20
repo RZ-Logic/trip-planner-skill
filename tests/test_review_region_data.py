@@ -198,5 +198,79 @@ class AssumedTimetableTests(unittest.TestCase):
         self.assertFalse([w for w in res["warnings"] if "last checked" in w], res["warnings"])
 
 
+MAX_STRAIGHT_KMH = 110   # about 125-130 km/h by road; 85 would flag dozens of plausible Hwy 401 coach legs
+
+
+def _minutes(hm):
+    h, m = hm.split(":")
+    return int(h) * 60 + int(m)
+
+
+def hand_entered_trips():
+    """(region id, feed, route, trip) for every hand-entered trip in the bundled region files."""
+    for r in th.load_regions():
+        for f in r.get("feeds", []):
+            for route in (f.get("manual") or {}).get("routes", []):
+                for t in route["trips"]:
+                    yield r["id"], f, route, t
+
+
+class HandEnteredTimetableData(unittest.TestCase):
+    """data-integrity-8: hand-entered timetables held legs faster than any road allows (Onex Milton to Kitchener
+    in 20 min on two weekend trips, GOST Williamsford to Chatsworth 9.6 km in 5 min). The operators' own
+    published times say so, so the times stay; such a trip carries a 'check' note that warns on any shown leg."""
+
+    def test_no_hand_entered_leg_is_faster_than_the_road_allows(self):
+        bad = []
+        for _rid, f, _route, t in hand_entered_trips():
+            if t.get("check"):
+                continue   # the operator publishes these times; the trip's 'check' note warns on every shown leg
+            for a, b in zip(t["stops"], t["stops"][1:]):
+                dep = a[4] if len(a) > 4 else a[3]
+                minutes = _minutes(b[3]) - _minutes(dep)
+                km = th.haversine_m(a[1], a[2], b[1], b[2]) / 1000.0
+                if minutes <= 0 or km / (minutes / 60.0) > MAX_STRAIGHT_KMH:
+                    bad.append((f["id"], t["service"], a[0], dep, b[0], b[3],
+                                round(km / (minutes / 60.0)) if minutes > 0 else None))
+        self.assertEqual(bad, [], bad)
+
+    def test_check_notes_are_kept_to_the_known_doubtful_trips(self):
+        # a 'check' note is not a way to skip the speed test: only the three trips the review found carry one
+        checked = sorted((f["id"], t["service"], t["stops"][0][3]) for _r, f, _ro, t in hand_entered_trips()
+                         if t.get("check"))
+        self.assertEqual(checked, [("gost-guelph-owen-sound", "daily", "10:38"), ("onex", "ox_2050_we", "20:50"),
+                                   ("onex", "ox_2155_we", "21:55")])
+
+    def test_gost_doubtful_leg_warns_and_keeps_the_published_times(self):
+        res = run_plan(one_feed_region("gost-guelph-owen-sound"),
+                       ["--origin", "44.17457,-80.81917", "--dest", "44.45658,-80.89835",   # Durham to Chatsworth
+                        "--depart", "2026-10-15 12:00"])
+        leg = res["transit_only"]["legs"][0]
+        self.assertEqual((th.fmt_t(leg["depart"]), th.fmt_t(leg["arrive"])), ("12:15", "12:40"))
+        self.assertIn("misprint", leg.get("check", ""))
+        ws = [w for w in res["warnings"] if w.startswith("GOST") and "12:35" in w and "check with the operator" in w]
+        self.assertEqual(len(ws), 1, res["warnings"])
+        txt = run_plan(one_feed_region("gost-guelph-owen-sound"),
+                       ["--origin", "44.17457,-80.81917", "--dest", "44.45658,-80.89835",
+                        "--depart", "2026-10-15 12:00"], as_json=False)
+        self.assertIn("times doubtful", txt)
+
+    def test_onex_weekend_milton_to_kitchener_warns(self):
+        res = run_plan(one_feed_region("onex"), ["--origin", "43.52803,-79.9038",   # Milton GO carpool lot
+                                                 "--dest", "43.40955,-80.39267",   # Kitchener Sportsworld
+                                                 "--depart", "2026-10-17 22:30"])   # a Saturday
+        leg = res["transit_only"]["legs"][0]
+        self.assertEqual(th.fmt_t(leg["depart"]), "22:55")
+        self.assertTrue(leg.get("check"))
+        self.assertTrue([w for w in res["warnings"] if w.startswith("Onex") and "20 min" in w], res["warnings"])
+
+    def test_published_gost_run_without_a_check_note_does_not_warn(self):
+        res = run_plan(one_feed_region("gost-guelph-owen-sound"),
+                       ["--origin", "44.17457,-80.81917", "--dest", "44.45658,-80.89835",
+                        "--depart", "2026-10-15 18:30"])   # the 17:30 Guelph run: Durham 19:07, Chatsworth 19:32
+        self.assertNotIn("check", res["transit_only"]["legs"][0])
+        self.assertFalse([w for w in res["warnings"] if "check with the operator" in w], res["warnings"])
+
+
 if __name__ == "__main__":
     unittest.main()

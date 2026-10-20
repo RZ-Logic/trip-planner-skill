@@ -30,7 +30,7 @@ python3 scripts/drive_plan.py --origin "ORIGIN" --dest "DESTINATION" --depart "Y
 | `--save-car`, `--forget-car`, `--no-saved-car` | keep the car for later runs, delete it, or ignore it once. The file is `%APPDATA%/trip-planner/car.json` on Windows and `~/.config/trip-planner/car.json` elsewhere; `TRIP_PLANNER_CONFIG` overrides it (a path ending in `.json` is the file, anything else a folder). Printed paths show the home folder as `~` |
 | `--car-class`, `--l-per-100km`, `--vehicle hybrid\|diesel` | fuel use without a lookup (default small SUV, NRCan medians); `--l-per-100km` wins over everything |
 | `--fuel-price 1.85` | override the Ontario survey price ($/L) |
-| `--ev-model NAME --soc 80` | EV presets: ioniq5, ev9, equinox, model-y, model-3, niro, mach-e, leaf (2026, NACS), leaf-plus (2019 to 2025, 62 kWh), leaf-40 (2018 to 2025, 40 kWh), generic. `--car` picks the LEAF preset by model year and trim; a 2011 to 2017 LEAF uses leaf-40 with its own 24 or 30 kWh pack, with a WARNING. `--battery-kwh`, `--max-dc-kw`, `--kwh-per-100km`, `--nacs-adapter` override |
+| `--ev-model NAME --soc 80` | EV presets: ioniq5, ev9, equinox, model-y, model-3, niro, mach-e, leaf (2026, NACS), leaf-plus (2019 to 2025, 62 kWh), leaf-40 (2018 to 2025, 40 kWh), generic. `--car` picks the LEAF preset by model year and trim; a 2011 to 2017 LEAF uses leaf-40 with its own 24 or 30 kWh pack, with a WARNING. A `--car` whose NRCan range and rating imply a battery more than 10% smaller than its preset's gets that smaller battery, with a WARNING. `--battery-kwh`, `--max-dc-kw`, `--kwh-per-100km`, `--nacs-adapter` override |
 | `--max-walk-m 800`, `--height-m 2.1` | parking walk limit; garage clearance |
 | `--park-and-ride auto\|on\|off` | also check driving to a station and taking transit (auto: GTHA destinations only, downtown Toronto or parking over $15 for the stay; on: any destination) |
 | `--weather auto\|clear\|rain\|snow`, `--temp-c` | auto uses the Open-Meteo forecast (16 days), else month normals |
@@ -184,7 +184,10 @@ priced.
   3. The class median from `--car-class`, or for a small SUV by default.
 
   For an electric car, `--car` gives kWh/100 km. Battery size and charging power come from the
-  matching EV preset, and `--l-per-100km` is refused.
+  matching EV preset, and `--l-per-100km` is refused. When the car's NRCan range and rating imply a
+  battery more than 10% smaller than the preset's (a Standard Range or RWD trim, or an EV with no
+  preset), the battery is scaled to that, with a WARNING; charging power stays the preset's.
+  `--battery-kwh` and `--max-dc-kw` override.
 
   City and highway figures are blended by the route's highway share. The result is 8% higher below
   5 C and 15% higher below -5 C. The `CAR` line says which source was used, and says "assumed"

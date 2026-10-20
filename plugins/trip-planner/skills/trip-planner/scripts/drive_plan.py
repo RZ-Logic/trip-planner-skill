@@ -625,6 +625,47 @@ def ev_battery_for(car):
     return LEAF_40[2] if key not in _ev_presets() else None
 
 
+TRIM_GAP = 0.10   # a looked-up EV whose NRCan range x rating implies a battery this much smaller gets a scaled one
+
+
+def _nrcan_energy(c):
+    """NRCan range x combined kWh/100 km (about the energy one full charge gives), or None."""
+    try:
+        return float(c["range_km"]) * float(c["comb"]) / 100.0
+    except (KeyError, TypeError, ValueError):
+        return None
+
+
+def _ref_ratio(p):
+    """A preset's usable kWh over the NRCan energy of its own reference row, or None (the generic preset)."""
+    ref = p.get("nrcan_ref") or {}
+    try:
+        return float(p["battery_kwh"]) / (float(ref["range_km"]) * float(ref["kwh_100km"]) / 100.0)
+    except (KeyError, TypeError, ValueError, ZeroDivisionError):
+        return None
+
+
+def ev_trim_battery(car, key):
+    """Usable kWh for a looked-up EV whose NRCan range and rating imply a battery more than TRIM_GAP smaller than
+    its preset's (a Standard Range or RWD trim on a Long Range preset; an EV with no preset on the generic one):
+    its NRCan energy x the preset's own ratio (for the generic preset, the median ratio of the presets). Never
+    larger than the preset's battery. Else None."""
+    presets = _ev_presets()
+    p = presets.get(key or "generic")
+    e = _nrcan_energy(car)
+    if not p or not e:
+        return None
+    ratio = _ref_ratio(p)
+    if ratio is None:
+        rs = sorted(r for r in (_ref_ratio(x) for x in presets.values()) if r)
+        if not rs:
+            return None
+        mid = len(rs) // 2
+        ratio = rs[mid] if len(rs) % 2 else (rs[mid - 1] + rs[mid]) / 2.0
+    kwh = round(e * ratio, 1)
+    return kwh if kwh < float(p["battery_kwh"]) * (1 - TRIM_GAP) else None
+
+
 def _figs(c):
     return {"label": c.get("label") or "your car", "city": float(c["city"]), "hwy": float(c["hwy"])} \
         if c.get("city") is not None and c.get("hwy") is not None else (
@@ -661,7 +702,9 @@ def build_ev(car, args, warnings):
     nr = ea.get("nrcan")
     if nr and not ea.get("kwh_per_100km"):   # the NRCan rating of the looked-up or saved EV
         e["kwh_100km_city"], e["kwh_100km_hwy"] = nr["city"], nr["hwy"]
-        e["name"] = "%s (NRCan rating; battery and charging from the %s preset)" % (nr["label"], e["key"])
+        e["name"] = ("%s (NRCan rating; battery scaled from its NRCan range, charging from the %s preset)"
+                     if car.get("battery_scaled") else
+                     "%s (NRCan rating; battery and charging from the %s preset)") % (nr["label"], e["key"])
     car["ev"] = e
     return e
 
@@ -819,18 +862,30 @@ def resolve_car(args, warnings):
                        class_given=bool(args.car_class), source=cfg["source"], source_url=cfg["source_url"])
     else:
         car["fuel"], car["unit"] = "electricity", "kWh/100 km"
-        model, stand_in_kwh = args.ev_model, None
+        model, stand_in_kwh, trim_kwh, trim_src = args.ev_model, None, None, None
         if not model and looked is not None:
-            model, stand_in_kwh = ev_preset_for(looked), ev_battery_for(looked)
+            model, stand_in_kwh, trim_src = ev_preset_for(looked), ev_battery_for(looked), looked
         if not model and using_saved:
             model = saved_flags.get("ev_model")
             if not model and saved:
-                model, stand_in_kwh = ev_preset_for(saved), ev_battery_for(saved)
+                model, stand_in_kwh, trim_src = ev_preset_for(saved), ev_battery_for(saved), saved
+        if trim_src is not None and not stand_in_kwh:   # the preset was matched, not given: check its battery fits
+            trim_kwh = ev_trim_battery(trim_src, model)
         sf = saved_flags if using_saved else {}
-        ea = {"model": model, "battery_kwh": args.battery_kwh or sf.get("battery_kwh") or stand_in_kwh,
+        ea = {"model": model,
+              "battery_kwh": args.battery_kwh or sf.get("battery_kwh") or stand_in_kwh or trim_kwh,
               "max_dc_kw": args.max_dc_kw or sf.get("max_dc_kw"),
               "kwh_per_100km": args.kwh_per_100km or (sf.get("kwh_per_100km") if not args.ev_model else None),
               "nacs_adapter": bool(args.nacs_adapter or sf.get("nacs_adapter")), "nrcan": None}
+        if trim_kwh and ea["battery_kwh"] == trim_kwh:
+            pk = model or "generic"
+            car["battery_scaled"] = {"kwh": trim_kwh, "preset": pk, "preset_kwh": _ev_presets()[pk]["battery_kwh"]}
+            warnings.append("%s: its NRCan range and rating imply about %.0f kWh usable, less than the %s preset's "
+                            "%.0f kWh, so charging uses %.0f kWh%s; pass --battery-kwh for your car's exact battery"
+                            % (car.get("label") or "your EV", trim_kwh, pk, car["battery_scaled"]["preset_kwh"],
+                               trim_kwh, "" if pk == "generic" else
+                               " (fast charging stays the preset's; smaller batteries often charge slower, so "
+                               "pass --max-dc-kw too if you know it)"))
         if stand_in_kwh and ea["battery_kwh"] == stand_in_kwh:
             pack = _old_leaf_pack(looked or saved or {})
             warnings.append("charging for %s uses the %s preset (the same CHAdeMO port and charging speed) with a "
@@ -980,7 +1035,11 @@ def car_lines(res):
             first = "%s%s: %s kWh/100 km (%s)%s" % (nm, saved, _fig(kwh_given),
                                                     "your saved figure" if how == "saved" else "your figure", tail)
         elif how in ("lookup", "saved") and ea.get("nrcan"):
-            where = ("from the %s preset" % preset if preset and preset != "generic" and not c.get("generic_ev")
+            scaled = c.get("battery_scaled")
+            where = ("battery scaled from its NRCan range, generic charging, pass --max-dc-kw"
+                     if scaled and c.get("generic_ev") else
+                     "battery scaled from its NRCan range, charging from the %s preset" % preset if scaled else
+                     "from the %s preset" % preset if preset and preset != "generic" and not c.get("generic_ev")
                      else "generic, pass --battery-kwh" if c.get("generic_ev") else "your figures")
             first = "%s%s: %s (%s)%s%s" % (label, saved, figs, _nrcan_text(c), "; %s %s" % (bat, where) if bat else "",
                                            rough)

@@ -47,6 +47,34 @@ verified findings. They are fixed in batches below, test first; IDs in brackets 
   off") are read, so a lot closed during the stay no longer fits; hours that cannot be read show in the
   lot's notes and check line. [parking-5]
 
+### Batch 2: transit engine and fares
+
+- **GTFS fares.** Feeds priced from their own fare table honour transfers 1 or 2 and transfer_duration
+  (durations under 30 min are read as a unit error; an unreadable value charges every leg "(before
+  transfer discounts)"). A Niagara local bus next to a WEGO line no longer hides the $16 WEGO pass. Fares
+  in two currencies are listed per currency and not added up. A local fare credited back at a GO tap no
+  longer gives later legs its transfer window. New tests pin the GO fare path (15.7% card discount,
+  cheapest rule, route rules, per-leg sums). [hubs-pricing-io-3, ext-4, ext-12, gem-G2B, tests-ci-eng-2]
+- **Timetable reading.** Stop times that jump back past midnight are read as after midnight (with a
+  warning) and other backward times skip the trip, so a bus can no longer arrive before it leaves. UTC
+  feeds (FlixBus) show the right hour on the evening before a clock change. "Every N min" service is
+  planned with the longest wait and shown as "every N min from X". A bus boarded inside the time window
+  keeps its later stops. Station-level transfers.txt rules apply to every platform. With no region file,
+  a UTC feed no longer sets the trip clock. [hubs-engine-4, hubs-engine-2, hubs-engine-7,
+  hubs-engine-verifier-1, hubs-engine-5, hubs-engine-8]
+- **Network messages.** A failed HTTPS certificate check stops with TLS FAILED and the fix instead of
+  "address not found"; NETWORK BLOCKED names the cause it saw (DNS, timeout, proxy, refused). Blocked
+  timetable hosts give NETWORK BLOCKED naming them, not "no transit departures" with a raw list.
+  [hubs-pricing-io-4, hubs-pricing-io-5]
+- **Geocoding and discovery.** The Photon fallback is biased to Nominatim's street and a house match more
+  than 5 km away is refused; the label keeps the province. Discovery skips feeds that cannot be near the
+  trip before downloading them (other-country town matches, out-of-reach catalog areas; at most 60 per
+  run). [hubs-pricing-io-7, hubs-pricing-io-8]
+- **Other.** The Transitous second opinion is asked with the plan's safety margin, so a bus inside the
+  margin is not reported as a better connection. Final rides are timed from the drop point to the
+  destination, not the reverse. trip_hubs output credits OpenStreetMap on a SOURCES line.
+  [hubs-pricing-io-6, hubs-engine-6, ext-2, hubs-pricing-io-10]
+
 ## 0.9.8 (2026-10-12)
 
 **Review:** a code, test and security review by Sonnet and Opus agents raised 80 findings. Verifiers

@@ -279,7 +279,7 @@ class PriceRule(unittest.TestCase):
     def test_per_unit_rounding_and_min_charge(self):
         rule = {"hourly": 1.0, "per_min": 15}
         self.assertEqual(pk.price_rule(rule, WED, 50)[0], 1.0)     # 4 units of 15 min
-        self.assertEqual(pk.price_rule({"hourly": 3.25, "min_charge": 3.25}, WED, 20)[0], 3.25)
+        self.assertEqual(pk.price_rule({"hourly": 2.0, "min_charge": 5.0}, WED, 20)[0], 5.0)   # minimum above the metered $2
 
     def test_season(self):
         rule = {"hourly": 8.0, "daily_max": 40.0, "season": ["05-15", "09-15"]}
@@ -385,7 +385,8 @@ class FindParking(unittest.TestCase):
         self.assertEqual(res["caveat"], pk.CAVEAT)
         names = [o["name"] for o in opts]
         # free first: City Hall lot is free on Saturday and is official; the OSM church lot (fee=no, no official
-        # source) is labelled unverified and ranks after the $5 OSM-priced lot but before the $6 options
+        # source) is labelled unverified and ranks as $5.005, so it comes next; the $5 OSM-priced lot ranks as if
+        # it cost 25% more ($6.25), so the official $6 Elizabeth St lot comes before it (review parking-4)
         self.assertTrue(names[0].startswith("City Hall Lot"))
         self.assertEqual(opts[0]["cost_text"], "free")
         self.assertTrue(opts[0]["fits_stay"])
@@ -394,9 +395,12 @@ class FindParking(unittest.TestCase):
         self.assertEqual(church["confidence"], "osm")
         self.assertEqual(church["cost_text"], pk.UNVERIFIED_FREE_TEXT)
         self.assertTrue(church["unverified"])
-        self.assertEqual(opts[1]["cost"], 5.0)
-        self.assertEqual(opts[2]["name"], "Church lot")
-        self.assertTrue(all(o["cost"] >= 6.0 for o in opts[3:] if o["cost"]))
+        self.assertEqual(opts[1]["name"], "Church lot")
+        self.assertTrue(opts[2]["name"].startswith("Elizabeth"))
+        osm5 = [i for i, o in enumerate(opts) if o["cost"] == 5.0 and o["confidence"] == "osm"]
+        self.assertEqual(len(osm5), 1)
+        self.assertGreater(osm5[0], 2)                    # the $5 OSM price ranks after the official $6 lot
+        self.assertTrue(all(o["cost"] >= 5.0 for o in opts[3:] if o["cost"]))
         # the Elizabeth St lot is paid Mon-Sat; the OSM lot 40 m away merged into it with its capacity
         eliz = [o for o in opts if o["name"].startswith("Elizabeth")][0]
         self.assertEqual(eliz["cost"], 6.0)
@@ -412,7 +416,9 @@ class FindParking(unittest.TestCase):
         unknown = [o for o in opts if o["cost"] is None]
         self.assertEqual(len(unknown), 2)                 # at most 2 unknown-price lots
         self.assertEqual(unknown[0]["cost_text"], "price unknown, check signs")
-        priced = [o["cost"] for o in opts if o["cost"] is not None and not o["unverified"]]
+        # priced lots in order of the cost they rank at: an osm or stale price counts 25% more
+        priced = [o["cost"] * (1.0 + pk.UNVERIFIED_PRICE_RANK_PCT if o["confidence"] in ("osm", "stale") else 1.0)
+                  for o in opts if o["cost"] is not None and not o["unverified"]]
         self.assertEqual(priced, sorted(priced))
         for o in opts:
             for k in ("name", "lat", "lon", "walk_m", "walk_min", "search_min", "cost", "cost_text", "basis", "kind",

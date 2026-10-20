@@ -4,10 +4,11 @@ Sources, best first: curated tourist-town places (references/driving/parking-pla
 ArcGIS parking layers, Toronto Green P 2019 carparks joined to TPA occupancy, and OpenStreetMap through
 Overpass. Every lot is priced for the actual stay with price_rule() on a normalized rule:
 
-  {"free": bool, "hourly": $, "per_min": minutes per charge unit (60), "daily_max": $ per calendar day,
+  {"free": bool, "hourly": $, "per_min": minutes per charge unit (60; units run on across midnight within one
+   period, each counting toward the day it starts on), "daily_max": $ per calendar day,
    "min_charge": $, "flat": $ per entry, "free_first_min": n, "tiers": [{"up_to_min": n, "cost": $}, {"cost": $}],
    "paid_days": [0-6], "paid_hours": ["09:00", "18:00"], "holidays_free": bool, "season": ["MM-DD", "MM-DD"],
-   "off_season": "free"|"closed", "max_stay_min": n, "evening_flat": $, "evening_from": "18:00"}
+   "off_season": "free"|"closed"|"unknown", "max_stay_min": n, "evening_flat": $, "evening_from": "18:00"}
 
 Extensions used by the open-data parsers (all optional):
   "periods": [{"days": [0-6], "hours": [start, end], "holidays": bool, "hourly", "per_min", "max", "flat",
@@ -23,15 +24,21 @@ Extensions used by the open-data parsers (all optional):
   "season" ends may be named anchors that move by year: "victoria_day", "fri_before_victoria_day",
   "labour_day", "thanksgiving", "civic_holiday", "easter_monday", "good_friday"; "season_year": 2026 (the
   season dates are that year's dates; other years get a warning note); "off_season_flat": $ (a different
-  price off season); "off_season_max_stay_min": n (a time limit that still applies off season);
-  "rate_year": 2026 (rates published for that year; later years get a note); "tax": 0.13 (published rates
+  price off season); "off_season_rule": {...} (a full rule priced instead when no day of the stay is in
+  season); "off_season": "unknown" (no published price off season: the lot is price unknown with a check line,
+  and the rule's max stay does not bind); "off_season_max_stay_min": n (a time limit that still applies off
+  season);
+  "rate_year": 2026 (rates published for that year; later years get a note; a place-level rate_year applies
+  to every priced lot of the place); "tax": 0.13 (published rates
   exclude HST); "per_person": {"adult", "child", "senior"} or true (admission per person: the cost is one
   adult unless the party is known); "per_passenger": $ (vehicle price covers the driver, plus $ for each
-  passenger); "first_hour": $ (the first hour costs this, later hours the hourly rate); "fill_cap": $ (cap
-  per day on time charged by "fill"); "_partial_days": [0-6] (the rate text priced only these weekdays;
-  other days are unknown, not free); a period may carry "no_limit": true (max_stay does not bind in it) and
-  "entry_max": [{"from", "to", "max"}] (the cap depends on the arrival time), "months": [1-12] (the window
-  applies in those months only), "free_first_min": n (the first n minutes of the stay in it are free) and
+  passenger); "first_hour": $ (the first hour costs this, later hours the hourly rate; the day maximum
+  still caps the day); "fill_cap": $ (cap per day on time charged by "fill"); "_partial_days": [0-6] (the
+  rate text priced only these weekdays; other days are unknown, not free); "_partial_hours": true (the rate
+  text priced only some hours, with no base rate; other hours are unknown, not free); a period may carry
+  "no_limit": true (max_stay does not bind in it) and "entry_max": [{"from", "to", "max"}] (the cap depends on
+  the arrival time), "months": [1-12] (the window applies in those months only), "free_first_min": n (the
+  first n minutes of the stay in it are free) and
   "roll_min": n (its "max" is a rolling maximum: each n-minute block of the stay from the first charged minute
   costs at most "max", across midnight, as Green P's "Any 4 hour Period" or "24 Hour Rolling Maximum").
 
@@ -65,6 +72,8 @@ UNVERIFIED_FREE_TEXT = "free per OpenStreetMap, unverified; check signs"
 FACILITY_FREE_TEXT = "free per OpenStreetMap, unverified; may be for facility users"
 # an unverified free OSM lot ranks after verified priced options up to this cost for the stay
 UNVERIFIED_FREE_RANK_COST = 5.0
+# an old or unverified price ranks as if it cost this much more, so a verified price up to 25% dearer comes first
+UNVERIFIED_PRICE_RANK_PCT = 0.25
 
 
 def _today():
@@ -200,11 +209,20 @@ UNIT_RE = re.compile(r"\s*(?:/|per|an?|for|each)?\s*(?P<n>\d+(?:\.\d+)?|1/2|half
 LIMIT_RE = re.compile(r"(?P<n>\d+(?:\.\d+)?)\s*-?\s*(?P<u>hr|hrs|hour|hours|h|min|mins|minute|minutes)\.?\s*(?:parking\s*)?"
                       r"(?:limit|max(?:imum)?)\b|(?:limit|max(?:imum)?\s*stay)\s*(?:of\s*)?(?P<n2>\d+)\s*(?P<u2>h|hr|hrs|hours?|min)"
                       r"|\bmax(?:imum)?\.?\s*(?:of\s*)?(?P<n3>\d+(?:\.\d+)?)\s*(?P<u3>hours?|hrs?|h|min(?:ute)?s?)\b", re.I)
-FIRST_HOUR_RE = re.compile(r"(?P<pre>US\s*\$|CA?\$|C\$|\$)\s*(?P<a>\d+(?:\.\d+)?)\s*(?:for\s+)?(?:the\s+)?first\s+(?:hour|hr|h)\b"
-                           r"[\s,;.]*(?:then\s+)?(?:\$\s*)?(?P<b>\d+(?:\.\d+)?)\s*(?:/|per|for)?\s*(?:each\s+)?"
-                           r"(?:additional|addt?'?l|extra|subsequent)\s*(?:hour|hr|h)\b", re.I)
-FREE_FIRST_RE = re.compile(r"first\s+(?P<n>\d+|one|two|half)?\s*(?P<u>hours?|hrs?|h|min(?:ute)?s?)\s*(?:is\s+)?free", re.I)
+# "$5 first hour, $2 each additional hour", "$5 1st hour, $3/hr after" (in "$1/hr after 6pm" the "after" starts a window)
+FIRST_HOUR_RE = re.compile(r"(?P<pre>US\s*\$|CA?\$|C\$|\$)\s*(?P<a>\d+(?:\.\d+)?)\s*(?:for\s+)?(?:the\s+)?(?:first|1st)\s+(?:hour|hr|h)\b"
+                           r"[\s,;.]*(?:then\s+)?(?:\$\s*)?(?P<b>\d+(?:\.\d+)?)\s*(?:(?:/|per|for)?\s*(?:each\s+)?"
+                           r"(?:additional|addt?'?l|extra|subsequent)\s*(?:hour|hr|h)\b"
+                           r"|(?:/|per)\s*(?:hour|hr|h)\b(?:\s*(?:after|thereafter)\b(?!\s*(?:\d|midnight|noon)))?)", re.I)
+# "first hour free", "2 hours free" (not "2 hours free parking limit"), "free for the first 2 hours"; without
+# "first", _tokens reads the hours only when a price follows ("2 hours free, then $3/hr")
+FREE_FIRST_RE = re.compile(r"first\s+(?P<n>\d+|one|two|half)?\s*(?P<u>hours?|hrs?|h|min(?:ute)?s?)\s*(?:is\s+|are\s+)?free"
+                           r"|\b(?P<n2>\d+|one|two|half)\s*(?P<u2>hours?|hrs?|h|min(?:ute)?s?)\s+free\b(?!\s*(?:parking\s*)?(?:limit|max))"
+                           r"|\bfree\s+(?:for\s+)?(?:the\s+)?(?:first\s+)?(?P<n3>\d+|one|two|half)\s*(?P<u3>hours?|hrs?|h|min(?:ute)?s?)\b", re.I)
 EVENING_RE = re.compile(r"\b(eve|evening|night|overnight)\b", re.I)
+CLAUSE_SEP = re.compile(r"[,;|]|//")    # what ends a clause of rate text ("$2/hr Mon-Fri 8am-6pm; $1/hr Sat ...")
+# what may stand between "free" and its days: "free Sat-Sun", "free on weekends", "free evenings and weekends"
+FREE_GAP_RE = re.compile(r"^[\s:,\-]*(?:on\s+)?(?:(?:eve|evenings?|nights?|overnight)\s*(?:,|and|&)\s*)?(?:on\s+)?$", re.I)
 
 
 def _clock(tok, ap_hint=None):
@@ -230,7 +248,9 @@ def _ampm(tok):
 
 
 def parse_hours(a, b):
-    """Two time tokens -> (start_min, end_min) or None when they do not look like clock times."""
+    """Two time tokens -> (start_min, end_min) or None when they do not look like clock times. With no am/pm on
+    either and both hours 1-12 with no leading zero, an end before the start is pm ("8:00-6:00" is 8am-6pm, not
+    past midnight; "07:00-01:00" still runs to 1am)."""
     sa, sb = a.strip().lower(), b.strip().lower()
     clocky = lambda s: (":" in s) or _ampm(s) or s in ("midnight", "noon")
     if not (clocky(sa) or clocky(sb)):
@@ -245,6 +265,12 @@ def parse_hours(a, b):
         sa_min, _ = _clock(sa, hint)
         if hint == "pm" and sa_min > ea:
             sa_min, _ = _clock(sa, "am")
+    # hour 0 or above 12 or a leading zero ("07:00-01:00") is a 24 h time and midnight/noon carry their own
+    # meaning: those still wrap past midnight
+    hour = lambda s: int(re.match(r"\d+", s).group()) if re.match(r"\d+", s) else 0
+    if not (_ampm(sa) or _ampm(sb)) and 1 <= hour(sa) <= 12 and 1 <= hour(sb) <= 12 and ea < sa_min \
+            and not (re.match(r"0\d", sa) or re.match(r"0\d", sb)):
+        ea += 720
     if ea == 1439:
         ea = 1440
     if sa_min >= 1440 or ea > 1440:
@@ -320,9 +346,13 @@ def _tokens(text):
                                                "evening": bool(EVENING_RE.search(text[m.start():end + 20]) or EVENING_RE.search(prev))}))
         used.append((m.start(), end))
     for m in FREE_FIRST_RE.finditer(text):
-        q = (m.group("n") or "1").lower()
+        if m.group("u") is None and not re.search(r"\bfirst\b", m.group(), re.I) \
+                and not re.match(r"[\s,;.]*(?:then\b|(?:US\s*|CA?|C)?\$)", text[m.end():], re.I):
+            continue   # "free 24 hours on weekends": when parking is free, not free hours before a price
+        q =(m.group("n") or m.group("n2") or m.group("n3") or "1").lower()
         n = {"one": 1, "two": 2, "half": 0.5}.get(q) or float(q)
-        mins = n if m.group("u").lower().startswith("min") else n * 60
+        unit = (m.group("u") or m.group("u2") or m.group("u3")).lower()
+        mins = n if unit.startswith("min") else n * 60
         toks.append(("free_first", m.start(), m.end(), int(mins)))
         used.append((m.start(), m.end()))
     for m in LIMIT_RE.finditer(text):
@@ -363,15 +393,27 @@ def _tokens(text):
         toks.append(("no_overnight", m.start(), m.end(), None))
     toks.sort(key=lambda t: t[1])
     # merge day lists such as "Sat, Sun, Holidays" or "Saturday - Sunday & Holidays"
-    out = []
+    out, parts = [], []
     for t in toks:
         if (t[0] == "days" and out and out[-1][0] == "days"
                 and re.match(r"^[\s,/&+]*(?:and)?[\s,/&+]*$", text[out[-1][2]:t[1]], re.I)):
             d0, h0 = out[-1][3]
             d1, h1 = t[3]
             out[-1] = ("days", out[-1][1], t[2], (d0 | d1, h0 or h1))
+            parts[-1].append(t)
         else:
             out.append(t)
+            parts.append([t])
+    # "$2/hr Mon-Fri, Sat-Sun free", "$1.50/hr Mon-Sat, Sun free": a list holding weekdays, then a weekend or
+    # holiday list right before "free", is a paid list followed by a free one, not one list of free days
+    for k in range(len(out) - 2, -1, -1):
+        t, nxt = out[k], out[k + 1]
+        if t[0] != "days" or len(parts[k]) < 2 or nxt[0] != "free" or not re.match(r"^[\s\-:,]*$", text[t[2]:nxt[1]]):
+            continue
+        first, rest = parts[k][0], parts[k][1:]
+        if any(d < 5 for d in first[3][0]) and not any(d < 5 for r in rest for d in r[3][0]):
+            rd = set().union(*(r[3][0] for r in rest))
+            out[k:k + 1] = [first, ("days", rest[0][1], rest[-1][2], (rd, any(r[3][1] for r in rest)))]
     return out
 
 
@@ -430,8 +472,13 @@ def parse_rate_text(text):
     "08:00am - 06:00pm (Mon - Sat)", "$6 Day (7am-6pm), $5 Eve (6pm-midnight)", "$2/hr;$5 max",
     "First hour FREE. $1 per 1/2 hour. $9 Daily.", "Mon-Fri, 8:30 -18:00, $0.50/7.5 min, $19 Max, ...
     // Sat,Sun,Holidays - Free", "$18 a day weekdays" (other days unknown, not free), "Weekdays $15, Weekends $8",
-    "$3/h, $12 max, free after 6pm", "$20 per day, $10 after 5pm", "$5 first hour, $2 each additional hour",
-    "$2.25/hour, max 3 hours". Unknown parts are left out; an empty dict means nothing was understood."""
+    "$3/h, $12 max, free after 6pm", "$20 per day, $10 after 5pm", "$3/hr, $10 after 5pm" ($3/h until 17:00),
+    "$5 after 6pm" (other hours unknown, not free), "$5 first hour, $2 each additional hour", "$5 1st hour,
+    $3/hr after", "2 hours free, then $3/hr", "$2.25/hour, max 3 hours", "$2/hr Mon-Fri 8am-6pm; $1/hr Sat
+    9am-5pm" (each price before its window), "$12 Day Max, $5 Night Max" (a night maximum without hours is
+    noted, not used), "$2/hr Mon-Fri, Sat-Sun free" (a paid day list, then the free one), "$2/hr 8am-6pm, free
+    evenings and weekends". Unknown parts are left out; an empty dict means nothing was understood, or that the
+    text calls every paid day free ("$2/hr, free Mon-Sun")."""
     if not text or not str(text).strip() or str(text).strip().lower() in ("n/a", "na", "none", "-"):
         return {}, []
     text = _strip_french(str(text))
@@ -450,6 +497,9 @@ def parse_rate_text(text):
     last = None
     skip = set()
     free_days = set()     # weekdays the text calls free ("$2/hr, free Sat-Sun")
+    free_evenings = False  # "free evenings and weekends"
+    night_max = []        # "$10 overnight", "$5 Night Max" with no window: never the day maximum
+    last_p, last_p_end = None, 0   # the latest window and where its clock range ends in the text
     for i, (kind, a, b, val) in enumerate(toks):
         if i in skip:
             continue
@@ -499,9 +549,11 @@ def parse_rate_text(text):
                         rule["holidays_free"] = True
                     skip.add(i + 2)
             # "free Sat-Sun", "free on weekends and holidays": unpaid days (with no clock window after them)
-            elif nxt and nxt[0] == "days" and re.match(r"^[\s:,\-]*(?:on\s+)?$", text[b:nxt[1]], re.I) \
+            elif nxt and nxt[0] == "days" and FREE_GAP_RE.match(text[b:nxt[1]]) \
                     and not (i + 2 < len(toks) and toks[i + 2][0] == "hours"
                              and re.match(r"^[\s:,\-]*$", text[nxt[2]:toks[i + 2][1]])):
+                if re.search(r"\b(?:eve|evening|night|overnight)s?\b", text[b:nxt[1]], re.I):
+                    free_evenings = True
                 free_days |= nxt[3][0]
                 if nxt[3][1]:
                     rule["holidays_free"] = True
@@ -537,6 +589,7 @@ def parse_rate_text(text):
                     p["_after"] = True
                 last = None
             periods.append(p)
+            last_p, last_p_end = p, b
         elif kind == "money":
             if val["cur"] == "USD":
                 rule["currency"] = "USD"
@@ -571,6 +624,10 @@ def parse_rate_text(text):
             elif u.startswith("month"):
                 continue
             item["evening"] = val["evening"] or bool(u and (u.startswith("eve") or "night" in u))
+            # this amount itself is a night or evening price (its unit or the word right next to it)
+            night = bool(u and (u.startswith("eve") or u in ("night", "nights", "overnight"))) \
+                or bool(re.match(r"\s*(?:max(?:imum)?\s*)?(?:rate\s*)?(?:overnight|night|evening)s?\b", text[b:], re.I)) \
+                or bool(re.search(r"\b(?:overnight|night|evening)s?\s*(?:max(?:imum)?|rate)?\s*:?\s*$", text[max(0, a - 20):a], re.I))
             if i in qual_money:     # the price applies on the qualifying days only
                 days, hol = toks[qual_money[i]][3]
                 qp = {"days": sorted(days), "hours": ["00:00", "24:00"]}
@@ -593,6 +650,15 @@ def parse_rate_text(text):
                         item["_after"] = True
                     else:
                         forward = "(" in seg and len(seg) <= 45 and "," not in seg.split("(")[0]
+                        # "$2/hr Mon-Fri 8am-6pm; $1/hr Sat 9am-5pm", "$3/hr 7am-7pm, $8 flat 7pm-7am": a price
+                        # written before a window in the same clause is that window's price, unless the clause
+                        # opened with a window still waiting for its price ("Mon-Fri 8am-6pm $2/hr Sat ...")
+                        waiting = last_p is not None and not last_p.get("free") and not any(
+                            k in last_p for k in ("hourly", "flat", "max")) and not CLAUSE_SEP.search(text[last_p_end:a])
+                        if not forward and not waiting and not CLAUSE_SEP.search(seg) \
+                                and (j == i + 1 or toks[i + 1][0] == "days"):
+                            forward = True
+                            item["evening"] = night     # only this amount's own word, not a neighbour's
                     break
             if forward:
                 item["_forward"] = True
@@ -610,6 +676,8 @@ def parse_rate_text(text):
                         rule["hourly"], rule["per_min"] = item["hourly"], item["per_min"]
                 if "max" in item and item.get("roll_min"):
                     rule["_roll_max"] = (item["max"], item["roll_min"])   # turned into a rolling period below
+                elif "max" in item and night:
+                    night_max.append(item["max"])
                 elif "max" in item:
                     rule["daily_max"] = item["max"] if "daily_max" not in rule else min(rule["daily_max"], item["max"])
                 if "flat" in item:
@@ -655,6 +723,9 @@ def parse_rate_text(text):
             p0["days"] = list(after[0]["days"])
         periods.insert(periods.index(after[0]), p0)
         rule.pop("flat", None)
+    elif after and rule.get("hourly") is not None and len(after) == len(periods) \
+            and all(p.get("flat") is not None or p.get("max") is not None for p in after):
+        rule["fill"] = True      # "$3/hr, $10 after 5pm": $3/h until 17:00, then the evening price
     free_only = periods and all(p.get("free") for p in periods)
     if free_only:
         p = periods[0]
@@ -679,11 +750,15 @@ def parse_rate_text(text):
             rule["paid_hours"] = p["hours"]
             if "days" in p:
                 rule["paid_days"] = p["days"]
-            if "hourly" in p and "hourly" not in rule:
+            if "hourly" in p:
+                # "$3/hr 8am-6pm, $1/hr evenings": the window's own rate, not the later one with no hours
+                if "hourly" in rule and rule["hourly"] != p["hourly"]:
+                    notes.append("second rate %s/h ignored" % dc.money(rule["hourly"]))
                 rule["hourly"], rule["per_min"] = p["hourly"], p.get("per_min", 60)
         else:
-            rates = set((p.get("hourly"), p.get("per_min")) for p in periods if not p.get("free"))
-            if "hourly" not in rule and len(rates) == 1 and None not in list(rates)[0]:
+            # one price for every listed window is also the base rate ("$2/hr Mon-Fri 8am-6pm, Sat 9am-5pm")
+            rates = set((p.get("hourly"), p.get("per_min")) for p in periods if not p.get("free") and p.get("hourly") is not None)
+            if "hourly" not in rule and len(rates) == 1:
                 rule["hourly"], rule["per_min"] = list(rates)[0]
             rule["periods"] = periods
             if cur_hol and not any(p.get("holidays") for p in periods):
@@ -703,6 +778,37 @@ def parse_rate_text(text):
         else:
             rule["paid_days"] = [d for d in (rule.get("paid_days") if rule.get("paid_days") is not None else range(7))
                                  if d not in free_days]
+    if rule.get("periods") and not any(k in rule for k in ("hourly", "flat", "daily_max")) and not qperiods             and not rule.get("_partial_days") and not any(p.get("free") or p.get("hourly") is not None for p in rule["periods"])             and any(p.get("flat") is not None or p.get("max") is not None for p in rule["periods"]):
+        # "$5 after 6pm", "$6 Day (8am-6pm)": a price for some hours only, with no base rate; the other hours are
+        # unknown, not free (hourly windows such as "Mon-Fri 8:30-18:00 $0.50/7.5 min" stay paid hours)
+        rule["_partial_hours"] = True
+    if night_max:
+        if any(k in rule for k in ("hourly", "flat", "daily_max")) or rule.get("periods"):
+            notes.append("night maximum %s not used (its hours are not given)" % dc.money(min(night_max)))
+        else:
+            rule["daily_max"] = min(night_max)     # "$10 overnight" alone: the only price given
+    # "$2/hr, free Mon-Sun": a price whose every paid day the text also calls free contradicts itself, so the
+    # lot is price unknown (never $0)
+    if any(k in rule for k in ("hourly", "flat", "daily_max")) or any(
+            p.get("hourly") is not None or p.get("flat") is not None or p.get("max") is not None for p in rule.get("periods") or []):
+        free_said = set(free_days)
+        for k, t in enumerate(toks):      # days written right after "free" in the same clause
+            if t[0] == "days" and k and toks[k - 1][0] == "free" and not CLAUSE_SEP.search(text[toks[k - 1][2]:t[1]]):
+                if k + 1 < len(toks) and toks[k + 1][0] == "hours" and re.match(r"^[\s:,\-]*$", text[t[2]:toks[k + 1][1]]):
+                    continue      # "free Mon-Fri 6pm-8am": a free window on those days, read above
+                free_said |= t[3][0]
+        nonfree = [p for p in rule.get("periods") or [] if not p.get("free") and not (p.get("days") is None and p.get("holidays"))]
+        if nonfree:
+            paid = set().union(*(set(p.get("days") if p.get("days") is not None else range(7)) for p in nonfree))
+        elif rule.get("periods"):
+            paid = None       # only free windows: the base rate covers the rest of the week
+        else:
+            paid = set(rule["paid_days"]) if rule.get("paid_days") is not None else None
+        if paid is not None and free_said and paid <= free_said:
+            return {}, notes + ["free days cover every paid day; price not used"]
+    if free_evenings and not (rule.get("paid_hours") or rule.get("periods")):
+        # with a paid window ("$2/hr 8am-6pm") the evening is already unpaid; without one its hours are unknown
+        notes.append("free evenings (hours not given)")
     roll = rule.pop("_roll_max", None)
     if roll:
         if rule.get("periods"):
@@ -1000,6 +1106,10 @@ def describe_rule(rule, year=None):
         extra.append("paid %s" % _season_text(rule["season"], year))
         if rule.get("off_season_flat") is not None:
             extra.append("%s off season" % dc.money(rule["off_season_flat"]))
+        elif rule.get("off_season_rule"):
+            extra.append("off season %s" % describe_rule(rule["off_season_rule"], year))
+        elif rule.get("off_season") == "unknown":
+            extra.append("price not published off season")
     return s + ("; " + ", ".join(extra) if extra else "")
 
 
@@ -1016,6 +1126,17 @@ def _longest_run(ivs):
     if cur_b is not None:
         best = max(best, (cur_b - cur_a).total_seconds() / 60.0)
     return best
+
+
+def _merged(ivs):
+    """The intervals joined where they touch or overlap: [(start, end)] in time order."""
+    out = []
+    for a, b in sorted(x for x in ivs if x[1] > x[0]):
+        if out and a <= out[-1][1] + dt.timedelta(seconds=30):
+            out[-1] = (out[-1][0], max(out[-1][1], b))
+        else:
+            out.append((a, b))
+    return out
 
 
 def price_rule(rule, arrive, stay_min, holidays=None):
@@ -1101,6 +1222,12 @@ def _price_core(rule, arrive, stay_min, holidays=None):
                 lim = "; %s max off season" % dur_text(oms)
                 if stay_min > oms:
                     fits = False
+            if rule.get("off_season") == "unknown":      # no published price off season: unknown, not free
+                return None, "price not published off season (paid %s)%s" % (stext, lim), fits
+            osr = rule.get("off_season_rule")
+            if isinstance(osr, dict):                   # a different published rate off season
+                c, b, f = _price_core(osr, arrive, stay_min, holidays)
+                return c, "off season: %s%s" % (b, lim), fits and f
             if rule.get("off_season_flat") is not None:
                 return float(rule["off_season_flat"]), "%s off season (the %s rate does not apply)%s" % (
                     dc.money(rule["off_season_flat"]), stext, lim), fits
@@ -1191,9 +1318,20 @@ def _price_core(rule, arrive, stay_min, holidays=None):
                 return float(rule["evening_flat"]), "evening rate (%s)" % desc, fits
         return float(rule["flat"]), desc, fits
     total, per_day, paid_min = 0.0, {}, 0.0
+    # what the first hour costs above the hourly rate; added to the first charged day, inside its maximum
+    fh_extra = max(0.0, float(rule["first_hour"]) - hourly) if rule.get("first_hour") is not None and hourly is not None else 0.0
     covered, done_to, entries, rolling = [], None, {}, {}
     arr_tod = arrive.hour * 60 + arrive.minute
+    # an hourly window that runs on past midnight into the same period (a 24:00 end, then a 00:00 start) is one
+    # stretch: its charge units count on from its start instead of restarting at midnight
+    stretches = []
     for p, ws, we, d in sorted(wins, key=lambda w: w[1]):
+        q = stretches[-1] if stretches else None
+        if q and q[0] is p and q[2] == ws and p.get("flat") is None and not p.get("free") and not p.get("roll_min")                 and p.get("hourly", hourly) is not None:
+            stretches[-1] = (p, q[1], we, q[3], q[4] + [(ws, we, d)])
+        else:
+            stretches.append((p, ws, we, d, [(ws, we, d)]))
+    for p, ws, we, d, parts in stretches:
         if p.get("flat") is not None and p.get("entry"):
             covered.append((max(ws, arrive), min(we, end)))
             entries.setdefault(d, []).append((p, ws, we))
@@ -1227,13 +1365,26 @@ def _price_core(rule, arrive, stay_min, holidays=None):
                     rolling.setdefault((float(cap), int(p["roll_min"]), h, per), []).append((a, b))
                     paid_min += mins
                     continue
-                c = math.ceil(mins / per - 1e-9) * h * per / 60.0
-                if cap is not None:
-                    c = min(c, float(cap))
+                # each charge unit belongs to the day of the window it starts in; that day's cap applies
+                units = {}
+                for k in range(int(math.ceil(mins / per - 1e-9))):
+                    t = a + dt.timedelta(minutes=k * per)
+                    dd = next((pd for ps, pe, pd in parts if ps <= t < pe), parts[-1][2])
+                    units[dd] = units.get(dd, 0) + 1
+                for dd, n_u in sorted(units.items()):
+                    c = n_u * h * per / 60.0
+                    if fh_extra and h == hourly:   # the first hour costs more, inside the same day maximum
+                        c, fh_extra = c + fh_extra, 0.0
+                    cap_d = cap if dd == d else p.get("max")
+                    if cap_d is not None:
+                        c = min(c, float(cap_d))
+                    per_day[dd] = per_day.get(dd, 0.0) + c
                 paid_min += mins
+                continue
         per_day[d] = per_day.get(d, 0.0) + c
     # rolling maximums: each block of roll_min minutes from the first charged minute costs at most the maximum
-    # (14 h at $4/h with an any-4-hour $12 maximum: $12 + $12 + $12 + $8)
+    # (14 h at $4/h with an any-4-hour $12 maximum: $12 + $12 + $12 + $8); free hours inside a block use up its
+    # time, as a garage clock bills (gem-G3, kept by the owner 2026-10-20)
     for (cap, roll, h, per), ivs in rolling.items():
         t0 = min(x[0] for x in ivs)
         blocks = {}
@@ -1263,30 +1414,27 @@ def _price_core(rule, arrive, stay_min, holidays=None):
             cur = max(cur, b)
         if cur < end:
             gap_ivs.append((cur, end))
-        by_day = {}
-        for a, b in gap_ivs:
-            while a < b:
-                nxt = dt.datetime.combine(a.date() + dt.timedelta(days=1), dt.time())
-                seg_end = min(b, nxt)
-                if not season or _in_season(a.date(), season):
-                    by_day[a.date()] = by_day.get(a.date(), 0.0) + (seg_end - a).total_seconds() / 60.0
-                a = seg_end
         per = rule.get("per_min") or 60
-        for d, mins in by_day.items():
-            if mins <= 0:
-                continue
-            c = math.ceil(mins / per - 1e-9) * hourly * per / 60.0
+        fill_day = {}
+        for a, b in gap_ivs:
+            # charge units count on across midnight; each belongs to the calendar day it starts on
+            mins = (b - a).total_seconds() / 60.0
+            for k in range(int(math.ceil(mins / per - 1e-9)) if mins > 0 else 0):
+                t = a + dt.timedelta(minutes=k * per)
+                if not season or _in_season(t.date(), season):
+                    fill_day[t.date()] = fill_day.get(t.date(), 0.0) + hourly * per / 60.0
+                    paid_min += min(per, (b - t).total_seconds() / 60.0)
+        for d, c in fill_day.items():
             if rule.get("fill_cap") is not None:
                 c = min(c, float(rule["fill_cap"]))
             per_day[d] = per_day.get(d, 0.0) + c
-            paid_min += mins
     fits = fits and limit_ok(wins, gap_ivs)
     for d, c in per_day.items():
         if rule.get("periods") and rule.get("daily_max") is not None:
             c = min(c, float(rule["daily_max"]))
         total += c
-    if rule.get("first_hour") is not None and hourly is not None and paid_min > 0:
-        total += max(0.0, float(rule["first_hour"]) - hourly)    # the first hour was charged at the hourly rate
+    if fh_extra and paid_min > 0:
+        total += fh_extra    # first charged in a rolling or fill stretch: the first hour was charged at the hourly rate
     if rule.get("evening_flat") is not None:
         ef = hm(rule.get("evening_from") or "18:00")
         d = arrive.date()
@@ -1298,6 +1446,23 @@ def _price_core(rule, arrive, stay_min, holidays=None):
                     and (not season or _in_season(d, season)):
                 total += float(rule["evening_flat"])
             d += dt.timedelta(days=1)
+    if rule.get("_partial_hours") and hourly is None and rule.get("flat") is None and rule.get("daily_max") is None:
+        # the rate text priced only some hours: time outside them (but not a free holiday) is unknown, not free
+        known = list(covered)
+        if hol_free:
+            for x in stay_days:
+                if x.isoformat() in holidays:
+                    d0 = dt.datetime.combine(x, dt.time())
+                    known.append((max(d0, arrive), min(d0 + dt.timedelta(days=1), end)))
+        if sum((b - a).total_seconds() for a, b in _merged(known)) / 60.0 < stay_min - 0.5:
+            hrs = []
+            for p in rule["periods"]:
+                h_txt = "%s-%s" % tuple(p["hours"])
+                if p.get("days") is not None and len(set(p["days"])) < 7:
+                    h_txt = "%s %s" % (days_text(p["days"]), h_txt)
+                if not p.get("free") and h_txt not in hrs:
+                    hrs.append(h_txt)
+            return None, "price published for %s only (%s)" % (", ".join(hrs), desc), fits
     if total <= 0:
         when = "Sat" if arrive.weekday() == 5 else ("Sun" if arrive.weekday() == 6 else arrive.strftime("%a"))
         if arrive.date().isoformat() in holidays:
@@ -1496,6 +1661,8 @@ def curated(lat, lon, arrive, stay_min, holidays, radius_m, warnings, party=None
                 rule.setdefault("off_season", season.get("off_season", "free"))
                 if season.get("off_season_max_stay_min"):
                     rule.setdefault("off_season_max_stay_min", season["off_season_max_stay_min"])
+            if rule and p.get("rate_year") and not rule.get("free"):   # the place's fee year covers its priced lots
+                rule.setdefault("rate_year", p["rate_year"])
             # a lot's booking applies in its own season; a park lot ignores the town's paid season
             lot_in_season = (not rule.get("season") or _in_season(arrive.date(), rule["season"])) \
                 and (place_in_season or kind == "park")
@@ -1514,6 +1681,12 @@ def curated(lat, lon, arrive, stay_min, holidays, radius_m, warnings, party=None
                            lot.get("source") or src, lot.get("confidence") or p.get("confidence") or "curated", (lat, lon),
                            arrive, stay_min, hol, capacity=lot.get("capacity"), notes=lot.get("notes") or "",
                            reservation=lrv or None, often_full=bool(lot.get("often_full")), party=party)
+            if lot.get("free_source") == "osm" and out["cost"] == 0:   # free only per an OSM fee=no tag
+                out["cost_text"] = UNVERIFIED_FREE_TEXT
+                out["unverified"] = True
+                out["_unverified_free"] = "plain"
+            if (lot.get("price_confidence") or p.get("price_confidence")) == "low":   # no fee published
+                out["_low_price_conf"] = True
             if out["basis"].startswith("closed off season"):
                 rules.append("%s: %s is %s" % (p.get("name"), out["name"], out["basis"].replace("closed off season", "closed for the season")))
                 continue
@@ -1789,6 +1962,8 @@ def city_lots(lat, lon, arrive, stay_min, holidays, radius_m, height_m, warnings
                                max_height=mh)
                 if link and re.match(r"https?://", str(link)):
                     lot["_website"] = str(link)   # the lot's own page in the layer
+                if layer.get("attribution"):
+                    lot["attribution"] = layer["attribution"]   # the city's licence statement, for SOURCES
                 if conf == "stale":
                     lot["_stale_text"] = "old price (%s)" % (notes[-1] if notes else "stale data")
                 lots.append(lot)
@@ -2050,6 +2225,18 @@ def _ckan_check(body):
     return None
 
 
+def toronto_bundled_lots(lat, lon, arrive, stay_min, holidays, radius_m, height_m, warnings):
+    """The Green P carparks opened after 2019 that ship in parking.json (no network): used offline and when the
+    2019 file cannot be read."""
+    t = cfg()["toronto"]
+    if not th.in_bbox(lat, lon, t["bbox"]):
+        return [], []
+    closed = set(_cp_id(x.get("id")) for x in t.get("closed") or [])
+    new = new_carpark_lots(lat, lon, arrive, stay_min, holidays, radius_m, height_m, {}, closed, t)
+    return new, (["Green P carparks opened after 2019 (rates from each Green P page, %s)" % (
+        t.get("verified") or "curated")] if new else [])
+
+
 def toronto_lots(lat, lon, arrive, stay_min, holidays, radius_m, height_m, warnings):
     t = cfg()["toronto"]
     if not th.in_bbox(lat, lon, t["bbox"]):
@@ -2060,10 +2247,7 @@ def toronto_lots(lat, lon, arrive, stay_min, holidays, radius_m, height_m, warni
         cps = data.get("carparks") or []
     except Exception as e:  # noqa: BLE001
         warnings.append("Green P 2019 carpark data unavailable (%s)" % (e if isinstance(e, dc.FetchError) else _err(e)))
-        closed = set(_cp_id(x.get("id")) for x in t.get("closed") or [])
-        new = new_carpark_lots(lat, lon, arrive, stay_min, holidays, radius_m, height_m, {}, closed, t)
-        return new, (["Green P carparks opened after 2019 (rates from each Green P page, %s)" % (
-            t.get("verified") or "curated")] if new else [])
+        return toronto_bundled_lots(lat, lon, arrive, stay_min, holidays, radius_m, height_m, warnings)
     occ, seen, years = {}, set(), ""
     try:
         od = dc.fetch_json(t["occupancy_url"], max_age_h=t.get("occupancy_max_age_h", 168), timeout=60,
@@ -2107,6 +2291,8 @@ def toronto_lots(lat, lon, arrive, stay_min, holidays, radius_m, height_m, warni
                            max_height=mh, often_full=full)
             lot["cost_text"] += " (2019 data)"    # free and unknown results come from the same stale data
             lot["_greenp"] = {"id": _cp_id(cp.get("id")), "address": (cp.get("address") or "").strip()}
+            if t.get("attribution"):
+                lot["attribution"] = t["attribution"]   # Toronto's open data licence statement, for SOURCES
             if gone:
                 lot["maybe_closed"] = True
             lots.append(lot)
@@ -2163,6 +2349,8 @@ def new_carpark_lots(lat, lon, arrive, stay_min, holidays, radius_m, height_m, o
         else:
             lot["cost_text"] = "price unknown, opened after 2019"
         lot["_greenp"] = {"id": cid, "address": (cp.get("address") or "").strip(), "current": bool(rule)}
+        if t.get("attribution"):
+            lot["attribution"] = t["attribution"]   # listed from Toronto's occupancy open data
         if cp.get("url"):
             lot["_website"] = cp["url"]
         out.append(lot)
@@ -2224,6 +2412,7 @@ def _overpass(query, warnings, max_age_h=24):
                                  timeout=max(5.0, min(40.0, budget - (time.time() - t0))),
                                  stale_max_h=oc.get("stale_max_h", 720), validate=_overpass_check)
         except urllib.error.HTTPError as e:
+            th.close_quietly(e)   # its body is never read; the code is all the warning needs
             if e.code in (429, 406, 504) and attempt == 0:   # busy: both slots taken, or the queue timed out
                 wait = min(30.0, budget - (time.time() - t0) - 10.0)   # keep 10 s for the retry itself
                 if wait > 0:
@@ -2302,6 +2491,105 @@ def open_for_stay(window, arrive, stay_min):
     return False
 
 
+OH_DAY = {"Mo": 0, "Tu": 1, "We": 2, "Th": 3, "Fr": 4, "Sa": 5, "Su": 6}
+OH_DAYSEL = r"(?:Mo|Tu|We|Th|Fr|Sa|Su|PH)(?:\s*-\s*(?:Mo|Tu|We|Th|Fr|Sa|Su))?"
+OH_TIME = r"\d{1,2}:\d{2}\s*-\s*\d{1,2}:\d{2}"
+OH_RULE_RE = re.compile(r"^(?:(?P<days>%s(?:\s*,\s*%s)*)\s*)?(?P<times>off|closed|%s(?:\s*,\s*%s)*)?$"
+                        % (OH_DAYSEL, OH_DAYSEL, OH_TIME, OH_TIME))
+# OSM opening_hours shown to the agent only in this character set (no quotes, URLs or brackets) and length
+OH_TEXT_RE = re.compile(r"^[A-Za-z0-9 :;,\-/]{1,80}$")
+
+
+def opening_schedule(text):
+    """OSM opening_hours -> {"week": {weekday: [(start_min, end_min)]}, "ph": [...] or None}; "24/7" and
+    "Mo-Su 00:00-24:00" -> "always"; None when the value uses syntax this reader does not handle (months,
+    sunrise, comments, "+", "||"). Rules are split on ";" and on the comma before a day ("Mo-Fr 08:00-18:00,
+    Sa 09:00-12:00") and read in order: a later rule replaces the days it names, the first rule that names
+    weekdays closes the days it leaves out unless a rule with no days came before it ("07:00-23:00; Su off"),
+    a day list with no time is open all day, and an end at or before its start runs past midnight."""
+    t = (text or "").strip()
+    if not t:
+        return None
+    if t == "24/7":
+        return "always"
+    week, ph = {d: [(0, 1440)] for d in range(7)}, None
+    named = False
+    for rule in re.split(r";|(?<=[\dfd])\s*,\s*(?=(?:Mo|Tu|We|Th|Fr|Sa|Su|PH)\b)", t):
+        rule = rule.strip()
+        if not rule:
+            continue
+        m = OH_RULE_RE.match(rule)
+        if not m or not (m.group("days") or m.group("times")):
+            return None
+        spans = [(0, 1440)]
+        times = m.group("times")
+        if times in ("off", "closed"):
+            spans = []
+        elif times:
+            spans = []
+            for a, b in re.findall(r"(\d{1,2}:\d{2})\s*-\s*(\d{1,2}:\d{2})", times):
+                sa, sb = hm(a), hm(b)
+                sb = 1440 if sb == 1439 else sb
+                if sa >= 1440 or sb > 48 * 60:
+                    return None
+                spans.append((sa, sb))
+        days, hol = set(), False
+        for sel in re.split(r"\s*,\s*", m.group("days") or ""):
+            if not sel:
+                continue
+            if sel == "PH":
+                hol = True
+                continue
+            ends = [OH_DAY[x] for x in re.split(r"\s*-\s*", sel)]
+            d = ends[0]
+            while True:
+                days.add(d)
+                if d == ends[-1]:
+                    break
+                d = (d + 1) % 7
+        if days and not named:
+            week = {d: [] for d in range(7)}    # "Mo-Fr 08:00-18:00": the days left out are closed
+            named = True
+        if not m.group("days"):
+            days = set(range(7))
+            named = True     # "07:00-23:00; Su 09:00-18:00": a rule with no days sets the whole week
+        for d in days:
+            week[d] = list(spans)
+        if hol:
+            ph = list(spans)
+    if all(week[d] == [(0, 1440)] for d in range(7)) and ph in (None, [(0, 1440)]):
+        return "always"
+    if not any(week.values()) and not ph:
+        return None       # "Sa,Su off" alone: never open reads as a tagging slip, not a lot that is always shut
+    return {"week": week, "ph": ph}
+
+
+def open_for_schedule(sched, arrive, stay_min, holidays=()):
+    """True when the stay [arrive, arrive + stay_min) lies inside one stretch of opening of an
+    opening_schedule() result; openings on consecutive days that touch join ("Fr-Sa 20:00-02:00" holds Saturday
+    01:00), and on a public holiday the PH rule applies when the value has one."""
+    if sched == "always":
+        return True
+    end = arrive + dt.timedelta(minutes=stay_min)
+    ivs = []
+    d = arrive.date() - dt.timedelta(days=1)
+    while d <= end.date():
+        spans = sched["ph"] if (d.isoformat() in holidays and sched.get("ph") is not None) else sched["week"][d.weekday()]
+        d0 = dt.datetime.combine(d, dt.time())
+        for a, b in spans:
+            ivs.append((d0 + dt.timedelta(minutes=a), d0 + dt.timedelta(minutes=b if b > a else b + 1440)))
+        d += dt.timedelta(days=1)
+    cur = None
+    for a, b in sorted(ivs):
+        if cur and a <= cur[1]:
+            cur = (cur[0], max(cur[1], b))
+        else:
+            if cur and cur[0] <= arrive and end <= cur[1]:
+                return True
+            cur = (a, b)
+    return bool(cur and cur[0] <= arrive and end <= cur[1])
+
+
 def facility_free(tags):
     """A fee=no OSM lot that is probably for the users of a facility (a 2017 City of Ottawa import pattern):
     access permissive rather than yes/public, or a ref or source:date with no name."""
@@ -2370,8 +2658,9 @@ def osm_lots(lat, lon, arrive, stay_min, holidays, radius_m, height_m, warnings,
                 name = "%s facility lot%s" % (tags["operator"], (", " + addr) if addr else "")
             if (tags.get("fee") or "").lower() == "yes" and rule is None:
                 notes.append("paid (fee=yes), no rate in OSM")
+            name = th.osm_name_cut(name)
             if tags.get("operator") and tags["operator"] not in name:
-                notes.append("operator %s" % tags["operator"])
+                notes.append("operator %s" % th.osm_name_cut(tags["operator"]))
             conf, stale_yr = "osm", None
             yr = re.search(r"\b(19|20)(\d\d)\b", tags.get("charge") or "")
             if yr and int(yr.group(0)) <= arrive.year - 2:
@@ -2385,7 +2674,9 @@ def osm_lots(lat, lon, arrive, stay_min, holidays, radius_m, height_m, warnings,
                             conf, stale_yr = "stale", cd.group(1)
                             notes.append("price checked %s" % cd.group(1))
                         break
-            oh = opening_window(tags.get("opening_hours"))
+            oh_raw = (tags.get("opening_hours") or "").strip()
+            oh = opening_window(oh_raw)       # the simple daily form keeps its own wording
+            sched = opening_schedule(oh_raw) if oh_raw else None
             lot = make_lot(name, la, lo, kind, rule, "OpenStreetMap", "https://www.openstreetmap.org/%s/%s" % (el.get("type"), el.get("id")),
                            conf, (lat, lon), arrive, stay_min, holidays,
                            capacity=int(num(tags.get("capacity")) or 0) or None, notes="; ".join(notes), max_height=mh)
@@ -2400,15 +2691,25 @@ def osm_lots(lat, lon, arrive, stay_min, holidays, radius_m, height_m, warnings,
             lot["_street"] = (tags.get("addr:street") or "").strip()
             lot["_addr"] = " ".join(x.strip() for x in (tags.get("addr:housenumber"), tags.get("addr:street")) if x and x.strip())
             lot["_city"] = (tags.get("addr:city") or "").strip() or city_of(lat, lon)
+            # anyone can edit these tags: shown as "OSM-supplied, unverified", never the check link (check_hint)
             site = tags.get("website") or tags.get("contact:website") or tags.get("url")
-            if site and re.match(r"https?://", site):
-                lot["_website"] = site
-            if oh:
-                lot["notes"] = "; ".join([n for n in [lot["notes"], "open %s-%s" % oh] if n])
-                if not open_for_stay(oh, arrive, stay_min):
+            if site and re.match(r"https?://", site) and not _no_fetch(site):
+                lot["_osm_website"] = site
+            # opening hours: a lot closed during the stay does not fit; the raw value is shown only in a safe
+            # character set, and a value this reader cannot read is noted (and flagged on the check line)
+            shown = oh_raw if OH_TEXT_RE.match(oh_raw) else None
+            if sched is not None and sched != "always":
+                hours = ("%s-%s" % oh) if oh else (shown or "per OpenStreetMap")
+                lot["notes"] = "; ".join([n for n in [lot["notes"], "open %s" % hours] if n])
+                if not open_for_schedule(sched, arrive, stay_min, holidays):
                     lot["fits_stay"] = False
-                    why = "open %s to %s only" % oh
+                    why = ("open %s to %s only" % oh) if oh else ("open %s only" % shown if shown
+                                                                   else "closed during the stay (OpenStreetMap hours)")
                     lot["unfit_reason"] = "%s; %s" % (lot["unfit_reason"], why) if lot.get("unfit_reason") else why
+            elif oh_raw and sched is None:
+                lot["notes"] = "; ".join([n for n in [lot["notes"], ("hours (OSM, not read): %s" % shown) if shown
+                                                      else "opening hours in OpenStreetMap not read"] if n])
+                lot["_hours_unread"] = True
             lots.append(lot)
         except Exception as e:  # noqa: BLE001 (one unreadable lot must not drop the rest of the source)
             skipped.append(e)
@@ -2471,9 +2772,18 @@ def dedupe(lots, within_m=60.0):
     return out
 
 
+def _unverified_price(lot):
+    """Whether the lot's price is old or unverified: osm, stale or low confidence, a Green P 2019 price, a past
+    rate year, or a place or lot whose price_confidence is low."""
+    gp = lot.get("_greenp")
+    return bool(lot.get("confidence") in ("osm", "stale", "low") or (gp and not gp.get("current"))
+                or lot.get("_old_rate") or lot.get("_low_price_conf"))
+
+
 def rank_key(lot):
     """Fitting lots first, walkable before far, then by tier: 0 priced (an unverified free OSM lot sorts as if it
-    cost just over $5, so a verified option up to $5 comes first), 1 priced but may have closed (a Green P 2019
+    cost just over $5, so a verified option up to $5 comes first; an old or unverified price sorts as if it cost
+    UNVERIFIED_PRICE_RANK_PCT more, so a verified price up to 25% dearer comes first), 1 priced but may have closed (a Green P 2019
     carpark missing from the occupancy feed: absence is a weak signal, so it stays ahead of the tiers below), 2 an
     unverified free lot that looks like a facility lot, 3 unknown price, 4 unknown price and may have closed;
     within a tier by cost, then confidence and walk."""
@@ -2488,6 +2798,8 @@ def rank_key(lot):
     cost = lot["cost"] if priced else 0.0
     if uv == "plain":
         cost = UNVERIFIED_FREE_RANK_COST + 0.005
+    elif priced and _unverified_price(lot):
+        cost = cost * (1.0 + UNVERIFIED_PRICE_RANK_PCT)
     return (0 if lot["fits_stay"] else 1, 1 if lot.get("_far") else 0, tier,
             cost, CONF_RANK.get(lot["confidence"], 9), lot["walk_m"])
 
@@ -2540,6 +2852,18 @@ BRAND_RE = re.compile(r"\b(?:impark|indigo|precise(?:\s+parklink)?|target\s+park
                       r"customer|the|and|access|not|tagged|of|destination|[nsew]{1,2})\b", re.I)
 
 
+# operators whose terms forbid automated access (sources.md, architecture.md): their pages are never offered to open
+NO_FETCH_RE = re.compile(r"(?:^|\.)(?:impark\.com|spothero\.com)$", re.I)
+
+
+def _no_fetch(url):
+    """True for a page the agent must not be sent to (NO_FETCH_RE, or a URL whose host cannot be read)."""
+    try:
+        return bool(NO_FETCH_RE.search((urllib.parse.urlsplit(url).hostname or "").rstrip(".")))
+    except ValueError:
+        return True
+
+
 def _brand_only(name):
     """True when a name is only an operator brand or generic words ('Impark', 'Indigo parking', 'SP+ garage')."""
     rest = BRAND_RE.sub(" ", re.sub(r"\bsp\+", " ", name or "", flags=re.I))
@@ -2568,8 +2892,13 @@ def greenp_search(gp):
 def check_hint(lot):
     """What to verify before driving to a lot, or None when its price is official or curated and current:
     {"why": "may have closed" | "2019 price" | "price unknown" | "price unknown, opened after 2019" |
-    "free per OpenStreetMap, unverified" | "price per OpenStreetMap, unverified" | "old price (...)",
-    "url": the operator's own page or None, "search": a web search string or None}. Green P: the url is the
+    "free per OpenStreetMap, unverified" | "price per OpenStreetMap, unverified" | "old price (...)" |
+    "price not confirmed" (low confidence, or a curated price_confidence of low), with
+    "; opening hours not read" added when the lot's OSM opening_hours could not be read,
+    "url": an official page or None, "search": a web search string or None, and "osm_url" when OpenStreetMap
+    tags a website}. The url comes only from official or curated data: a city layer's lot page, a curated or
+    official source_url, Green P's page, or an unnamed or brand-only OSM lot's map entry; an OSM website tag
+    (anyone can edit it) is only "osm_url", printed as "OSM-supplied, unverified". Green P: the url is the
     carpark's page from the 2019 data (43, 283 and the toronto.open pages are live; some 2019 addresses are a 404
     now, so the search is the fallback); the page is rendered with JavaScript (toronto.page_fetch_note). Other
     lots: the search names the lot, its street and city ('<name> <street> Toronto parking rates'); a brand-only
@@ -2591,8 +2920,12 @@ def check_hint(lot):
         why = lot["_old_rate"]
     elif lot.get("confidence") == "osm":
         why = "price per OpenStreetMap, unverified"
+    elif lot.get("confidence") == "low" or lot.get("_low_price_conf"):
+        why = "price not confirmed"
     else:
         return None
+    if lot.get("_hours_unread"):
+        why += "; opening hours not read"
     url = lot.get("_website")
     if not url and lot.get("confidence") in ("official", "curated") and re.match(r"https?://", lot.get("source_url") or ""):
         url = lot["source_url"]
@@ -2611,7 +2944,10 @@ def check_hint(lot):
         search = "%s parking rates" % _join(lot.get("name"), addr, city) if addr else None
     else:
         search = "%s parking rates" % _join(lot.get("name"), addr, city)
-    return {"why": why, "url": url or None, "search": search}
+    out = {"why": why, "url": url or None, "search": search}
+    if lot.get("_osm_website"):
+        out["osm_url"] = lot["_osm_website"]
+    return out
 
 
 def check_list(options, top=5, limit=3):
@@ -2629,6 +2965,11 @@ def check_list(options, top=5, limit=3):
     return sorted(out, key=lambda h: h["n"])
 
 
+def osm_link(url):
+    """An OSM website tag as printed: labelled, so it is never read as the lot's official page."""
+    return "OSM-supplied, unverified: %s" % url
+
+
 def check_text(items):
     """One line for the text output: '#1 Green P ...: 2019 price, search "..."; #3 ...: price unknown, https://...'."""
     out = []
@@ -2636,6 +2977,8 @@ def check_text(items):
         how = c.get("url") or ('search "%s"' % c["search"] if c.get("search") else "")
         if c.get("url") and c.get("search"):
             how = '%s or search "%s"' % (c["url"], c["search"])
+        if c.get("osm_url"):
+            how = "%s (%s)" % (how, osm_link(c["osm_url"])) if how else osm_link(c["osm_url"])
         out.append("#%d %s: %s%s" % (c["n"], c.get("name") or "parking", c["why"], ", " + how if how else ""))
     return "; ".join(out)
 
@@ -2672,16 +3015,18 @@ def find_parking(lat, lon, arrive, stay_min, opts, warnings):
     opts: "max_walk_m" (default 800; widen to 1500 when nothing free or priced is found, and say so),
     "height_m" (vehicle height or None), "holidays" (set of 'YYYY-MM-DD'), "region" (region dict or None),
     "party" ({"adults", "children", "seniors"} or None: prices per-person admission for the party),
-    "offline" (True: the curated files only, no network sources).
+    "offline" (True: the curated files and the bundled post-2019 Green P carparks only, no network sources).
     Returns {"options": [lot, ...] (at most 8, ranked), "place_rules": [str] (season, reservations, free
     fallback lots of a curated place), "reservations": [{"name", "text", "url", "lead_days"}], "sources": [str],
-    "radius_m": int, "caveat": "Posted signs override this data: time limits, rush-hour no-stopping, permit zones."}
+    "radius_m": int, "offline": bool (live sources were skipped),
+    "caveat": "Posted signs override this data: time limits, rush-hour no-stopping, permit zones."}
     A lot's "per_person" flag marks admission priced per person (one adult unless the party is given),
     "unverified" marks an OpenStreetMap fee=no lot that no official source confirms, "maybe_closed" a Green P
     2019 carpark missing from the current occupancy data and not in toronto.open (ranked after the other priced
-    lots, ahead of facility lots and unknown prices; see rank_key), "greenp_id" the Green P carpark number, and
-    "check" what to verify before going (check_hint); the top-level "check" lists the first three of the top five
-    that need it, plus #1 and the first lot that may have closed when they fall past three (check_list).
+    lots, ahead of facility lots and unknown prices; see rank_key), "greenp_id" the Green P carpark number,
+    "attribution" the licence statement of the city open data the lot came from (parking.json), and "check"
+    what to verify before going (check_hint); the top-level "check" lists the first three of the top five that
+    need it, plus #1 and the first lot that may have closed when they fall past three (check_list).
     The search widens to 1500 m when no walkable lot is priced, fits the stay and is not flagged."""
     opts = opts or {}
     c = cfg()
@@ -2698,7 +3043,8 @@ def find_parking(lat, lon, arrive, stay_min, opts, warnings):
     place_rules += rules
     reservations += res
     sources += srcs
-    for fn in () if opts.get("offline") else (city_lots, toronto_lots, osm_lots):   # offline: curated files only
+    # offline: the curated files and the bundled post-2019 Green P carparks, no network sources
+    for fn in (toronto_bundled_lots,) if opts.get("offline") else (city_lots, toronto_lots, osm_lots):
         try:
             extra = {"country": opts.get("country")} if fn is osm_lots and opts.get("country") else {}
             lots, srcs = fn(lat, lon, arrive, stay_min, holidays, fetch_r, height, warnings, **extra)
@@ -2742,7 +3088,7 @@ def find_parking(lat, lon, arrive, stay_min, opts, warnings):
             extra = []
             for x in sorted(all_lots, key=lambda y: y["walk_m"]):
                 if id(x) in have or not x["source"].endswith("(curated)") or x["cost"] != 0 or not x["fits_stay"] \
-                        or not (max_walk < x["walk_m"] <= wide):
+                        or x.get("_unverified_free") or not (max_walk < x["walk_m"] <= wide):
                     continue
                 x["_far"] = True
                 pool.append(x)
@@ -2754,7 +3100,8 @@ def find_parking(lat, lon, arrive, stay_min, opts, warnings):
     seen = set()
     reservations = [r for r in reservations if not (r["name"], r["text"]) in seen and not seen.add((r["name"], r["text"]))]
     return {"options": options, "place_rules": place_rules, "reservations": reservations,
-            "sources": sources, "radius_m": radius, "caveat": c.get("caveat") or CAVEAT, "check": check_list(options)}
+            "sources": sources, "radius_m": radius, "offline": bool(opts.get("offline")),
+            "caveat": c.get("caveat") or CAVEAT, "check": check_list(options)}
 
 
 def main(argv=None):
@@ -2782,7 +3129,8 @@ def main(argv=None):
     print("     " + res["caveat"])
     for w in warnings:
         print("WARNING    " + w)
-    print("SOURCES    " + "; ".join(res["sources"]))
+    licences = list(dict.fromkeys(o["attribution"] for o in res["options"] if o.get("attribution")))
+    print("SOURCES    " + "; ".join(res["sources"] + licences))
 
 
 if __name__ == "__main__":

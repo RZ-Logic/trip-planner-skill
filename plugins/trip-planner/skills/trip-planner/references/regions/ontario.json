@@ -3,6 +3,7 @@
   "name": "Ontario getaways: intercity rail and coach, and local transit at tourist destinations beyond the GTHA",
   "intercity": true,
   "timezone": "America/Toronto",
+  "country": "CA",
   "dst_rule": "north_america",
   "utc_std_offset_hours": -5,
   "bbox": {
@@ -89,7 +90,7 @@
     "tax": 0.13,
     "uplift": 1.0,
     "out_of_area_per_km": 0.35,
-    "source": "Uber Ontario P2P rate addendum 2024-02-22 by rate region, + 13% HST; checked against 39 Uber route averages 2026-10-10 (about +/-15%)",
+    "source": "Uber Ontario P2P rate addendum 2024-02-22 by rate region, + 13% HST; checked once against 39 Uber route averages 2026-10-10 (about +/-15%; route list not published in this repo)",
     "currency": "CAD"
   },
   "ride_pricing_areas": [
@@ -157,7 +158,7 @@
         "uplift": 1.0,
         "out_of_area_per_km": 0.35,
         "currency": "CAD",
-        "source": "Uber Ontario P2P rate addendum 2024-02-22, London rate region, + 13% HST; checked against Uber's own route averages 2026-10-10 (about +/-15%). Rides that end outside this region add $0.35/km for the whole trip"
+        "source": "Uber Ontario P2P rate addendum 2024-02-22, London rate region, + 13% HST; checked once against Uber's own route averages 2026-10-10 (about +/-15%; route list not published in this repo). Rides that end outside this region add $0.35/km for the whole trip"
       }
     },
     {
@@ -211,7 +212,7 @@
         "uplift": 1.0,
         "out_of_area_per_km": 0.35,
         "currency": "CAD",
-        "source": "Uber Ontario P2P rate addendum 2024-02-22, Niagara rate region, + 13% HST; checked against Uber's own route averages 2026-10-10 (about +/-15%). Rides that end outside this region add $0.35/km for the whole trip"
+        "source": "Uber Ontario P2P rate addendum 2024-02-22, Niagara rate region, + 13% HST; checked once against Uber's own route averages 2026-10-10 (about +/-15%; route list not published in this repo). Rides that end outside this region add $0.35/km for the whole trip"
       }
     },
     {
@@ -277,7 +278,7 @@
         "uplift": 1.0,
         "out_of_area_per_km": 0.35,
         "currency": "CAD",
-        "source": "Uber Ontario P2P rate addendum 2024-02-22, Hamilton rate region, + 13% HST; checked against Uber's own route averages 2026-10-10 (about +/-15%). Rides that end outside this region add $0.35/km for the whole trip"
+        "source": "Uber Ontario P2P rate addendum 2024-02-22, Hamilton rate region, + 13% HST; checked once against Uber's own route averages 2026-10-10 (about +/-15%; route list not published in this repo). Rides that end outside this region add $0.35/km for the whole trip"
       }
     },
     {
@@ -344,7 +345,7 @@
         "uplift": 1.0,
         "out_of_area_per_km": 0.35,
         "currency": "CAD",
-        "source": "Uber Ontario P2P rate addendum 2024-02-22, Kitchener-Waterloo rate region, + 13% HST; checked against Uber's own route averages 2026-10-10 (about +/-15%). Rides that end outside this region add $0.35/km for the whole trip"
+        "source": "Uber Ontario P2P rate addendum 2024-02-22, Kitchener-Waterloo rate region, + 13% HST; checked once against Uber's own route averages 2026-10-10 (about +/-15%; route list not published in this repo). Rides that end outside this region add $0.35/km for the whole trip"
       }
     },
     {
@@ -422,7 +423,7 @@
         "uplift": 1.18,
         "out_of_area_per_km": 0.35,
         "currency": "CAD",
-        "source": "Uber Ontario P2P rate addendum 2024-02-22, Ottawa rate region, + 13% HST; checked against Uber's own route averages 2026-10-10 (about +/-15%). Rides that end outside this region add $0.35/km for the whole trip"
+        "source": "Uber Ontario P2P rate addendum 2024-02-22, Ottawa rate region, + 13% HST; checked once against Uber's own route averages 2026-10-10 (about +/-15%; route list not published in this repo). Rides that end outside this region add $0.35/km for the whole trip"
       }
     },
     {
@@ -497,7 +498,7 @@
         "uplift": 1.0,
         "out_of_area_per_km": 0.35,
         "currency": "CAD",
-        "source": "Uber Ontario P2P rate addendum 2024-02-22, Kingston rate region, + 13% HST; checked against Uber's own route averages 2026-10-10 (about +/-15%). Rides that end outside this region add $0.35/km for the whole trip"
+        "source": "Uber Ontario P2P rate addendum 2024-02-22, Kingston rate region, + 13% HST; checked once against Uber's own route averages 2026-10-10 (about +/-15%; route list not published in this repo). Rides that end outside this region add $0.35/km for the whole trip"
       }
     },
     {
@@ -545,7 +546,7 @@
         "uplift": 0.87,
         "out_of_area_per_km": 0.35,
         "currency": "CAD",
-        "source": "Uber Ontario P2P rate addendum 2024-02-22, Windsor rate region, + 13% HST; checked against Uber's own route averages 2026-10-10 (about +/-15%). Rides that end outside this region add $0.35/km for the whole trip"
+        "source": "Uber Ontario P2P rate addendum 2024-02-22, Windsor rate region, + 13% HST; checked once against Uber's own route averages 2026-10-10 (about +/-15%; route list not published in this repo). Rides that end outside this region add $0.35/km for the whole trip"
       }
     },
     {
@@ -628,7 +629,7 @@
         "uplift": 1.0,
         "out_of_area_per_km": 0.35,
         "currency": "CAD",
-        "source": "Uber Ontario P2P rate addendum 2024-02-22, Toronto rate region, + 13% HST; checked against Uber's own route averages 2026-10-10 (about +/-15%). Rides that end outside this region add $0.35/km for the whole trip"
+        "source": "Uber Ontario P2P rate addendum 2024-02-22, Toronto rate region, + 13% HST; checked once against Uber's own route averages 2026-10-10 (about +/-15%; route list not published in this repo). Rides that end outside this region add $0.35/km for the whole trip"
       }
     }
   ],
@@ -650,7 +651,7 @@
     "currency": "CAD"
   },
   "taxi_pricing_default": {
-    "label": "rural Ontario taxi estimate (from published flat rates, e.g. Star Taxi Grand Bend and Exeter; about $1.90/km)",
+    "label": "rural Ontario taxi estimate (assumed about $1.90/km plus $5; local taxis here publish no rates)",
     "base": 5.0,
     "per_km": 1.9,
     "per_min": 0.0,
@@ -1070,6 +1071,7 @@
         "https://huronshoresareatransit.ca/rates/"
       ],
       "verified": "2026-10-10",
+      "assumed_note": "2027 Beach Bus season assumed from 2026",
       "manual": {
         "agency": "Huron Shores Area Transit",
         "url": "https://huronshoresareatransit.ca/",
@@ -1091,6 +1093,7 @@
             "extra": []
           },
           "hsat-beach-2027": {
+            "assumed": true,
             "days": "0000011",
             "start": "2027-06-26",
             "end": "2027-09-05",
@@ -2655,7 +2658,7 @@
       "id": "gost-guelph-owen-sound",
       "name": "GOST (Guelph Owen Sound Transportation), Guelph Central - Elora/Fergus - Owen Sound",
       "holiday_service": "as_feed",
-      "notes": "Daily, 2 round trips, regular schedule on stat holidays except Christmas Day (no service 2026-12-25). Funded only to 2026-12-31; 2027 not announced. Exact cash to the driver, no booking. Hand-entered because the city's GTFS lists the 14:30 Owen Sound departure as 02:30; do not load that GTFS alongside this feed.",
+      "notes": "Daily, 2 round trips, regular schedule on stat holidays except Christmas Day (no service 2026-12-25). Funded only to 2026-12-31; 2027 not announced. Exact cash to the driver, no booking. Hand-entered because the city's GTFS lists the 14:30 Owen Sound departure as 02:30; do not load that GTFS alongside this feed. The 10:38 Guelph run's Williamsford 12:35 and Chatsworth 12:40 are as GOST publishes them (https://www.owensound.ca/roads-transportation/guelph-owen-sound-transportation/, checked 2026-10-19), though 9.6 km in 5 min is faster than the other runs; that trip carries a check note.",
       "source": [
         "https://www.owensound.ca/roads-transportation/guelph-owen-sound-transportation/",
         "https://www.owensound.ca/news-and-public-notices/posts/guelph-owen-sound-transportation-gost-service-to-continue-through-december-2026/"
@@ -2713,6 +2716,7 @@
               },
               {
                 "service": "daily",
+                "check": "the published times of the 10:38 Guelph run give Williamsford 12:35 to Chatsworth 12:40, 9.6 km in 5 min where the other runs take 10-11 min; one of them may be a misprint, so check with the operator",
                 "headsign": "Owen Sound",
                 "stops": [
                   ["Guelph Central Station (79 Carden St)", 43.54481, -80.24637, "10:38"],
@@ -4905,6 +4909,8 @@
         "https://ca.megabus.com/journey-planner/api/journeys?originId=435&destinationId=438&departureDate=2026-10-14&totalPassengers=1"
       ],
       "verified": "2026-10-10",
+      "observed_until": "2027-01-05",
+      "assumed_note": "trips sampled 2026-10-12 to 10-25; the Toronto-Montreal timetable changes 2027-01-06",
       "manual": {
         "agency": "Megabus (Coach Canada)",
         "url": "https://ca.megabus.com/",
@@ -5544,6 +5550,8 @@
       ],
       "verified": "2026-10-10",
       "board_buffer_min": 10,
+      "observed_until": "2027-01-05",
+      "assumed_note": "spot-checked to the 2027-01-05 booking horizon; later service assumed",
       "manual": {
         "agency": "Megabus (Badder Bus)",
         "url": "https://ca.megabus.com/",
@@ -6116,6 +6124,7 @@
               },
               {
                 "service": "ox_2050_we",
+                "check": "Milton 21:50 to Kitchener Sportsworld 22:10 is 20 min for 41.6 km straight-line where the daytime trips take 30 min; one of the two times may be wrong, so check with the operator",
                 "headsign": "London Western University",
                 "stops": [
                   ["Toronto - Downtown, 44 York St (at Front St, Billy Bishop shuttle loading zone)", 43.64568, -79.38257, "20:50"],
@@ -6142,6 +6151,7 @@
               },
               {
                 "service": "ox_2155_we",
+                "check": "Milton 22:55 to Kitchener Sportsworld 23:15 is 20 min for 41.6 km straight-line where the daytime trips take 30 min; one of the two times may be wrong, so check with the operator",
                 "headsign": "London Western University",
                 "stops": [
                   ["Toronto - Downtown, 44 York St (at Front St, Billy Bishop shuttle loading zone)", 43.64568, -79.38257, "21:55"],
@@ -6624,6 +6634,8 @@
       "notes": "Year-round loop from Port Hope Town Hall to Cobourg (Northumberland Mall, Hospital, Walmart) every 30 min, Mon-Fri 07:00-19:30 and Sat 09:00-15:30 departures, no Sunday; it does not serve downtown Cobourg or VIA. No service on statutory holidays; reduced 08:00-16:00 on Easter Monday, Civic Holiday and Sept 30 (2027 dates assumed from 2026), Remembrance Day 2026-11-11 08:00-16:00 with no 10:30-11:30 trips, Dec 24 and Dec 31 07:00-12:00. Return time to Town Hall is inferred from the 30-minute round trip. Routes A and B are skipped (stops only on a map).",
       "source": ["https://www.porthope.ca/en/living-here/transit.aspx", "https://www.cobourg.ca/transit"],
       "verified": "2026-10-10",
+      "assumed_dates": ["2027-03-29", "2027-08-02", "2027-09-30"],
+      "assumed_note": "2027 reduced-service holiday times assumed from 2026",
       "manual": {
         "agency": "Port Hope Transit",
         "url": "https://www.porthope.ca/en/living-here/transit.aspx",
@@ -9356,6 +9368,7 @@
         "https://www.niagaraparks.com/wego"
       ],
       "verified": "2026-10-10",
+      "assumed_note": "spring, summer and fall 2027 projected from the 2026 schedule",
       "manual": {
         "agency": "WEGO (Niagara Parks)",
         "url": "https://www.niagaraparks.com/wego",
@@ -9370,6 +9383,7 @@
             "extra": []
           },
           "spring2027": {
+            "assumed": true,
             "days": "1111111",
             "start": "2027-04-04",
             "end": "2027-05-14",
@@ -9377,6 +9391,7 @@
             "extra": []
           },
           "summer2027": {
+            "assumed": true,
             "days": "1111111",
             "start": "2027-05-15",
             "end": "2027-10-03",
@@ -9384,6 +9399,7 @@
             "extra": []
           },
           "fall2027": {
+            "assumed": true,
             "days": "1111111",
             "start": "2027-10-04",
             "end": "2027-10-31",
@@ -10458,6 +10474,8 @@
         "https://files.mobilitydatabase.org/tld-5874/latest.zip"
       ],
       "verified": "2026-10-10",
+      "assumed_dates": ["2026-11-11", "2026-12-24", "2027-09-30"],
+      "assumed_note": "service on Remembrance Day, Dec 24 and Sep 30 assumed to run",
       "manual": {
         "agency": "Ride Norfolk",
         "url": "https://www.norfolkcounty.ca/home-property-and-neighbourhood/public-transit-ride-norfolk/",
@@ -10549,6 +10567,7 @@
       "contactless": null,
       "cash": 12.0,
       "currency": "CAD",
+      "approx": "distance-based: $6 local, $12 to or from Grand Bend, $20 Sarnia or London to Goderich",
       "note": "Distance-based: $6 local, $12 long distance (Sarnia or London to Grand Bend; also Beach Bus London-Grand Bend), $20 Sarnia/London to Goderich; children 12 and under free; cash (bring exact) or HSAT Smart Card; Beach Bus is online pre-paid only. $12 used as the common long-distance fare."
     },
     "PC Connect": {
@@ -10556,6 +10575,7 @@
       "contactless": null,
       "cash": 12.0,
       "currency": "CAD",
+      "approx": "distance-based: $6 or $12",
       "note": "Two adult fare rows, $6 and $12 (St. Marys-Stratford $6; longer trips such as London or Kitchener to Stratford likely $12); seniors/students $5/$10; exact cash (no change) or credit/debit through the Blaise Transit app. $12 used as the common long-distance fare."
     },
     "Middlesex County Connect": {
@@ -10605,6 +10625,7 @@
       "contactless": null,
       "cash": 20.0,
       "currency": "CAD",
+      "approx": "zone fare: $5 to $20 by distance",
       "note": "Zone fares $5-$20, exact cash only; $20 is Guelph or Elora/Fergus to Owen Sound (the common long trip); shorter hops cost less."
     },
     "Simcoe County Linx": {
@@ -10612,7 +10633,15 @@
       "contactless": null,
       "cash": 6.0,
       "currency": "CAD",
-      "note": "Zone fares $2/$4/$6 exact cash, LINX card 10% off; $6 is Barrie Allandale GO to Wasaga (Route 2). Route 4 Collingwood-Wasaga is only $2, so this overstates it."
+      "approx": "zone fare: $2, $4 or $6 cash, 10% less by LINX card",
+      "note": "Zone fares $2/$4/$6 exact cash, LINX card 10% off; $6 is Barrie Allandale GO to Wasaga (Route 2). Route 4 has its own entry ($2)."
+    },
+    "Simcoe County Linx 4": {
+      "card": 1.8,
+      "contactless": null,
+      "cash": 2.0,
+      "currency": "CAD",
+      "note": "Route 4 Collingwood-Wasaga: $2 exact cash (one zone); LINX card 10% off, from the Simcoe County Linx entry."
     },
     "Owen Sound Transit": {
       "card": null,
@@ -10633,6 +10662,7 @@
       "contactless": null,
       "cash": 15.0,
       "currency": "CAD",
+      "approx": "distance-based: $5 to $20 by town pair",
       "note": "Distance-based cash fare; 15 is Bracebridge-Orillia or Huntsville-Gravenhurst/Kilworthy/Washago. Others: within a town or adjacent towns 5 (Gravenhurst-Bracebridge, Washago-Orillia, Huntsville-Port Sydney), Huntsville-Bracebridge or Gravenhurst-Orillia 10, Huntsville-Orillia 20. Pre-booked round trips are cheaper (Huntsville-Orillia 30). Cash to driver or prepay by card in Blaise."
     },
     "Bracebridge Transit": {
@@ -10731,6 +10761,7 @@
       "contactless": null,
       "cash": 20.0,
       "currency": "CAD",
+      "approx": "distance-based: $5 to $20",
       "note": "Route 4 fares depend on distance, $5 to $20, exact cash only (card and app payment are planned for 2026 but not live). Official table: Sarnia (Bayside or Lambton Mall) to London (Woodward/Oxford, YMCA Waterloo St, Fanshawe College) $20; Sarnia-Komoka $15; Sarnia to Adelaide-Metcalfe, Strathroy or Mount Brydges $10; Bayside-Lambton Mall $5; Adelaide-Metcalfe, Strathroy or Mount Brydges to London $10; those three with each other or to Komoka $5; Komoka-London $5; within London $5. $20 is the full Sarnia-London run, so short hops are overstated."
     },
     "Megabus (Badder Bus)": {
@@ -11677,6 +11708,15 @@
         "from": ["WEGO (Niagara Parks)"],
         "to": ["Niagara Region Transit"],
         "routes": ["602", "603"],
+        "window_min": 1440,
+        "payment": ["card", "cash"],
+        "label": "one WEGO pass covers all WEGO lines for 24 h"
+      },
+      {
+        "from": ["Niagara Region Transit"],
+        "to": ["Niagara Region Transit"],
+        "routes": ["602", "603"],
+        "pass": true,
         "window_min": 1440,
         "payment": ["card", "cash"],
         "label": "one WEGO pass covers all WEGO lines for 24 h"

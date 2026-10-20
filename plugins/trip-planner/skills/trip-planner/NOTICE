@@ -1,0 +1,320 @@
+Trip Planner skill: NOTICE
+
+The code and documentation in this folder are licensed under the MIT License; see LICENSE. The bundled
+data keeps its own licence and is not MIT. Each source below names the repo files or feed ids it
+covers, its licence and its licence URL. Where the licensor publishes an attribution statement, the
+Attribution line gives it exactly as published. A source with no Attribution line has a licence that sets no
+statement. "Licence statement not found" means no data licence was found at the URLs listed on the date
+shown. Licence pages were read on 2026-10-20.
+
+======================
+TRANSIT COVERAGE GRIDS
+======================
+references/regions/gtha.json and references/regions/ontario.json: each GTFS feed's coverage grid, box and
+stop- and route-derived data come from that feed's timetable. The feeds marked manual in ontario.json are
+hand-entered and are not listed here: most from the operators' public pages; onex, megabus-on-east and
+megabus-on-west were built from the Onex and Megabus booking systems (see references/sources.md).
+
+Metrolinx (GO Transit and UP Express), regime 1 of 2
+  Covers: gtha.json feeds go, upx; ontario.json feed go
+  Licence: Metrolinx Access and Use Agreement (GO Transit and UP Express GTFS)
+    https://www.gotransit.com/en/information-resources/software-developers
+  Attribution: Data used in this product or service is provided with the permission of Metrolinx. Metrolinx makes no representations or warranties of any kind, express or implied, with respect to the Data and assumes no responsibility for the accuracy or currency of the data used in this product or service.
+
+Metrolinx (GO Transit and UP Express), regime 2 of 2
+  Covers: gtha.json feeds go, upx; ontario.json feed go
+  Licence: Open Government Licence - Ontario - Metrolinx (Version 1.0)
+    https://assets.metrolinx.com/image/upload/v1663237565/Documents/Metrolinx/Open-Government-Licence-Ontario-Metrolinx.pdf
+  Attribution: Contains information licensed under the Open Government Licence - Ontario - Metrolinx.
+
+City of Mississauga (MiWay)
+  Covers: gtha.json feed miway
+  Licence: City of Mississauga Terms of Use (open data)
+    http://www5.mississauga.ca/research_catalogue/CityofMississauga_TermsofUse.pdf
+
+Town of Milton (Milton Transit)
+  Covers: gtha.json feed milton
+  Licence: Open Government Licence – Milton, version 2.0
+    https://discover-milton.hub.arcgis.com/pages/disclaimer-and-terms-of-use
+  Attribution: Contains information licensed under the Open Government Licence – Milton.
+
+Town of Oakville (Oakville Transit)
+  Covers: gtha.json feed oakville
+  Licence: Open Government Licence - Town of Oakville (Town of Oakville Open Data Licence)
+    https://www.oakville.ca/town-hall/plans-strategies/open-data/open-data-licence/
+  Attribution: Contains information licensed under the Open Government Licence – Town of Oakville.
+  Note: Attribution as worded in the Town's PDF copy of the licence: https://oakville.ca/getmedia/3cb7902a-2220-433e-8aed-24f326b745b9/town-hall-oakville-open-data-licence.pdf
+
+City of Brampton (Brampton Transit)
+  Covers: gtha.json feed brampton
+  Licence: Creative Commons Attribution 4.0 International (CC BY 4.0), per the City's ArcGIS item licenseInfo 'CC BY' and GeoHub index 'CC-BY-4.0'
+    https://creativecommons.org/licenses/by/4.0/legalcode.en
+
+City of Burlington (Burlington Transit)
+  Covers: gtha.json feed burlington
+  Licence: City of Burlington Open Data Terms of Use (September 19, 2011)
+    https://opendata.burlington.ca/opendata-terms-of-use/City%20of%20Burlington%20-%20Open%20Data%20Terms%20of%20Use.pdf
+
+City of Hamilton (Hamilton Street Railway)
+  Covers: gtha.json feed hsr
+  Licence: City of Hamilton Open Data Licence (Version 1.1, January 2017)
+    https://www.hamilton.ca/city-council/data-maps/open-data/open-data-licence-terms-and-conditions
+  Attribution: Contains public sector Data made available under the City of Hamilton’s Open Data Licence
+
+City of Toronto (TTC Routes and Schedules)
+  Covers: gtha.json feed ttc
+  Licence: Open Government Licence – Toronto (version 1.0)
+    https://www.toronto.ca/city-government/data-research-maps/open-data/open-data-licence/
+  Attribution: Contains information licensed under the Open Government Licence – Toronto.
+
+York Region (York Region Transit)
+  Covers: gtha.json feed yrt
+  Licence: YRT Open Data Licence (version 2.0)
+    https://www.yrt.ca/en/about-us/open-data-licence-agreement.aspx
+  Attribution: Contains public transit Information made available under YRT's Open Data Licence
+
+Regional Municipality of Durham (Durham Region Transit)
+  Covers: gtha.json feed drt
+  Licence: Region of Durham Open Data Licence v.1.0
+    https://www.durham.ca/regional-government/access-to-information/open-data/
+  Attribution: Contains public sector information made available under The Regional Municipality of Durham's Open Data Licence
+
+City of Guelph (Guelph Transit)
+  Covers: gtha.json feed guelph
+  Licence: Open Government Licence – City of Guelph (City of Guelph Open Data Licence, Version 2.0)
+    https://explore.guelph.ca/pages/open-data-license
+  Attribution: Contains information licensed under the Open Government Licence – City of Guelph.
+
+Town of Orangeville (Orangeville Transit)
+  Covers: gtha.json feed orangeville
+  Licence: Open Government Licence – Orangeville, version 1.0
+    https://www.arcgis.com/sharing/rest/content/items/34a5906b55564294b59f737eb875a7bb/data
+  Attribution: Contains information licenced under the Open Government Licence – Orangeville.
+
+Regional Municipality of Waterloo (Grand River Transit)
+  Covers: gtha.json feed grt (skipped: a box only, no coverage grid ships)
+  Licence: Region of Waterloo Open Data Licence v.2.0
+    https://regionofwaterloo-018-ca.govstack.com/government-and-council/transparency-and-accountability/open-data/
+  Attribution: Contains information provided by the Regional Municipality of Waterloo under licence
+
+Government of Canada: VIA Rail Canada
+  Covers: ontario.json feed via
+  Licence: Open Government Licence – Canada (version 2.0)
+    https://open.canada.ca/en/open-government-licence-canada
+  Attribution: Contains information licensed under the Open Government Licence – Canada.
+
+Ontario Northland Transportation Commission
+  Covers: ontario.json feed ontario-northland
+  Licence: licence statement not found (checked 2026-10-20)
+  Checked: https://mobilitydatabase.org/feeds/gtfs/tld-4817
+           https://www.transit.land/feeds/f-ontario~northland~ca
+           https://ontarionorthland.tmix.se/
+           https://www.ontarionorthland.ca/en/company/terms-service
+
+FlixMobility Tech GmbH (FlixBus / Greyhound US feed)
+  Covers: ontario.json feed flixbus
+  Licence: licence statement not found (checked 2026-10-20)
+  Checked: the feed's feed_info.txt
+           the Transitland Atlas record f-9-flixbus
+           https://www.flixbus.com/terms-of-use (HTTP 404)
+
+London Transit Commission
+  Covers: ontario.json feed london
+  Licence: LTC’s Open Data – Terms of Use
+    https://www.londontransit.ca/open-data/ltcs-open-data-terms-of-use/
+
+City of Sarnia (Sarnia Transit)
+  Covers: ontario.json feed sarnia
+  Licence: Open Government Licence – City of Sarnia (Open Data Terms of Use, based on OGL – Canada 2.0)
+    https://city-of-sarnia.hub.arcgis.com/pages/open-data-terms-of-use
+  Attribution: Contains information licensed under the Open Government Licence – City of Sarnia
+
+City of Stratford (Stratford Transit)
+  Covers: ontario.json feed stratford
+  Licence: licence statement not found (checked 2026-10-20)
+  Checked: https://mobilitydatabase.org/feeds/tld-4744
+           stratford.ca transit pages and site search
+
+City of St. Thomas (Railway City Transit)
+  Covers: ontario.json feed st-thomas
+  Licence: licence statement not found (checked 2026-10-20)
+  Checked: https://mobilitydatabase.org/feeds/tld-4746
+           stthomas.ca (web search)
+
+City of Barrie (Barrie Transit)
+  Covers: ontario.json feed barrie
+  Licence: Barrie GTFS Licence (Barrie Transit data licence)
+    https://www.barrie.ca/services-payments/transportation-parking/barrie-transit/barrie-gtfs
+
+City of Orillia (Orillia Transit)
+  Covers: ontario.json feed orillia
+  Licence: licence statement not found (checked 2026-10-20)
+  Checked: https://mobilitydatabase.org/feeds/tld-4683
+           https://www.orillia.ca/Transit
+
+City of Owen Sound (Owen Sound Transit)
+  Covers: ontario.json feed owen-sound
+  Licence: licence statement not found (checked 2026-10-20)
+  Checked: https://www.owensound.ca/roads-transportation/public-transit/city-bus-service/
+           the Transitland Atlas record f-owensound~on~ca
+
+County of Simcoe (Simcoe County LINX)
+  Covers: ontario.json feed simcoe-linx
+  Licence: Open Government Licence – Simcoe County, version 1.0
+    http://maps.simcoe.ca/openlicense.html
+  Attribution: Contains information licensed under the Open Government Licence – Simcoe County.
+
+Town of Midland (Midland Penetanguishene Transit)
+  Covers: ontario.json feed midland
+  Licence: licence statement not found (checked 2026-10-20)
+  Checked: https://mobilitydatabase.org/feeds/tld-4704
+           https://www.midland.ca/getting-around/mid-pen-transit/mid-pen-transit-schedules-routes/
+           https://www.midland.ca/disclaimer/
+
+City of North Bay (North Bay Transit)
+  Covers: ontario.json feed north-bay
+  Licence: licence statement not found (checked 2026-10-20)
+  Checked: https://mobilitydatabase.org/feeds/tld-4700
+           https://northbay.ca/services-payments/north-bay-transit/
+
+City of Kingston (Kingston Transit)
+  Covers: ontario.json feed kingston
+  Licence: City of Kingston Open Data Licence 1.0 (statement text: Open Data Licence – City of Kingston)
+    https://cityofkingston.ca/media/wtpgpkb0/gis_license_opendata.pdf
+  Attribution: Contains information licensed under the Open Data Licence – City of Kingston.
+
+City of Belleville (Belleville Transit)
+  Covers: ontario.json feed belleville
+  Licence: licence statement not found (checked 2026-10-20)
+  Checked: https://www.belleville.ca/council-and-administration/city-policies/terms-of-use/ (website terms only)
+
+Quinte Access Transportation (Quinte Transit)
+  Covers: ontario.json feed quinte
+  Licence: licence statement not found (checked 2026-10-20)
+  Checked: https://myride.quintetransit.ca/
+           https://quintetransit.ca/terms-and-conditions
+           https://mobilitydatabase.org/feeds/gtfs/tld-4685
+           the Transitland Atlas record and the feed's feed_info.txt
+
+Regional Municipality of Niagara (Niagara Region Transit)
+  Covers: ontario.json feed niagara
+  Licence: Open Government License 2.0 (Niagara Region); statement text spells it Licence
+    https://niagaraopendata.ca/pages/open-government-license-2-0-niagara-region
+  Attribution: Contains information licensed under the Open Government Licence - Niagara Region
+
+City of Ottawa (OC Transpo)
+  Covers: ontario.json feed oc-transpo
+  Licence: Open Data Licence Version 2.0 (text: version 2.0 of the Open Government Licence – City of Ottawa)
+    https://open.ottawa.ca/pages/open-data-licence
+  Attribution: Contains information licensed under the Open Government Licence – City of Ottawa.
+
+Metrolinx / Consat Telematics (metrolinx.tmix.se hosting)
+  Covers: the metrolinx.tmix.se download URLs of the Milton, Orangeville, Sarnia, Stratford, St. Thomas, Orillia, Owen Sound, Simcoe LINX and Belleville feeds
+  Licence: licence statement not found (checked 2026-10-20)
+  Checked: https://www.metrolinx.com/en/about-us/open-data (lists none of these feeds)
+  Note: the hosting adds no licence; each municipality's entry above applies
+
+MobilityData (MobilityDatabase mirrors)
+  Covers: the files.mobilitydatabase.org mdb-N and tld-N fallback download URLs
+  Licence: MobilityDatabase Terms and Conditions (catalog metadata CC0 1.0; feed content licensed by feed owners)
+    https://mobilitydatabase.org/terms-and-conditions
+
+Interline Technologies / Transitland
+  Covers: the tld-N copies of feeds
+  Licence: Transitland Terms of Use
+    https://www.transit.land/terms
+
+=======================
+DRIVING DATA THAT SHIPS
+=======================
+references/driving/
+
+Government of Canada: Natural Resources Canada (Fuel Consumption Ratings)
+  Covers: vehicles-index.json; costs.json consumption and default kWh per 100 km; ev.json NRCan figures (open.canada.ca dataset 98f1a129-f628-4ce4-b24d-6f16bf24dd64)
+  Licence: Open Government Licence – Canada (version 2.0)
+    https://open.canada.ca/en/open-government-licence-canada
+  Attribution: Contains information licensed under the Open Government Licence – Canada.
+
+OpenStreetMap Foundation / OpenStreetMap contributors
+  Covers: tolls.json interchange and bridge coordinates; costs.json fuel-market town coordinates; parking-places-east.json and parking-places-west.json lot coordinates; traffic.json built-up area boxes; and, while planning, the Overpass parking search (parking.json overpass) and the OpenStreetMap-based routing and geocoding services
+  Licence: Open Data Commons Open Database License (ODbL) 1.0; OSMF Attribution Guidelines
+    https://osmfoundation.org/wiki/Licence/Attribution_Guidelines
+    https://www.openstreetmap.org/copyright
+  Attribution: © OpenStreetMap contributors
+
+Government of Ontario (Fuels price survey information)
+  Covers: costs.json fuel fallback prices; and, while planning, the weekly survey file fueltypesall.csv (data.ontario.ca dataset fuels-price-survey-information)
+  Licence: Open Government Licence – Ontario
+    https://www.ontario.ca/page/open-government-licence-ontario
+  Attribution: Contains information licensed under the Open Government Licence – Ontario.
+
+Open-Meteo.com
+  Covers: costs.json climate_normals (from the Open-Meteo archive API); and, while planning, the weather forecast
+  Licence: Attribution 4.0 International (CC BY 4.0)
+    https://open-meteo.com/en/licence
+  Attribution: Weather data by Open-Meteo.com
+  Note: the statement links to https://open-meteo.com/
+  Note: Open-Meteo's terms (https://open-meteo.com/en/terms): "You may only use the free API services for non-commercial purposes."
+
+Bank of Canada (Valet API exchange rates)
+  Covers: tolls.json usd_cad rate; and, while planning, the Valet exchange rate
+  Licence: Bank of Canada website Terms of Use
+    https://www.bankofcanada.ca/terms/
+
+==================================================================
+CITY PARKING DATA (fetched while planning, cached on your machine)
+==================================================================
+references/driving/parking.json names each layer; drive_plan prints a layer's Attribution on the SOURCES
+line when one of its lots is shown.
+
+City of Burlington (Open Data Burlington)
+  Covers: parking.json city_layers burlington_lots, burlington_street
+  Licence: City of Burlington Open Data Terms of Use (September 19, 2011)
+    https://opendata.burlington.ca/opendata-terms-of-use/City%20of%20Burlington%20-%20Open%20Data%20Terms%20of%20Use.pdf
+
+City of Hamilton (Open Data)
+  Covers: parking.json city_layers hamilton_lots, hamilton_meters
+  Licence: City of Hamilton Open Data Licence (Version 1.1, January 2017)
+    https://www.hamilton.ca/city-council/data-maps/open-data/open-data-licence-terms-and-conditions
+  Attribution: Contains public sector Data made available under the City of Hamilton’s Open Data Licence
+
+City of Ottawa (Open Ottawa)
+  Covers: parking.json city_layers ottawa_machines, ottawa_street, ottawa_lots
+  Licence: Open Data Licence Version 2.0 (text: version 2.0 of the Open Government Licence – City of Ottawa)
+    https://open.ottawa.ca/pages/open-data-licence
+  Attribution: Contains information licensed under the Open Government Licence – City of Ottawa.
+
+City of Mississauga (Open Data)
+  Covers: parking.json city_layers mississauga
+  Licence: City of Mississauga Terms of Use (open data)
+    http://www5.mississauga.ca/research_catalogue/CityofMississauga_TermsofUse.pdf
+
+Town of Oakville (Open Data)
+  Covers: parking.json city_layers oakville
+  Licence: Open Government Licence - Town of Oakville (Town of Oakville Open Data Licence)
+    https://www.oakville.ca/town-hall/plans-strategies/open-data/open-data-licence/
+  Attribution: Contains information licensed under the Open Government Licence – Town of Oakville.
+  Note: Attribution as worded in the Town's PDF copy of the licence: https://oakville.ca/getmedia/3cb7902a-2220-433e-8aed-24f326b745b9/town-hall-oakville-open-data-licence.pdf
+
+City of London (Open Data)
+  Covers: parking.json city_layers london_meters
+  Licence: City of London Open Data Terms of Use
+    https://london.ca/government/council-civic-administration/open-data
+
+City of Kingston (Open Data Kingston)
+  Covers: parking.json city_layers kingston_lots, kingston_park_ride
+  Licence: City of Kingston Open Data Licence 1.0 (statement text: Open Data Licence – City of Kingston)
+    https://cityofkingston.ca/media/wtpgpkb0/gis_license_opendata.pdf
+  Attribution: Contains information licensed under the Open Data Licence – City of Kingston.
+
+City of Niagara Falls (open data)
+  Covers: parking.json city_layers niagara_falls_lots
+  Licence: Open Government License 2.0 (Niagara Falls); statement text: Open Government Licence – Niagara Falls
+    https://niagaraopendata.ca/pages/open-government-license-2-0-niagara-falls
+  Attribution: Contains information licensed under the Open Government Licence – Niagara Falls.
+
+City of Toronto (Green P parking and parking occupancy)
+  Covers: parking.json toronto: the Green P carparks 2019 file, the parking occupancy data and the carparks opened after 2019 that it lists
+  Licence: Open Government Licence – Toronto (version 1.0)
+    https://www.toronto.ca/city-government/data-research-maps/open-data/open-data-licence/
+  Attribution: Contains information licensed under the Open Government Licence – Toronto.

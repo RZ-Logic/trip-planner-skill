@@ -24,8 +24,12 @@ is more than six months old.
   Megabus east, Wolfe Island ferry, Port Hope, Brockville and Peterborough Transit, WEGO 604, Ride Norfolk).
 - Long trips get a search window sized to the drive (up to 9 h). Plans that cannot reach the door by
   transit show under **FINISH WITH A RIDE**: transit to a drop point, then Uber or a local taxi.
-- Hand-entered timetables carry a `verified` date and a `notes` line in `ontario.json`. When a WARNING
-  or the notes say "assumed from 2026", confirm on the operator's site before relying on it.
+- Hand-entered timetables carry a `verified` date and a `notes` line in `ontario.json`, and the FEEDS
+  line marks them `hand-entered`. A leg marked "timetable assumed" and its WARNING mean the times are
+  projected from an earlier schedule: confirm on the operator's site before relying on them. A leg
+  marked "times doubtful" uses the operator's published times, but its WARNING names two that cannot
+  both be right (GOST's 10:38 Guelph run at Williamsford and Chatsworth; Onex's weekend 20:50 and 21:55
+  from Toronto between Milton and Kitchener): check with the operator.
 
 ## 2. Intercity services
 
@@ -34,7 +38,7 @@ is more than six months old.
 | GO Transit | Yes (GTFS, holidays encoded) | Saturday schedule on holidays. Weekend and holiday trains to Stratford (from Union, Mount Pleasant, Guelph, Kitchener) and Niagara Falls. Stratford tickets: e-ticket only. |
 | VIA Rail | Yes (GTFS) | One trip per train number with fixed days; the file does not show holiday or seasonal changes and ends 2026-12-17. Corridor (Toronto-Kingston-Ottawa) schedule changes from 2026-10-25. Fares are dynamic (Escape fares from about $25 to $60): book on viarail.ca. |
 | Ontario Northland coach | Yes (GTFS) | Toronto-Barrie-Orillia-Gravenhurst-Bracebridge-Huntsville-North Bay and Toronto-Parry Sound-Sudbury. The Northlander train is in the file but not in service yet (excluded). |
-| FlixBus | Yes (GTFS, UTC times converted) | Toronto-London-Sarnia, Toronto-Niagara Falls, Toronto-Kingston-Gananoque-Ottawa, Toronto-Muskoka-North Bay, Toronto-Barrie-Wasaga-Collingwood-Blue Mountain-Owen Sound, Peterborough. Sauble Beach/Port Elgin only to 2026-10-19; Blue Mountain ski trips 2026-12-07 to 2027-03-21. Prices vary; book ahead. All FlixBus times in this file are local Toronto time; the feed publishes UTC (subtract 4 h before 2026-11-01, 5 h from then). |
+| FlixBus | Yes (GTFS, UTC times converted) | Toronto-London-Sarnia, Toronto-Niagara Falls, Toronto-Kingston-Gananoque-Ottawa, Toronto-Muskoka-North Bay, Toronto-Barrie-Wasaga-Collingwood-Blue Mountain-Owen Sound, Peterborough. Sauble Beach/Port Elgin only to 2026-10-19; Blue Mountain ski trips 2026-12-07 to 2027-03-21. Prices vary; book ahead. All FlixBus times in this file are local Toronto time; the feed publishes UTC (subtract 4 h from UTC times before 06:00 UTC on 2026-11-01 and 5 h from then: a coach shown at 02:00 UTC on Nov 1 leaves at 22:00 on Oct 31). |
 | Megabus (Coach Canada) | Hand-entered (`megabus-on-east`) | Toronto, Pearson, Scarborough to Kingston, Brockville, Ottawa (2720/2730, some continue to Cornwall and Montreal, not modelled) and Mississauga-Pearson-Yorkdale-Port Hope-Trenton-Belleville-Napanee-Kingston (2711). From the live booking API 2026-10-10. Toronto-Niagara Megabus was reported cancelled in June 2026. Online fares only. |
 | Megabus (Badder Bus) 2740 | Hand-entered (`megabus-on-west`) | Toronto Union to London Wellington Rd S and Western University, 4 daily trips each way plus 4 Thu-Mon; about $27 (range $10-49). Booking open to 2027-01-05. |
 | Onex | Hand-entered (`onex`) | London-Kitchener (Sportsworld)-**Milton GO carpool lot**-Mississauga (800 Boyer)-Pearson-Toronto (44 York St); Toronto-Ottawa via Kingston (Fri-Sun); Brampton-Toronto-Niagara Falls-Buffalo Airport. From Milton: to London 10:50 Mon-Fri, 11:50 Sat-Sun, late evenings; to Toronto 03:45 and 19:05. Flex fare about $27, online only; be at the stop 10 min early. |
@@ -48,22 +52,26 @@ is more than six months old.
   Owen Sound), Hamilton, Kitchener-Waterloo (with Guelph, Brantford, Oxford), London (Middlesex, Elgin,
   Lambton incl. Grand Bend and Sarnia), Niagara, Kingston, Ottawa, Windsor. **A ride that starts in one
   region and ends outside it adds $0.35/km for the whole distance** (Milton to Guelph or Hamilton, Kingston
-  to Gananoque). Checked against 39 of Uber's own route averages: within about 15%.
+  to Gananoque). A one-off check against 39 of Uber's own route averages (2026-10-10) found them within
+  about 15%; that route list is not published in this repo.
 - **No rate card, ride-hail sparse or absent:** Huron (Goderich, Bayfield), Bruce (Tobermory, Lion's Head,
   Sauble), Perth (Stratford), Muskoka (an Uber pilot since 2026-08-24, few drivers), Leeds and Grenville
   (Gananoque), Prince Edward County (uses the Uride app), Peterborough, Norfolk (Port Dover). The script
-  prices these with the London card, or a local taxi estimate (about $1.90/km) where Uber does not
-  operate, and says so. The destination's ride area in `ontario.json` lists local taxis with phone numbers.
+  prices these with the London card, or an assumed local taxi rate (about $1.90/km; the taxis here
+  publish no rates) where Uber does not operate, and says so. The destination's ride area in `ontario.json` lists local taxis with phone numbers.
 - **Getting back** is the hard part in sparse areas: book the return ride ahead (Uber Reserve or a taxi)
   before leaving the gateway town.
 
 ## 4. Holidays
 
-Statutory holidays to 2027-12 are listed in `ontario.json` (`holidays`). Feeds that do not mark them are
-corrected per feed (`holiday_service`): London Transit runs a Sunday-like schedule; Sarnia, Stratford,
-Orillia and Simcoe County LINX run nothing. GO, Barrie, Owen Sound, Kingston, Belleville, Quinte, Niagara,
-Midland and North Bay files already mark holidays. VIA and Ontario Northland run their normal timetables.
-Rural services in the hand-entered timetables list their own holiday dates (`except`).
+Statutory holidays to 2027-12 are listed in `ontario.json` (`holidays`); later years use the Ontario ESA rule
+(`trip_hubs.esa_holidays`) for ride and drive traffic and station parking prices, not for the feed corrections
+below. Feeds that do not mark them are corrected per feed (`holiday_service`): London Transit runs a
+Sunday-like schedule; Sarnia, Stratford and Orillia run nothing. Simcoe County LINX's file marks holidays
+itself (only Route 4 runs, on its Sunday trips), and Christmas Day is added as no service. GO, Barrie, Owen Sound,
+Kingston, Belleville, Quinte, Niagara, Midland and North Bay files already mark holidays. VIA and Ontario
+Northland run their normal timetables. Rural services in the hand-entered timetables list their own holiday
+dates (`except`).
 
 
 ## 5. Destinations: West (Lake Huron, London, Stratford)

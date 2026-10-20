@@ -1,10 +1,10 @@
 {"verified": "2026-10-10",
- "note": "Curated parking for Niagara, Toronto attractions, Lake Ontario east, Ottawa and Halton/Hamilton parks. Lot coordinates from OpenStreetMap (Overpass, way/relation centre; osm id in notes) or Nominatim, (c) OpenStreetMap contributors. Prices in CAD including tax unless the notes say otherwise. A rule prices the vehicle; per-person fees are noted.",
+ "note": "Curated parking for Niagara, Toronto attractions, Lake Ontario east, Ottawa and Halton/Hamilton parks. Lot coordinates from OpenStreetMap (Overpass, way/relation centre; osm id in notes) or Nominatim, (c) OpenStreetMap contributors. Prices in CAD including tax unless the notes say otherwise. A rule prices the vehicle; per-person fees are noted. free_source: osm marks a free lot whose only evidence of being free is an OSM fee=no tag; it is shown as unverified.",
  "places": [
  {"id": "niagara-falls", "name": "Niagara Falls (Niagara Parks, Clifton Hill, Fallsview)",
   "match": {"lat": 43.088, "lon": -79.072, "radius_km": 4.5},
   "season": {"from": "01-01", "to": "12-31", "off_season": "free", "note": "Niagara Parks lots are paid all year; Lot C Rapidsview is seasonal (closed in winter); no overnight parking at any Niagara Parks lot (00:00 to 06:00)"},
-  "source": "https://www.niagaraparks.com/visit/plan/parking/", "source_date": "2026 (page and 2026 variable price chart, checked 2026-10-10)", "confidence": "curated",
+  "source": "https://www.niagaraparks.com/visit/plan/parking/", "source_date": "2026 (page and 2026 variable price chart, checked 2026-10-10)", "confidence": "curated", "rate_year": 2026,
   "rules": [
    "Niagara Parks Lot A (Falls), Lot B (Floral Showhouse) and Queen Victoria Place use a variable daily price set by month in 2026: Jan $20 or $36, Feb $25 or $30, Mar $25, Apr $25 or $30, May and Jun $35 or $40, Jul and Aug $40, Sep $30 or $40, Oct $30, Nov $25 or $30, Dec $30 or $40. Priced here at the higher figure for the month; check the chart for the day. January is usually $20; the $36 applies only on the chart's marked dates (likely New Year's).",
    "Rapidsview Lot C (4555 Upper Rapids Blvd area): $10 for the day plus WEGO, $16 per adult and $12 per child 3 to 12 (24 h pass), about 8 min on the WEGO Green Line to Table Rock Centre; cheaper than Lot A only for a solo driver; seasonal, closes for winter (dates not published).",
@@ -30,7 +30,7 @@
     "rule": {"no_parking": [{"days": [0, 1, 2, 3, 4, 5, 6], "hours": ["00:00", "06:00"], "all_days": true}], "hours_note": "no parking 00:00 to 06:00 (all Niagara Parks lots)", "hourly": 8.0, "max_stay_min": 1080},
     "capacity": null, "notes": "6345 Dufferin Isle Rd; $8 per hour pay and display, year-round. OSM w/25262351.", "source": "https://www.niagaraparks.com/visit/plan/parking/"},
    {"name": "White Water Walk lot", "lat": 43.110825, "lon": -79.060986, "kind": "lot",
-    "rule": {"hourly": 8.0, "max_stay_min": 1080},
+    "rule": {"no_parking": [{"days": [0, 1, 2, 3, 4, 5, 6], "hours": ["00:00", "06:00"], "all_days": true}], "hours_note": "no parking 00:00 to 06:00 (all Niagara Parks lots)", "hourly": 8.0, "max_stay_min": 1080},
     "capacity": null, "notes": "4330 River Rd; $8 per hour pay and display. OSM w/1087952347 (OSM note: free for White Water Walk customers; not on the Niagara Parks page).", "source": "https://www.niagaraparks.com/visit/plan/parking/"},
    {"name": "Whirlpool Aero Car lot", "lat": 43.117632, "lon": -79.06883, "kind": "lot",
     "rule": {"no_parking": [{"days": [0, 1, 2, 3, 4, 5, 6], "hours": ["00:00", "06:00"], "all_days": true}], "hours_note": "no parking 00:00 to 06:00 (all Niagara Parks lots)", "free": true},
@@ -66,7 +66,7 @@
     "rule": {"hourly": 5.25, "paid_hours": ["10:00", "20:00"], "max_stay_min": 480},
     "capacity": null, "notes": "Town paid parking map: $5.25/h, 8 h maximum in the lots behind Queen St. OSM w/363773665 (unnamed).", "source": "https://services8.arcgis.com/ZEY4OJK2EqLv96rt/arcgis/rest/services/NOTL_Pad_Parking_Data/FeatureServer/0"},
    {"name": "Fort George lot (Parks Canada)", "lat": 43.251479, "lon": -79.064721, "kind": "park",
-    "rule": {"flat": 9.5},
+    "rule": {"daily_max": 9.5},
     "capacity": null, "notes": "Parks Canada daily parking fee $9.50 per vehicle (fees as of 2026-09-08); about 700 m walk to Queen St. OSM w/363598110.", "source": "https://parks.canada.ca/lhn-nhs/on/fortgeorge/visit/tarifs-fees"}]},
 
  {"id": "jordan-vineland", "name": "Jordan Village and Vineland wineries (Town of Lincoln)",
@@ -116,7 +116,7 @@
  {"id": "toronto-zoo", "name": "Toronto Zoo",
   "match": {"lat": 43.819852, "lon": -79.184937, "radius_km": 1.6},
   "season": {"from": "01-01", "to": "12-31", "off_season": "free", "note": "zoo open all year"},
-  "source": "https://www.torontozoo.com/hostyourevent/admission", "source_date": "2026 (group admission page lists 2026 parking)", "confidence": "curated",
+  "source": "https://www.torontozoo.com/hostyourevent/admission", "source_date": "2026 (group admission page lists 2026 parking)", "confidence": "curated", "rate_year": 2026,
   "rules": ["Zoo parking $20.00 per vehicle (paid on site); zoo members check their membership level for parking.",
             "Free alternative: Rouge National Urban Park Finch Meander trail lot, about 1.1 km from the zoo entrance by road; meant for trail users."],
   "reservation": {"required": false, "text": "", "url": "", "lead_days": 0},
@@ -125,7 +125,7 @@
     "rule": {"flat": 20.0},
     "capacity": null, "notes": "$20 per vehicle. OSM w/14262820 (zoo visitor lot; more zoo lots to the north, w/14262731, w/14262625).", "source": "https://www.torontozoo.com/hostyourevent/admission"},
    {"name": "Finch Meander trail lot (Rouge National Urban Park)", "lat": 43.82478, "lon": -79.196507, "kind": "lot",
-    "rule": {"free": true},
+    "rule": {"free": true}, "free_source": "osm",
     "capacity": null, "notes": "Free (OSM fee=no); trail parking, not a zoo lot; long walk along Meadowvale Rd. OSM r/8823430.", "source": "https://www.openstreetmap.org/relation/8823430"}]},
 
  {"id": "canadas-wonderland", "name": "Canada's Wonderland (Vaughan)",
@@ -151,32 +151,32 @@
   "reservation": {"required": false, "text": "", "url": "", "lead_days": 0},
   "lots": [
    {"name": "Green P Carpark 703, Bluffer's Park", "lat": 43.707124, "lon": -79.234353, "kind": "lot",
-    "rule": {"no_parking": [{"days": [0, 1, 2, 3, 4, 5, 6], "hours": ["00:00", "06:00"], "all_days": true}], "hours_note": "no parking 00:00 to 06:00", "hourly": 4.0, "per_min": 30, "daily_max": 12.0, "paid_days": [5, 6], "paid_hours": ["09:00", "20:00"], "season": ["05-01", "10-31"], "off_season": "free"},
-    "capacity": null, "notes": "Weekend rule only: weekdays free before 17:00 then up to $6 to 21:00, and holidays are priced like weekends (the rule cannot express either). Often full by late morning on summer weekends. OSM w/43106472.", "source": "https://parking.greenp.com/?p=13341"},
+    "rule": {"no_parking": [{"days": [0, 1, 2, 3, 4, 5, 6], "hours": ["00:00", "06:00"], "all_days": true}], "hours_note": "no parking 00:00 to 06:00", "hourly": 4.0, "per_min": 30, "daily_max": 12.0, "periods": [{"days": [5, 6], "hours": ["09:00", "20:00"], "holidays": true}, {"days": [0, 1, 2, 3, 4], "hours": ["17:00", "21:00"], "hourly": null, "max": 6.0}], "season": ["05-01", "10-31"], "off_season": "free"},
+    "capacity": null, "notes": "Weekends and holidays $2 per 30 min 09:00 to 20:00, $12 max; weekdays free before 17:00, then up to $6 to 21:00, priced at the $6 maximum (an upper bound: the evening hourly rate is not published here). Often full by late morning on summer weekends. OSM w/43106472.", "source": "https://parking.greenp.com/?p=13341"},
    {"name": "Green P Carpark 702, Bluffer's Park west", "lat": 43.706725, "lon": -79.235912, "kind": "lot",
-    "rule": {"no_parking": [{"days": [0, 1, 2, 3, 4, 5, 6], "hours": ["00:00", "06:00"], "all_days": true}], "hours_note": "no parking 00:00 to 06:00", "hourly": 4.0, "per_min": 30, "daily_max": 12.0, "paid_days": [5, 6], "paid_hours": ["09:00", "20:00"], "season": ["05-01", "10-31"], "off_season": "free"},
+    "rule": {"no_parking": [{"days": [0, 1, 2, 3, 4, 5, 6], "hours": ["00:00", "06:00"], "all_days": true}], "hours_note": "no parking 00:00 to 06:00", "hourly": 4.0, "per_min": 30, "daily_max": 12.0, "periods": [{"days": [5, 6], "hours": ["09:00", "20:00"], "holidays": true}, {"days": [0, 1, 2, 3, 4], "hours": ["17:00", "21:00"], "hourly": null, "max": 6.0}], "season": ["05-01", "10-31"], "off_season": "free"},
     "capacity": null, "notes": "Same rates as 703. OSM w/43074016.", "source": "https://parking.greenp.com/?p=13341"}]},
 
  {"id": "cobourg", "name": "Cobourg (Victoria Park beach, harbour, downtown)",
   "match": {"lat": 43.9585, "lon": -78.164, "radius_km": 1.5},
   "season": {"from": "01-01", "to": "12-31", "off_season": "free", "note": "downtown rates all year; waterfront high season May 15 to Sep 14, low season Sep 15 to May 14 (first 3 h free, then $2.50/h, $20/day)"},
-  "source": "https://media-001-ca.cdn.govstack.com/cobourg-008-ca/media/hitb4zod/municipalparkingbrochure2026_4fold_85x14_updated28jul2026.pdf", "source_date": "2026 brochure (updated 2026-07-28)", "confidence": "curated",
+  "source": "https://media-001-ca.cdn.govstack.com/cobourg-008-ca/media/hitb4zod/municipalparkingbrochure2026_4fold_85x14_updated28jul2026.pdf", "source_date": "2026 brochure (updated 2026-07-28)", "confidence": "curated", "rate_year": 2026,
   "rules": [
    "Waterfront lots and streets, high season May 15 to Sep 14: $5/h or $40/day Daily Waterfront Pass; no free parking.",
-   "Waterfront low season Sep 15 to May 14: first 3 h free, then $2.50/h, $20/day (the waterfront lot rules below price only the high season).",
+   "Waterfront low season Sep 15 to May 14: first 3 h free, then $2.50/h, $20/day.",
    "Downtown lots and streets all year: first 3 h free, then $2.50/h. Downtown lots are a 3 to 6 min walk from Victoria Beach.",
    "Enforced 24/7; overnight 23:00 to 07:00 needs a $10 overnight permit (lots only). Pay by machine, meter or HONK. The McGill St lot counts as waterfront in high season."],
   "reservation": {"required": false, "text": "", "url": "https://parking.cobourg.ca", "lead_days": 0},
   "lots": [
    {"name": "Centennial Pool lot (waterfront)", "lat": 43.958504, "lon": -78.162865, "kind": "lot",
-    "rule": {"hourly": 5.0, "daily_max": 40.0, "season": ["05-15", "09-14"], "off_season": "free"},
+    "rule": {"hourly": 5.0, "daily_max": 40.0, "season": ["05-15", "09-14"], "off_season_rule": {"hourly": 2.5, "free_first_min": 180, "daily_max": 20.0}},
     "capacity": null, "notes": "Next to Victoria Park and the beach. High season priced; low season first 3 h free then $2.50/h, $20/day. OSM w/1071793560.", "source": "https://media-001-ca.cdn.govstack.com/cobourg-008-ca/media/hitb4zod/municipalparkingbrochure2026_4fold_85x14_updated28jul2026.pdf"},
    {"name": "Charles Street lot (waterfront)", "lat": 43.958308, "lon": -78.163938, "kind": "lot",
-    "rule": {"hourly": 5.0, "daily_max": 40.0, "season": ["05-15", "09-14"], "off_season": "free"},
+    "rule": {"hourly": 5.0, "daily_max": 40.0, "season": ["05-15", "09-14"], "off_season_rule": {"hourly": 2.5, "free_first_min": 180, "daily_max": 20.0}},
     "capacity": null, "notes": "High season priced; low season first 3 h free then $2.50/h. A 2025 report said Charles St was resident-only; the 2026 brochure maps it as a waterfront lot. OSM w/1459433076.", "source": "https://media-001-ca.cdn.govstack.com/cobourg-008-ca/media/hitb4zod/municipalparkingbrochure2026_4fold_85x14_updated28jul2026.pdf"},
    {"name": "Division Street lot (waterfront)", "lat": 43.957621, "lon": -78.164917, "kind": "lot",
-    "rule": {"hourly": 5.0, "daily_max": 40.0, "season": ["05-15", "09-14"], "off_season": "free"},
-    "capacity": null, "notes": "South end of Division St by the beach and harbour. High season priced. OSM w/173699953.", "source": "https://media-001-ca.cdn.govstack.com/cobourg-008-ca/media/hitb4zod/municipalparkingbrochure2026_4fold_85x14_updated28jul2026.pdf"},
+    "rule": {"hourly": 5.0, "daily_max": 40.0, "season": ["05-15", "09-14"], "off_season_rule": {"hourly": 2.5, "free_first_min": 180, "daily_max": 20.0}},
+    "capacity": null, "notes": "South end of Division St by the beach and harbour. High season priced; low season first 3 h free then $2.50/h, $20/day. OSM w/173699953.", "source": "https://media-001-ca.cdn.govstack.com/cobourg-008-ca/media/hitb4zod/municipalparkingbrochure2026_4fold_85x14_updated28jul2026.pdf"},
    {"name": "Covert Street lot (downtown)", "lat": 43.960403, "lon": -78.167124, "kind": "lot",
     "rule": {"hourly": 2.5, "free_first_min": 180},
     "capacity": null, "notes": "Downtown lot, all year: first 3 h free then $2.50/h (OSM note still says 2 h free). About 550 m to the beach. OSM w/598649345.", "source": "https://media-001-ca.cdn.govstack.com/cobourg-008-ca/media/hitb4zod/municipalparkingbrochure2026_4fold_85x14_updated28jul2026.pdf"}]},
@@ -204,7 +204,7 @@
  {"id": "sandbanks", "name": "Sandbanks Provincial Park (Outlet, Dunes and Sandbanks beaches)",
   "match": {"lat": 43.905, "lon": -77.245, "radius_km": 5.0},
   "season": {"from": "01-01", "to": "12-31", "off_season": "free", "note": "day-use permit needed all year; reservations matter most in summer"},
-  "source": "https://www.ontarioparks.ca/fees/dayuse/2026", "source_date": "2026 (fees effective 2026-04-01 to 2027-03-31)", "confidence": "curated",
+  "source": "https://www.ontarioparks.ca/fees/dayuse/2026", "source_date": "2026 (fees effective 2026-04-01 to 2027-03-31)", "confidence": "curated", "rate_year": 2026,
   "rules": [
    "Ontario Parks daily vehicle permit, Sandbanks priced at the top tier DU4 $21.00 incl. HST (Ontario seniors $16.75); tier is not on the fee page, $21 is the long-standing Sandbanks price.",
    "Reserve the daily vehicle permit online from 07:00 five days before the visit; the park sells out on summer weekends and holidays and turns away cars without a permit.",
@@ -212,10 +212,10 @@
   "reservation": {"required": true, "text": "Book the daily vehicle permit at reservations.ontarioparks.ca from 07:00, 5 days ahead; seasonal pass holders must still book.", "url": "https://reservations.ontarioparks.ca/", "lead_days": 5},
   "lots": [
    {"name": "Outlet Beach day-use lot", "lat": 43.893485, "lon": -77.220209, "kind": "park",
-    "rule": {"flat": 21.0},
+    "rule": {"daily_max": 21.0},
     "capacity": null, "notes": "Ontario Parks daily vehicle permit (one per car, all occupants); permit tier assumed DU4. OSM w/233914739.", "source": "https://www.ontarioparks.ca/fees/dayuse/2026"},
    {"name": "Dunes Beach day-use lot", "lat": 43.90986, "lon": -77.271467, "kind": "park",
-    "rule": {"flat": 21.0},
+    "rule": {"daily_max": 21.0},
     "capacity": null, "notes": "Ontario Parks daily vehicle permit; OSM w/829430445 (operator Ontario Parks).", "source": "https://www.ontarioparks.ca/fees/dayuse/2026"}]},
 
  {"id": "wellington-pec", "name": "Wellington (Prince Edward County) and Wellington Rotary Beach",
@@ -228,7 +228,7 @@
   "reservation": {"required": false, "text": "", "url": "", "lead_days": 0},
   "lots": [
    {"name": "Wellington Rotary Beach lot", "lat": 43.950011, "lon": -77.340517, "kind": "lot",
-    "rule": {"flat": 20.0, "paid_days": [5, 6], "season": ["07-01", "09-30"], "off_season": "free"},
+    "rule": {"periods": [{"days": [5, 6], "hours": ["00:00", "24:00"], "flat": 20.0, "entry": true, "holidays": true}], "season": ["07-01", "09-30"], "off_season": "free"},
     "capacity": null, "notes": "2025 rule ($20 cash on summer weekends and holidays), not confirmed for 2026; free otherwise. OSM w/785908851 (fee=no).", "source": "https://www.countylive.ca/?p=77570"}]},
 
  {"id": "kingston-downtown", "name": "Kingston downtown (Springer Market Square, waterfront)",
@@ -275,7 +275,7 @@
   "reservation": {"required": false, "text": "", "url": "", "lead_days": 0},
   "lots": [
    {"name": "Free public lot near the waterfront", "lat": 44.323558, "lon": -76.16185, "kind": "lot",
-    "rule": {"free": true},
+    "rule": {"free": true}, "free_source": "osm",
     "capacity": null, "notes": "OSM tags only (access=yes, fee=no); not named on the Town page; check signs. About 120 m from the cruise dock. OSM w/264456146.", "source": "https://www.openstreetmap.org/way/264456146"}]},
 
  {"id": "brockville", "name": "Brockville (Blockhouse Island, Railway Tunnel, Aquatarium, downtown)",
@@ -314,7 +314,7 @@
  {"id": "bronte-creek", "name": "Bronte Creek Provincial Park (day use, 1219 Burloak Dr)",
   "match": {"lat": 43.4065, "lon": -79.7712, "radius_km": 1.8},
   "season": {"from": "01-01", "to": "12-31", "off_season": "free", "note": "day-use area open all year 08:00 to 19:00 (fall hours)"},
-  "source": "https://www.ontarioparks.ca/fees/dayuse/2026", "source_date": "2026 (fees effective 2026-04-01 to 2027-03-31)", "confidence": "curated",
+  "source": "https://www.ontarioparks.ca/fees/dayuse/2026", "source_date": "2026 (fees effective 2026-04-01 to 2027-03-31)", "confidence": "curated", "rate_year": 2026,
   "rules": [
    "Ontario Parks daily vehicle permit; Bronte Creek's tier is not published on the fee page, priced at the top tier DU4 $21.00 incl. HST (tiers DU1 to DU4 are $12.25 to $21.00).",
    "Day visitors must use the day-use entrance on Burloak Dr. The park caps daily visitors; reserve a permit from 07:00 five days ahead for summer weekends and holidays (busiest 10:00 to 16:00).",
@@ -322,20 +322,20 @@
   "reservation": {"required": false, "text": "A permit reservation guarantees entry on busy days; book at reservations.ontarioparks.ca from 07:00, 5 days ahead.", "url": "https://reservations.ontarioparks.ca/", "lead_days": 5},
   "lots": [
    {"name": "Bronte Creek day-use parking", "lat": 43.408382, "lon": -79.767924, "kind": "park",
-    "rule": {"flat": 21.0},
+    "rule": {"daily_max": 21.0},
     "capacity": null, "notes": "Daily vehicle permit (tier unpublished, priced at DU4). Lots A to F inside the day-use area; this point is one of the central lots. OSM w/25465297.", "source": "https://www.ontarioparks.ca/fees/dayuse/2026"}]},
 
  {"id": "sibbald-point", "name": "Sibbald Point Provincial Park (Lake Simcoe)",
   "match": {"lat": 44.328, "lon": -79.3221, "radius_km": 2.5},
   "season": {"from": "01-01", "to": "12-31", "off_season": "free", "note": "day use open all year"},
-  "source": "https://blog.ontarioparks.ca/?p=32788", "source_date": "2026 (blog undated; 2026 fee table unchanged from 2025)", "confidence": "curated",
+  "source": "https://blog.ontarioparks.ca/?p=32788", "source_date": "2026 (blog undated; 2026 fee table unchanged from 2025)", "confidence": "curated", "rate_year": 2026,
   "rules": [
    "Day use costs $21 per vehicle per day (Ontario Parks blog; matches tier DU4 in the 2026 fee table).",
    "Reserve the daily vehicle permit up to 5 days ahead (from 07:00) for summer weekends; seasonal permit holders still reserve, at no cost."],
   "reservation": {"required": false, "text": "Reserve the daily vehicle permit at reservations.ontarioparks.ca, up to 5 days ahead; recommended on summer weekends and holidays.", "url": "https://reservations.ontarioparks.ca/", "lead_days": 5},
   "lots": [
    {"name": "Sibbald Point beach day-use lot", "lat": 44.329833, "lon": -79.320283, "kind": "park",
-    "rule": {"flat": 21.0},
+    "rule": {"daily_max": 21.0},
     "capacity": null, "notes": "Ontario Parks daily vehicle permit. Gate at 26071 Park Rd, Sutton West. OSM w/850164291.", "source": "https://blog.ontarioparks.ca/?p=32788"}]},
 
  {"id": "rattray-marsh", "name": "Rattray Marsh Conservation Area and Jack Darling Memorial Park (Mississauga)",
@@ -349,8 +349,8 @@
   "reservation": {"required": false, "text": "", "url": "", "lead_days": 0},
   "lots": [
    {"name": "Jack Darling Memorial Park lot", "lat": 43.525432, "lon": -79.602736, "kind": "lot",
-    "rule": {"hourly": 1.0, "paid_days": [5, 6], "paid_hours": ["08:00", "21:00"], "season": ["05-01", "09-15"], "off_season": "free", "max_stay_min": 240},
-    "capacity": null, "notes": "Weekend rule; holidays are also paid (rule cannot express it). About 1 km walk to the marsh boardwalk. OSM r/2383520.", "source": "https://www.mississauga.ca/wp-content/uploads/2018/09/21173104/Schedule-07B-Parking-Machines-in-Mississauga-Transitway-Stations-City-Parks-Marinas-Golf-Course.pdf"}]},
+    "rule": {"hourly": 1.0, "periods": [{"days": [5, 6], "hours": ["08:00", "21:00"], "holidays": true}], "season": ["05-01", "09-15"], "off_season": "free", "max_stay_min": 240},
+    "capacity": null, "notes": "Weekend and holiday rule. About 1 km walk to the marsh boardwalk. OSM r/2383520.", "source": "https://www.mississauga.ca/wp-content/uploads/2018/09/21173104/Schedule-07B-Parking-Machines-in-Mississauga-Transitway-Stations-City-Parks-Marinas-Golf-Course.pdf"}]},
 
  {"id": "conservation-halton-kelso", "name": "Kelso Conservation Area (Conservation Halton, Milton)",
   "match": {"lat": 43.505, "lon": -79.942, "radius_km": 1.5},
@@ -413,7 +413,7 @@
  {"id": "spencer-gorge", "name": "Spencer Gorge: Dundas Peak, Tew Falls and Webster's Falls (HCA, Hamilton)",
   "match": {"lat": 43.2785, "lon": -79.9795, "radius_km": 1.5},
   "season": {"from": "01-01", "to": "12-31", "off_season": "free", "note": "reservations required 2026-09-26 to 2026-11-08 (fall colours)"},
-  "source": "https://conservationhamilton.ca/spencer-gorge-reservations/", "source_date": "2026 (2026 pricing)", "confidence": "curated",
+  "source": "https://conservationhamilton.ca/spencer-gorge-reservations/", "source_date": "2026 (2026 pricing)", "confidence": "curated", "rate_year": 2026,
   "rules": [
    "Reservation required Sep 26 to Nov 8, 2026 (bookings opened Sep 17): 2-hour blocks for Dundas Peak and Tew Falls (590 Harvest Rd lot) or Webster's Falls (28 Fallsview Rd lot), or a 4-hour block for both. Personal bookings only; no buses.",
    "Non-members: vehicle fee $11.00 + $5.50 per passenger + $10.00 reservation fee; $11 extra parking fee for the 4-hour experience ($32 for the driver). HCA members pay only the $10 reservation fee. The lot price is for the driver; each passenger adds $5.50.",
@@ -421,9 +421,9 @@
   "reservation": {"required": true, "text": "Required Sep 26 to Nov 8, 2026: book online 1 to 9 days ahead, by midnight the day before; no same-day, walk-up or drive-up entry. Reservations are location specific.", "url": "https://conservationhamilton.ca/spencer-gorge-reservations/", "lead_days": 0, "min_lead_days": 1, "max_lead_days": 9, "window": ["09-26", "11-08"], "year": 2026},
   "lots": [
    {"name": "Tew Falls / Dundas Peak lot (590 Harvest Rd)", "lat": 43.28173, "lon": -79.979357, "kind": "park",
-    "rule": {"tiers": [{"up_to_min": 120, "cost": 21.0}, {"up_to_min": 240, "cost": 32.0}], "max_stay_min": 240, "per_passenger": 5.5},
+    "rule": {"tiers": [{"up_to_min": 120, "cost": 21.0}, {"up_to_min": 240, "cost": 32.0}], "max_stay_min": 240, "per_passenger": 5.5, "season": ["09-26", "11-08"], "season_year": 2026, "off_season": "unknown"},
     "capacity": null, "notes": "Sep 26 to Nov 8: $11 vehicle + $10 reservation (+$11 for the 4 h block), + $5.50 per passenger. Outside that period no reservation fee; likely $11 + $5.50 per passenger (not stated by HCA). OSM w/391692721.", "source": "https://conservationhamilton.ca/spencer-gorge-reservations/"},
    {"name": "Webster's Falls lot (28 Fallsview Rd)", "lat": 43.276847, "lon": -79.97991, "kind": "park",
-    "rule": {"tiers": [{"up_to_min": 120, "cost": 21.0}, {"up_to_min": 240, "cost": 32.0}], "max_stay_min": 240, "per_passenger": 5.5},
+    "rule": {"tiers": [{"up_to_min": 120, "cost": 21.0}, {"up_to_min": 240, "cost": 32.0}], "max_stay_min": 240, "per_passenger": 5.5, "season": ["09-26", "11-08"], "season_year": 2026, "off_season": "unknown"},
     "capacity": null, "notes": "Sep 26 to Nov 8: $11 vehicle + $10 reservation (+$11 for the 4 h block), + $5.50 per passenger; 2 accessible spaces. Outside that period no reservation fee; likely $11 + $5.50 per passenger (not stated by HCA). OSM w/180201523.", "source": "https://conservationhamilton.ca/spencer-gorge-reservations/"}]}
  ]}

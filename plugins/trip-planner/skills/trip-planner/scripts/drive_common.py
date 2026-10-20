@@ -25,7 +25,7 @@ import trip_hubs as th  # noqa: E402
 
 DATA_DIR = os.path.normpath(os.path.join(HERE, "..", "references", "driving"))
 _DATA = {}
-_LAST_CALL = {}
+_LAST_CALL = th._LAST_CALL   # one per-host pacing clock for both planners (Nominatim's 1 request/second)
 _STALE = {}          # host -> (age in hours, error name) for replies served from an old cached copy
 _CACHE_OFF = []      # set once the cache folder turned out unusable this run
 
@@ -146,7 +146,7 @@ def fetch(url, data=None, headers=None, timeout=30, min_interval=0.0, max_age_h=
 
     On a failure a cached copy older than `max_age_h` stands in when it is at most `stale_max_h` hours old
     (None: any age; 0: never), and stale_notes() reports it for the run's warnings. Otherwise the error is
-    raised.
+    raised; an HTTPError is raised unread, and the caller closes it (place_reviews reads its body).
 
     `allowed_hosts` (host names) refuses the URL, and any redirect, on another host with a ValueError or an
     HTTPError."""
@@ -228,7 +228,20 @@ def stale_notes(reset=True):
     return out
 
 
+def json_reply(body):
+    """`validate` for JSON services: None when the body parses, else why not (a login, proxy or error page sent
+    with HTTP 200 is never cached, and a copy cached before this check is skipped)."""
+    try:
+        json.loads(body)
+    except ValueError:
+        return "not JSON (%s...)" % body[:40].decode("utf-8", "replace").strip()
+    return None
+
+
 def fetch_json(url, **kw):
+    """fetch() parsed as JSON. Without a `validate` of the caller's own, a reply that is not JSON is rejected."""
+    if kw.get("validate") is None:
+        kw["validate"] = json_reply
     return json.loads(fetch(url, **kw))
 
 
@@ -327,17 +340,10 @@ def in_any(lat, lon, boxes):
 def holidays_for(regions=None):
     """Statutory holiday dates ('YYYY-MM-DD') from the region files (entries with "stat": false are
     operator-only service days and are left out), plus the Ontario ESA public holidays computed for last
-    year through ten years ahead: the region lists stop at the end of next year."""
-    import tolls   # imported here: tolls imports this module
-    out = set()
-    for r in regions if regions is not None else th.load_regions():
-        for h in r.get("holidays") or []:
-            if h.get("stat", True):
-                out.add(h["date"])
+    year through ten years ahead: the region lists stop at the end of next year. One rule with trip_hubs
+    (trip_hubs.stat_holidays)."""
     this = dt.date.today().year
-    for y in range(this - 1, this + 11):
-        out |= tolls.esa_holidays(y)
-    return out
+    return th.stat_holidays(regions if regions is not None else th.load_regions(), range(this - 1, this + 11))
 
 
 def is_weekend_or_holiday(day, holidays):
@@ -374,5 +380,18 @@ def minutes_between(a, b):
     return (b - a).total_seconds() / 60.0
 
 
-def add_s(when, seconds):
-    return when + dt.timedelta(seconds=seconds)
+def add_s(when, seconds, tz=None, region=None):
+    """Naive local wall clock `when` plus `seconds` of elapsed time (negative goes back). With a time zone the
+    sum is worked out in UTC, so the clock jumps at a daylight-saving change. A wall time inside the repeated
+    hour of the fall-back night is read as its first occurrence."""
+    if not tz:
+        return when + dt.timedelta(seconds=seconds)
+    utc = when - th.offset_at_local(when, tz, region)[0] + dt.timedelta(seconds=seconds)
+    return utc + th.offset_at_utc(utc, tz, region)[0]
+
+
+def elapsed_s(a, b, tz=None, region=None):
+    """Seconds of elapsed time from wall clock a to wall clock b (across a daylight-saving change with a tz)."""
+    if not tz:
+        return (b - a).total_seconds()
+    return ((b - th.offset_at_local(b, tz, region)[0]) - (a - th.offset_at_local(a, tz, region)[0])).total_seconds()

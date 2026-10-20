@@ -512,10 +512,11 @@ class CatalogAndDiscovery(unittest.TestCase):
                "urls.authentication_type": "0", "is_official": "True",
                "location.bounding_box.minimum_latitude": "43.75", "location.bounding_box.maximum_latitude": "43.85",
                "location.bounding_box.minimum_longitude": "-79.85", "location.bounding_box.maximum_longitude": "-79.75"}
-        res = self.destination_trip(lambda max_age_h=168.0: [row])
+        res = self.destination_trip(lambda max_age_h=168.0, refresh=False: [row])
         self.assertIn("Dest Transit", [f["name"] for f in res["feeds"]])
         self.assertTrue(any("feeds found there: Dest Transit" in w for w in res["warnings"]), res["warnings"])
-        res = self.destination_trip(lambda max_age_h=168.0: (_ for _ in ()).throw(SystemExit("catalog offline")))
+        res = self.destination_trip(lambda max_age_h=168.0, refresh=False:
+                                    (_ for _ in ()).throw(SystemExit("catalog offline")))
         self.assertTrue(any("could not search the feed catalog near the destination: catalog offline" in w
                             for w in res["warnings"]), res["warnings"])
 
@@ -755,7 +756,8 @@ class SmallFixes(unittest.TestCase):
                   ("t2", "10:15:00", "10:15:00", "B2", 1, 0, 0), ("t2", "10:40:00", "10:40:00", "C", 2, 0, 0),
                   ("t3", "10:05:00", "10:05:00", "D", 1, 0, 0), ("t3", "10:25:00", "10:25:00", "C", 2, 0, 0)])
         args = ["--origin", "43.4990,-79.8000", "--dest", "43.5500,-79.8000", "--depart", "2026-10-15 09:50",
-                "--feed", "t=" + p, "--min-saving", "0", "--origin-walk-m", "300", "--radius-km", "5"] + BASE
+                "--feed", "t=" + p, "--min-saving", "0", "--origin-walk-m", "300", "--radius-km", "5",
+                "--traffic-factor", "1.2"] + BASE   # 09:50 is a weekday shoulder (x1.3): keep the x1.2 scenario
         res = run(args)
         self.assertEqual(res["transit_only"]["ride_instead"]["hub"], "Hub D")
         self.assertIn("Hub D", [o["hub"] for o in res["pareto"]])

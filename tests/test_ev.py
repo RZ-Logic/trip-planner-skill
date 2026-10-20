@@ -233,7 +233,10 @@ class PlanTest(unittest.TestCase):
         st = self.corridor()[:3] + [rec(6, "Partner 300", 300, {"TESLA": (250.0, 8)}, network="Tesla",
                                         access="24 hours daily. NACS partner enabled.")]
         r, _ = plan(420, ev.car_profile("equinox"), 0.8, 10, FakeNet(route=st))
-        self.assertFalse(r["feasible"])          # no CCS charger after km 160
+        # the partner site needs an adapter; the 260 km after Good 150 is bridged by charging above 80% there
+        self.assertNotIn("Partner 300", [s["name"] for s in r["stops"]])
+        self.assertGreater(r["stops"][0]["depart_soc"], 0.8)
+        self.assertTrue(any("charge limit" in n for n in r["notes"]))
         r, _ = plan(420, ev.car_profile("equinox", nacs_adapter=True), 0.8, 10, FakeNet(route=st))
         self.assertTrue(r["feasible"])
         self.assertEqual(r["stops"][-1]["name"], "Partner 300")

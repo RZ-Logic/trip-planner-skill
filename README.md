@@ -16,7 +16,7 @@
   <a href="https://agentskills.io"><img src="https://img.shields.io/badge/Agent_Skills-standard-7C3AED?style=for-the-badge" alt="Agent Skills standard"/></a>
   <img src="https://img.shields.io/badge/Runs_in-Claude_%7C_Codex-D97706?style=for-the-badge" alt="Runs in Claude and Codex"/>
   <img src="https://img.shields.io/badge/API_keys-optional-0EA5E9?style=for-the-badge" alt="API keys optional"/>
-  <img src="https://img.shields.io/badge/Status-v0.9.8-orange?style=for-the-badge" alt="Status v0.9.8"/>
+  <img src="https://img.shields.io/badge/Status-v0.9.9-orange?style=for-the-badge" alt="Status v0.9.9"/>
 </p>
 
 <p align="center">
@@ -46,7 +46,7 @@ trip-planner is an [Agent Skill](https://agentskills.io): a folder of instructio
 - **Python 3.8 or later.** The scripts use the standard library only, so there is nothing to `pip install`.
 - **Network access** for live data: timetables, routing, geocoding, parking, fuel, weather and chargers (the hosts are listed in [`references/driving.md`](plugins/trip-planner/skills/trip-planner/references/driving.md); `--check-network` tests them). Without it, the agent uses the bundled data and the manual method.
 - **Optional: API keys** for live traffic, highway incidents, more charger lookups and review rates (see [Optional API Keys](#-optional-api-keys)).
-- **Optional: a tool that can open any URL** (an HTTP or fetch connector such as Scrapling's MCP server, or a browser tool), so the agent can check parking prices and run the manual method. The scripts never use it.
+- **Optional: a tool that can open any URL** (a plain HTTP or fetch connector, or a browser tool; not stealth or anti-bot tools), so the agent can check parking prices and run the manual method. The scripts never use it.
 
 ### Install
 
@@ -60,7 +60,7 @@ The skill is the folder [`plugins/trip-planner/skills/trip-planner/`](plugins/tr
 | Claude Code (copy) | `cp -r plugins/trip-planner/skills/trip-planner ~/.claude/skills/` |
 | Codex, Gemini CLI, Cursor, Copilot (copy) | `cp -r plugins/trip-planner/skills/trip-planner ~/.agents/skills/` |
 | claude.ai | `python tools/build_zip.py`, then Customize > Skills > + > Upload `dist/trip-planner.zip`. Turn on code execution and network access. |
-| Claude API | Upload the zip with `POST /v1/skills` and attach it to a container with the code execution tool. The API sandbox has no network, so the agent uses the bundled data and the manual method. |
+| Claude API | Upload the zip with `POST /v1/skills` and attach it to a container with the code execution tool. The API sandbox has no network, so the agent uses the bundled data and the manual method. With `lat,lon` and `--routing estimate`, a trip whose timetables are all hand-entered or cached still plans offline, with an `OFFLINE` WARNING. |
 
 ### Try it
 
@@ -90,7 +90,7 @@ COVERAGE  1495 stops in range grouped into 635 hubs, 610 of them reach the desti
 BASELINE ride all the way: arrive 21:35, 29.5 km, 29 min, ~40 CAD (osrm x1.00)
 BASELINE transit only: leave by 21:25, arrive 23:13, transit fare 7.75 CAD (Milton Transit 4.25; Brampton Transit free from Milton Transit (Milton route 21 paper transfer); MiWay 3.50)
 
-BEST TRADE-OFFS (no other hub is both cheaper and earlier)
+BEST TRADE-OFFS (no other hub is both cheaper, fare included, and earlier)
  1. Winston Churchill Blvd At Eglinton Ave  [MiWay]
     ride 19.1 km / 24 min (osrm x1.00), ~28 CAD  |  book by 21:00, board 21:34, ARRIVE 21:51
     transit fare 3.50 CAD (MiWay 3.50), total ~32 CAD
@@ -134,22 +134,22 @@ The trade-off prices the default case, no transponder: the $13.05 toll, the $5 a
 ## ⚡ What It Does
 
 **Ride + transit** ([`trip_hubs.py`](plugins/trip-planner/skills/trip-planner/scripts/trip_hubs.py))
-- Checks every transit stop within ride range in one backward pass over the GTFS timetables. A Milton trip compares 1,384 stops in 594 hubs in under a second.
+- Checks every transit stop within ride range in one backward pass over the GTFS timetables. The Milton example above compares 1,495 stops in 635 hubs. The scan's own time is shown in its progress line on stderr; the full run, with downloads and routing, takes longer.
 - Prices each option: the ride from regional Uber rate cards, then fares with free and credited transfers.
 - Gives the latest time to book, a backup departure and check links.
-- Plans forward or to a deadline. Getaways use intercity rail and coach, hand-entered rural timetables and a final taxi where ride-hail is sparse.
+- Plans forward or to a deadline. Getaways use intercity rail and coach, hand-entered rural timetables and a taxi at either end where ride-hail is sparse or absent.
 - Works beyond Ontario through MobilityDatabase feed discovery. Optional second opinion from the Transitous router.
 
 **Driving** ([`drive_plan.py`](plugins/trip-planner/skills/trip-planner/scripts/drive_plan.py))
 - **Toll against time.** The fastest route and the toll-free one. The 407 is priced by zone, direction and the time you get on, with and without a transponder. One recommendation at your value of time.
 - **Leave-by time** for a deadline: a conservative planning allowance for traffic, plus finding parking, the walk to the door and any charging stops.
-- **Parking** priced for your actual arrival and stay, ranked by fit, walk and how well the price is verified. Each lot is tagged official, curated, osm or stale, and every old, unverified or unknown price gets a check line (the ranking rules are in [`references/driving.md`](plugins/trip-planner/skills/trip-planner/references/driving.md)).
+- **Parking** priced for your actual arrival and stay, ranked by fit, walk and how well the price is verified. Each lot is tagged official, curated, osm, low or stale; an old or unverified price ranks as if it cost 25% more, so a verified lot up to 25% dearer comes first, and every old, unverified, unconfirmed or unknown price gets a check line (the ranking rules are in [`references/driving.md`](plugins/trip-planner/skills/trip-planner/references/driving.md)).
 - **Your car's fuel cost.** `--car "2022 Toyota Corolla"` looks up the official NRCan rating, and `--save-car` remembers it. Electric cars get charging stops instead.
 - **Park and ride.** Every GO station and park-and-ride lot in driving range, costed there and back. Automatic for GTHA destinations when the destination is downtown Toronto or parking costs over $15; `--park-and-ride on` anywhere.
 - **Handoff.** Google Maps, Waze and Apple Maps links that navigate to the chosen lot.
 
 **Coverage.**
-- **Transit:** the Greater Toronto and Hamilton Area (13 working feeds; Grand River Transit is listed but skipped until a current file is available; transfer rules, Uber rate cards) and 48 Ontario getaway destinations, from Grand Bend and Tobermory to Muskoka, Prince Edward County and Niagara. Elsewhere, feeds are discovered automatically.
+- **Transit:** the Greater Toronto and Hamilton Area (13 working feeds; Grand River Transit is listed but skipped until a current file is available; transfer rules, Uber rate cards) and 48 Ontario getaway destinations, from Grand Bend and Tobermory to Muskoka, Prince Edward County and Niagara. Elsewhere, feeds are discovered automatically, including US cities inside the Ontario boxes (Detroit, Buffalo), which also get a generic ride estimate.
 - **Driving:** routes, OpenStreetMap parking and weather support trips beyond Ontario. Charger data covers the US and Canada (NLR, queried with `country=all`). The 407 model, fuel prices, city parking data and curated tourist parking are Ontario.
 
 ---
@@ -158,12 +158,12 @@ The trade-off prices the default case, no transponder: the $13.05 toll, the $5 a
 
 ### Real trips
 
-From a home in Milton (the address is not published), October 2026, except the EV run. The quick start and the example above start from a public stand-in point (Milton Community Park), so their distances and times differ a little.
+From a home in Milton (the address is not published), October 2026, except the EV run and the Bay St run, which is the driving example above. The quick start and the examples start from a public stand-in point (Milton Community Park), so their distances and times differ a little from the home runs.
 
 | Trip | Outcome |
 |---|---|
 | **Milton to Mississauga, weekday 21:00** (ride + transit) | Uber 7.6 km to the Bronte Rd @ Hwy 407 Park & Ride, then a GO bus: about $20 and 22:19, against $34 for Uber all the way and 23:17 by transit alone. |
-| **Milton to Bay St, arrive by 09:00** (drive) | Toll-free, leave by 07:03; the 407 only lets you leave 3 min later, for $18.52. Better: Milton GO, $21.74 there and back against $31.87 driving and parking. |
+| **Milton to Bay St, arrive by 09:00** (drive; the example above, from the stand-in point) | Toll-free, leave by 07:03; the 407 only lets you leave 3 min later, for $18.52. Better: Milton GO, $21.74 there and back against $31.87 driving and parking. |
 | **Milton to the Toronto Island ferry, Sunday** (drive) | The first version ranked a Green P lot first that **closed in 2021**; a manual check caught it. Closed lots are now dropped, possibly closed ones flagged, and stale ones carry a check line. |
 | **Milton to Niagara Falls, Sunday 13:51** (TomTom live) | A 10 min jam showed up about 30 km out, near Burlington. The 407 saved about 16 min each way for $14.85 without a transponder. The agent verified a city lot on Ellen Ave at $12 for 8 h, against $30 at Table Rock. |
 | **Toronto to Ottawa, Equinox EV at 80%** | One stop at a 100 kW FLO charger at km 211, 40 min, about $11.73; arrives with 20%. |
@@ -173,17 +173,19 @@ From a home in Milton (the address is not published), October 2026, except the E
 
 Free routing engines have no traffic data, so their times are calibrated against Google Maps' "typically X to Y min" ranges. A regression test keeps all nine reference routes within 15% of those ranges. These are the same nine routes, all from Milton, that the calibration was set on, so this is an in-sample check; a check on routes from other origins is on the roadmap. It covers typical times only; the "allow" time is a modelled allowance, not a measured on-time rate.
 
-| Trip from Milton | Google typical | Before calibration | After |
+| Trip from Milton | Google typical | Calibration off | Calibrated |
 |---|:-:|:-:|:-:|
-| Markham, Wed 07:30, via 407 | 40 to 60 min | 79 min | 58 min |
-| Markham, Wed 07:30, toll-free | 60 to 120 min | 86 min | 88 min |
-| Canada's Wonderland, Sat 11:00, via 407 | 35 to 50 min | 63 min | 54 min |
-| Tobermory, Sat 07:00, toll-free | 210 to 250 min | 274 min | 255 min |
-| Kingston, Fri 15:00, via 407 | 170 to 230 min | no 407 option offered | 201 min |
+| Markham, Wed 07:30, via 407 | 40 to 60 min | 64 min | 58 min |
+| Markham, Wed 07:30, toll-free | 60 to 120 min | 88 min | 88 min |
+| Canada's Wonderland, Sat 11:00, via 407 | 35 to 50 min | 58 min | 54 min |
+| Tobermory, Sat 07:00, toll-free | 210 to 250 min | 275 min | 255 min |
+| Kingston, Fri 15:00, via 407 | 170 to 230 min | 226 min | 201 min |
+
+Calibration off is today's model without the per-road-class calibration (the 407 and highways outside congested areas), so the toll-free Markham drive, all on congested-area roads, does not move. The 407's own traffic rows ([build decision 3](docs/build-decisions.md)) came earlier and are in both columns. Two calibrated times sit outside Google's range but inside the test's 15% band: Wonderland 54 (35 to 50) and Tobermory 255 (210 to 250).
 
 ### Review record
 
-Before shipping, each release was reviewed by fresh-context reviewer agents (separate sessions with no part in the build) or an outside GPT review, and agent findings were re-checked by a verifier before anything was fixed. The latest review, for v0.9.8, raised 80 findings: the verifiers confirmed 72, confirmed 8 in part, rejected none and found 11 more. All were fixed except one data-source question, kept as is by decision, and a review of the fixes caught 7 more problems before release. [`CHANGELOG.md`](CHANGELOG.md) lists each release and its review. Code findings each have a regression test; the suite runs offline with no API keys, and CI fails any test run that tries the network.
+Before shipping, each release was reviewed by fresh-context reviewer agents (separate sessions with no part in the build) or an outside GPT review, and agent findings were re-checked by a verifier before anything was fixed. The latest review, of v0.9.8 for v0.9.9, ran ten area reviewers and then an adversarial verifier per area. Its 110 findings were fixed in seven batches, each test first, and six owner decisions were settled. A second review of the fixes, whose verifiers reproduced every finding, caught 31 more problems, all fixed before release. A few items stay partly open where a source is missing or conflicts; the changelog names them. [`CHANGELOG.md`](CHANGELOG.md) lists each release and its review. Code findings each have a regression test; the suite runs offline with no API keys, and CI fails any test run that tries the network.
 
 ---
 
@@ -200,7 +202,7 @@ None is needed. Keys come from environment variables only. TomTom and Ontario 51
 
 **Where keys work.** Keys reach the scripts only when the scripts run on your own computer. Chat apps (claude.ai, ChatGPT, Gemini, Microsoft Copilot) run code in the provider's sandbox, which cannot see your environment variables and has limited or no network access. There the skill runs without keys, and where the sandbox cannot reach the data hosts, the agent falls back to the bundled data and the manual method. To get everything (live traffic, highway incidents, more charger lookups, review rates), use a coding agent that runs on your machine: Claude Code, Codex, Gemini CLI, Cursor or GitHub Copilot in VS Code. Never upload `.env` to a chat or paste a key into one.
 
-**Setting them.** [`.env.example`](.env.example) lists the four variables. Copy it to `.env` (git ignores that file) and fill in the keys you have. The scripts read the environment, not the file, so load it in one of these ways. After a permanent setting, restart Claude Code or Codex; after a session-only load, start `claude` or `codex` from that same terminal.
+**Setting them.** [`.env.example`](.env.example) lists the four keys, plus the two optional routing server settings (`TRIP_PLANNER_VALHALLA_URL`, `TRIP_PLANNER_OSRM_URL`; see Limitations). Copy it to `.env` (git ignores that file) and fill in the keys you have. The scripts read the environment, not the file, so load it in one of these ways. After a permanent setting, restart Claude Code or Codex; after a session-only load, start `claude` or `codex` from that same terminal.
 
 ```powershell
 # Windows, permanent for your user (one line per key)
@@ -217,7 +219,7 @@ set -a; . ./.env; set +a
 
 Never paste a key into the chat with the agent.
 
-On Windows, Python trusts only root certificates Windows has already downloaded. If the first TomTom call fails with a certificate error, one request through Windows loads the root: `Invoke-WebRequest https://api.tomtom.com`.
+On Windows, Python trusts only root certificates Windows has already downloaded. If a call fails with a certificate error (the planner stops with `TLS FAILED`, or `--check-network` shows `tls failed`), one request through Windows to that host loads the root, for example `Invoke-WebRequest https://api.tomtom.com`.
 
 ---
 
@@ -230,12 +232,21 @@ On Windows, Python trusts only root certificates Windows has already downloaded.
   - A "free" lot that only OpenStreetMap vouches for is unverified.
   - Cheaper lots beyond the walk limit can sit in the notes instead of the ranked list.
 - **Prices are estimates.**
-  - Uber estimates come from rate cards. Across 12 GTHA routes, Uber's published averages were 1.02x our estimates on average; individual ratios ranged from 0.90x to 1.19x. Real quotes need the rider's login.
+  - Rural operators with distance or zone fares (Huron Shores, PC Connect, GOST, LINX, Corridor 11, Middlesex Route 4) show one common fare as "about" that price, with the scale.
+  - Uber estimates come from rate cards. A one-off check on 12 GTHA routes found Uber's published averages 1.02x our estimates on average, individual ratios 0.90x to 1.19x; that route list is not in the repo, and a test pins only two Milton routes within $1. Ride + fare totals within 5% count as equal when hubs are ranked. Real quotes need the rider's login.
   - 407 tolls are computed from the rate chart; 407 ETR's own calculator needs reCAPTCHA, so it is never called.
-- **Timetables, not live departures.** The agent checks live departures for same-day trips. On-demand transit is not in timetable data.
+  - Only the 407 ETR and ten listed border crossings are priced. Other tolls a routing engine reports (US toll roads, crossings not in the list such as Sault Ste. Marie) print as "tolls not priced" with a WARNING, and with a toll-free comparison when the engine finds one within 30% of the distance (excluding tolls also rules out an unlisted crossing); the OSRM fallback cannot see them.
+- **Timetables, not live departures.** The agent checks live departures for same-day trips. On-demand transit is not in timetable data. Hand-entered timetables are marked in FEEDS; projected seasons are flagged "assumed" with a WARNING, and region files over six months old raise one too.
+- **Border trips are partial.** Rides that would cross the Canada-US border are flagged, not priced or timed with the crossing, and final rides from across the border are left out. Which country an end is in comes from a town-level Nominatim lookup; offline, the region boxes decide.
 - **Ontario-first driving data.** Outside Ontario you get routes, OpenStreetMap parking and weather, plus `--fuel-price`.
 - **Untested keys.** Ontario 511, Google Places and a personal NLR key are tested only against replies shaped like their documentation. TomTom has run live.
 - **The Transitous second opinion is light-use only.** Transitous is open-source, non-commercial and best effort, and asks to be contacted before routing at volume, so `--crosscheck` is optional and off by default.
+- **The free routers and the weather API are for non-commercial use.** Unless you set your own servers, drive and ride times come from donated demo servers:
+  - The OSRM demo servers (router.project-osrm.org and routing.openstreetmap.de): the [OSRM demo server policy](https://github.com/Project-OSRM/osrm-backend/wiki/Demo-server) says their use "is restricted to reasonable, non-commercial use-cases" and asks for no more than 1 request per second.
+  - FOSSGIS's Valhalla server (valhalla1.openstreetmap.de): its page states no terms. The FOSSGIS [routing page](https://routing.openstreetmap.de/about.html) sums up its usage policy as attribution, a valid User-Agent, one request per second at most, and no scraping or heavy use. The full [FOSSGIS policy](https://www.fossgis.de/arbeitsgruppen/osm-server/nutzungsbedingungen/) (German) could not be read when checked.
+  - The Open-Meteo forecast: its [terms](https://open-meteo.com/en/terms) allow the free API for non-commercial purposes only, under 10,000 calls a day.
+
+  Personal use fits these terms: the scripts send each router at most 1 request per second, and ask Open-Meteo once per route for every point on it (cached for an hour). Commercial or hosted use, such as a paid product or a service run for other people, needs your own router or a paid one. Set `TRIP_PLANNER_VALHALLA_URL` and `TRIP_PLANNER_OSRM_URL` to point the scripts at it (see [`references/driving.md`](plugins/trip-planner/skills/trip-planner/references/driving.md#your-own-routing-servers)). It also needs Open-Meteo's paid API, which the scripts do not support yet.
 
 The full list, with what is deferred on purpose, is in [`references/driving.md`](plugins/trip-planner/skills/trip-planner/references/driving.md) and [`docs/architecture.md`](docs/architecture.md).
 
@@ -250,7 +261,7 @@ The full list, with what is deferred on purpose, is in [`references/driving.md`]
 | [`references/sources.md`](plugins/trip-planner/skills/trip-planner/references/sources.md) | Which dataset or service for each job, with usage rules. |
 | [`references/adding-a-region.md`](plugins/trip-planner/skills/trip-planner/references/adding-a-region.md) | Supporting a new city, for transit and for driving. |
 | [`docs/architecture.md`](docs/architecture.md) | Where the AI is and is not, the components, the stack, the engineering properties. |
-| [`docs/build-decisions.md`](docs/build-decisions.md) | Eight non-obvious choices and the real trips that forced them. |
+| [`docs/build-decisions.md`](docs/build-decisions.md) | Ten non-obvious choices and the real trips that forced them. |
 | [`CHANGELOG.md`](CHANGELOG.md) | Each release, what changed and how it was reviewed. |
 
 Development:
@@ -308,14 +319,18 @@ The plan's numbers come from deterministic scripts. The model asks what's missin
 
 **Code:** MIT, see [`LICENSE`](./LICENSE). Use it, fork it, add your region; the acknowledgement is a link back.
 
-**Data:** bundled data keeps its original licence, not MIT. [`references/sources.md`](plugins/trip-planner/skills/trip-planner/references/sources.md) lists each source with its date.
+**Data:** bundled data keeps its original licence, not MIT. [`NOTICE`](plugins/trip-planner/skills/trip-planner/NOTICE) ships with the skill and gives each source's licence, its attribution statement as published and the files or feeds it covers; [`references/sources.md`](plugins/trip-planner/skills/trip-planner/references/sources.md) lists each source with its date.
 
 - **Car fuel ratings** (`vehicles-index.json` and the class medians): contains information licensed under the Open Government Licence – Canada.
 - **Coordinates of curated parking lots, 407 interchanges, border crossings and fuel-market towns:** © OpenStreetMap contributors, available under the [Open Database Licence 1.0](https://www.openstreetmap.org/copyright). These fields stay under the ODbL.
-- **Transit coverage grids** (`gtha.json`, `ontario.json`) are derived from open GTFS feeds. GO Transit and UP Express data is provided with the permission of Metrolinx. Contains public sector data made available under the City of Hamilton's Open Data Licence. Contains information licensed under the Open Government Licence – Town of Oakville, and the Open Government Licence – Toronto.
+- **Transit coverage grids** (`gtha.json`, `ontario.json`) are derived from each agency's open GTFS feed. [`NOTICE`](plugins/trip-planner/skills/trip-planner/NOTICE) lists every feed with its agency's licence and attribution statement, and the feeds whose licence was not found.
 - **Climate normals:** weather data by [Open-Meteo.com](https://open-meteo.com/) (CC BY 4.0), with modified Copernicus Climate Change Service information 2026. **USD/CAD rate:** Bank of Canada, unchanged.
-- **Fares, timetables and prices** copied from operators' public pages are facts; each keeps its source URL in the data file.
-- **Data fetched while planning** (Ontario fuel prices under the Open Government Licence – Ontario, Toronto and other city open data, OpenStreetMap services, Open-Meteo forecasts) is cached only on your machine and keeps its own licence.
+- **Fares, timetables and prices** are facts; each keeps its source URL in the data file. Most were typed in by hand from operators' public pages. Three coach timetables were built instead by automated searches of the operators' booking systems in October 2026: Onex (`onex`, through the Betterez booking API its site uses) and Megabus (`megabus-on-east`, `megabus-on-west`, through the Megabus journey API). The operators' terms were not confirmed to allow this; the owner keeps these timetables by decision. [`sources.md`](plugins/trip-planner/skills/trip-planner/references/sources.md) records how each was built.
+- **Data fetched while planning** (Ontario fuel prices under the Open Government Licence – Ontario, Toronto and other city open data, OpenStreetMap services, Open-Meteo forecasts) is cached only on your machine and keeps its own licence. A drive's `SOURCES` line prints the attribution statement of each city whose parking lots it shows.
+- **Privacy: which hosts get your locations.**
+  - Geocoders (Nominatim, Photon) get the address you type. Reverse lookups of a `lat,lon` place (its label, town or country) send at most 3 decimals (about 100 m) at street level or coarser; set `TRIP_HOME` and a drive labels your home with no lookup.
+  - Routing engines (Valhalla, OSRM, TomTom with a key) and Transitous get the full start and end points; Open-Meteo gets points along the route (4 decimals).
+  - Overpass, the charger API and Google Places (with a key) get the route or the area around the destination and stations.
 
 ---
 

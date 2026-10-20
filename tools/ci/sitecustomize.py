@@ -7,7 +7,9 @@ Python imports a module named sitecustomize at startup when it is on sys.path, s
 
 A refused connection raises ConnectionRefusedError, which the scripts read as "network blocked", the same as a
 sandbox with no outbound access. Tests must never try the network, so when any connection was refused the run
-lists them on stderr and exits with status 1, even if every test passed. Standard library only, Python 3.8+.
+lists them on stderr and exits with status 1, even if every test passed. Proxy settings (HTTP(S)_PROXY, ALL_PROXY,
+system proxies) are switched off, so a proxy on the machine cannot carry a request out. Standard library only,
+Python 3.8+.
 """
 import atexit
 import ipaddress
@@ -44,6 +46,11 @@ def install():
     """Patch socket.socket.connect, connect_ex and socket.create_connection (once)."""
     if getattr(socket, "_trip_planner_guard", False):
         return
+    for name in list(os.environ):   # a proxy on the machine itself is loopback, and would carry requests out
+        if name.lower() in ("http_proxy", "https_proxy", "all_proxy", "ftp_proxy"):
+            del os.environ[name]
+    # urllib reads the Windows registry or macOS proxy only when the environment names none: 'no' stops that
+    os.environ["NO_PROXY"] = os.environ["no_proxy"] = "*"
     real_connect, real_connect_ex = socket.socket.connect, socket.socket.connect_ex
     real_create = socket.create_connection
     inet = {socket.AF_INET, getattr(socket, "AF_INET6", socket.AF_INET)}

@@ -158,6 +158,13 @@ def _deg(t):
 
 _NUM = r"\$\s*(\d+(?:\.\d+)?)"
 _FEE_WORDS = r"(?:connection|session|plug-?in|start(?:ing)?)\s*fee"
+_DC_RE = re.compile(r"dc\s*fast|dcfc|\bdc\b|level 3|\bl3\b|fast charg")
+_L2_RE = re.compile(r"level 2|\bl2\b")
+_IDLE_RE = re.compile(r"idle|overstay|over-stay|congestion")   # never the charging rate
+# nor a parking fee, but a rate with parking on top or included ('$0.30/min plus parking') is the rate
+_PARKING_RE = re.compile(r"parking")
+_ON_TOP_RE = re.compile(r"(?:plus|\+|\(|with)\s*parking|parking\s+(?:included|extra)")
+_LATER_RE = re.compile(r"grace|after\s+\d+\s*min")   # a rate that starts later: not the rate when another is listed
 
 
 def parse_price(text):
@@ -166,13 +173,25 @@ def parse_price(text):
         return None
     t = text.lower().replace("\u00a0", " ")
     segs = [x for x in re.split(r"[;\n]|\.\s", t) if x.strip()]
-    dcs = [x for x in segs if re.search(r"dc\s*fast|dcfc|\bdc\b|level 3|\bl3\b|fast charg", x)]
-    if dcs:
+    # each clause (a segment split also on commas and 'and') belongs to the last charging level named in its segment
+    dcs, l2s, rest = [], [], []
+    for seg in segs:
+        tier = None
+        for cl in re.split(r",|\band\b", seg):
+            if not cl.strip():
+                continue
+            d = _DC_RE.search(cl)
+            if d:
+                tier = "dc"
+                if _L2_RE.search(cl) and "$" in cl[d.start():]:   # 'Level 2 $1/hr DC fast $15/hr': the DC part
+                    cl = cl[d.start():]
+            elif _L2_RE.search(cl):
+                tier = "l2"
+            (dcs if tier == "dc" else l2s if tier == "l2" else rest).append(cl.strip())
+    if any("$" in x or "free" in x for x in dcs):   # DC clauses with no price: the price is for every level
         t = "; ".join(dcs)
-        if "dc fast" in t and "$" in t[t.index("dc fast"):]:
-            t = t[t.index("dc fast"):]
-    elif len(segs) > 1:
-        t = "; ".join(x for x in segs if not re.search(r"level 2|\bl2\b", x)) or t
+    elif l2s and rest:
+        t = "; ".join(rest)
     if (re.match(r"\s*free\b", t) and "$" not in t) or t.strip() in ("$0", "$0.00", "no charge"):
         return {"model": "free", "rate": 0.0, "fee": 0.0, "first": None, "pairs": []}
     fee = re.search(_NUM + r"\s*" + _FEE_WORDS, t) or re.search(_FEE_WORDS + r"\s*(?:of|is|:)?\s*" + _NUM, t)
@@ -182,10 +201,15 @@ def parse_price(text):
         out["first"] = float(first.group(1))
     elif re.search(r"free\s*(?:for\s*)?(?:the\s*)?first hour", t):
         out["first"] = 0.0
-    pairs = re.findall(_NUM + r"\s*(?:per|/)\s*min(?:ute)?\s*(?:@|at)\s*(\d+)\s*kw", t)
+    rates = [x for x in re.split(r"[;,\n]|\.\s", t)   # time rates: never an idle or parking fee
+             if not _IDLE_RE.search(x) and (not _PARKING_RE.search(x) or _ON_TOP_RE.search(x))]
+    tr = "; ".join(x for x in rates if not _LATER_RE.search(x))
+    if not re.search(_NUM + r"\s*(?:per|/)\s*(?:min(?:ute)?|hour|hr|h)\b", tr):
+        tr = "; ".join(rates)
+    pairs = re.findall(_NUM + r"\s*(?:per|/)\s*min(?:ute)?\s*(?:@|at)\s*(\d+)\s*kw", tr)
     kwh = re.search(_NUM + r"\s*(?:per|/)\s*kwh", t)
-    pmin = re.search(_NUM + r"\s*(?:per|/)\s*min(?:ute)?\b", t)
-    hours = re.findall(_NUM + r"\s*(?:per|/)\s*(?:hour|hr|h)\b", t)
+    pmin = re.search(_NUM + r"\s*(?:per|/)\s*min(?:ute)?\b", tr)
+    hours = re.findall(_NUM + r"\s*(?:per|/)\s*(?:hour|hr|h)\b", tr)
     flat = re.search(_NUM + r"\s*(?:flat|per session|/\s*session|a session|per charge)", t)
     if flat and not fee:
         out["fee"] = float(flat.group(1))
@@ -333,9 +357,10 @@ def _nlr_call(path, params, key, warnings, post=False, with_total=False):
     hdr = {"X-Api-Key": key}   # header, so the key never reaches a URL or a cache file name
     try:
         if post:
-            body = dc.fetch(url, data=params, headers=hdr, timeout=60, max_age_h=CACHE_H)
+            body = dc.fetch(url, data=params, headers=hdr, timeout=60, max_age_h=CACHE_H, validate=dc.json_reply)
         else:
-            body = dc.fetch(url + "?" + urllib.parse.urlencode(params), headers=hdr, timeout=60, max_age_h=CACHE_H)
+            body = dc.fetch(url + "?" + urllib.parse.urlencode(params), headers=hdr, timeout=60, max_age_h=CACHE_H,
+                            validate=dc.json_reply)
         d = json.loads(body)
         st = d.get("fuel_stations") or []
         if with_total:
@@ -391,7 +416,7 @@ def norm_osm(e):
     lon = e.get("lon", (e.get("center") or {}).get("lon"))
     if lat is None or lon is None:
         return None
-    name = tags.get("name") or tags.get("brand") or tags.get("operator") or "charging station"
+    name = th.osm_name_cut(tags.get("name") or tags.get("brand") or tags.get("operator") or "charging station")
     hay = " ".join(tags.get(k, "") for k in ("name", "brand", "operator", "network")).lower()
     units, assumed = {}, False
     for sock, code in OSM_SOCKETS.items():
@@ -508,7 +533,8 @@ def stations_near(lat, lon, warnings, opts=None):
             if la is None:
                 continue
             n = int(tags.get("capacity", "1")) if tags.get("capacity", "").isdigit() else 1
-            s = {"id": "osm:%s" % e.get("id"), "name": tags.get("name") or tags.get("operator") or "charging station",
+            s = {"id": "osm:%s" % e.get("id"),
+                 "name": th.osm_name_cut(tags.get("name") or tags.get("operator") or "charging station"),
                  "network_code": tags.get("operator") or tags.get("network") or "", "lat": float(la), "lon": float(lo),
                  "address": "", "units": {"J1772": (None, n)}, "pricing": tags.get("charge", ""), "access_text": "",
                  "dc_num": 0, "l2_num": n, "status": "E", "source": "OSM", "assumed": True}
@@ -602,6 +628,10 @@ def plan_charging(poly, route_km, depart, car, soc_start, temp_c, warnings, opts
     stops, infeasible, source, cands = [], False, "no charger search needed", []
     est_nets = []   # ev.json network entries used for estimated prices, in stop order
     pos, soc, detour_kwh = 0.0, soc_start, 0.0
+    lw = []   # the stop loop's warnings, kept back until the retry above the charge limit is decided
+
+    def remedy():   # after a stop, more charge at departure does not help
+        return "use Level 2 on the way" if stops else "leave with more charge, or use Level 2 on the way"
     if soc_start - reserve < 0 and not inner:
         warnings.append("Starting charge %.0f%% is below the %.0f%% reserve" % (soc_start * 100, reserve * 100))
 
@@ -625,10 +655,12 @@ def plan_charging(poly, route_km, depart, car, soc_start, temp_c, warnings, opts
             notes.append("You start below the %.0f%% reserve: charge at the first fast charger you reach"
                          % (reserve * 100))
     elif direct_soc < reserve - 1e-9 and poly and len(poly) >= 2:
+        # the stops' charge limit: max_soc, or the stretch limit on the retry below when max_soc finds no plan
+        cap = opts.get("_stop_cap") or max_soc
         while len(stops) < 12:
             if soc - (route_km - pos) * per_km >= reserve - 1e-9:
                 break
-            pick = _pick(cands, pos, soc, per_km, reserve, max_soc, route_km, m)
+            pick = _pick(cands, pos, soc, per_km, reserve, cap, route_km, m)
             if pick is None and not stops and soc_start < reserve - 1e-9:
                 # already below the reserve: the nearest charger the car can still reach is the right answer
                 pick = _pick_low(cands, pos, soc, per_km, reserve, soc_start)
@@ -639,21 +671,34 @@ def plan_charging(poly, route_km, depart, car, soc_start, temp_c, warnings, opts
                 infeasible = True
                 gap_from = pos
                 nxt = [c for c in cands if c["km"] > pos + 1]
-                warnings.append("No reachable compatible fast charger after km %.0f (range about %.0f km at %.0f%% with "
-                                "%.0f%% reserve)%s; leave with more charge, or use Level 2 on the way"
-                                % (gap_from, max(0.0, (soc - reserve) / per_km), soc * 100, reserve * 100,
-                                   ", next one at km %.0f" % nxt[0]["km"] if nxt else ""))
+                lw.append("No reachable compatible fast charger after km %.0f (range about %.0f km at %.0f%% with "
+                          "%.0f%% reserve)%s; %s" % (gap_from, max(0.0, (soc - reserve) / per_km), soc * 100,
+                                                     reserve * 100, ", next one at km %.0f" % nxt[0]["km"] if nxt
+                                                     else "", remedy()))
                 break
             c = pick
             half = c["detour_km"] / 2.0
             arr = soc - (c["km"] - pos + half) * per_km
-            target = _target(c, cands, per_km, reserve, max_soc, route_km, m)
+            target = _target(c, cands, per_km, reserve, cap, route_km, m)
+            if target - arr < MIN_ADD and c["good"]:
+                # a good charger picked over a nearer slower one, where the stop adds nothing: skip it when the
+                # next stop (alt) leaves with the same charge either way and adding it all there is no slower
+                alt = _farther(c, cands, pos, soc, per_km, reserve, cap, route_km, m)
+                if alt is not None:
+                    a_half = alt["detour_km"] / 2.0
+                    a_target = _target(alt, cands, per_km, reserve, cap, route_km, m)
+                    a_arr = soc - (alt["km"] - pos + a_half) * per_km   # without the stop at c
+                    a_after = cap - (alt["km"] - c["km"] + half + a_half) * per_km   # after charging at c
+                    if a_target - a_after >= MIN_ADD and _skip_saves(
+                            car, c, alt, (cap - arr) * usable, (a_target - a_after) * usable,
+                            (a_target - a_arr) * usable, temp_c):
+                        c, half, arr, target = alt, a_half, a_arr, a_target
             if target - arr < MIN_ADD:   # a stop that adds nothing: the next leg cannot be done from here
-                target = max_soc
+                target = cap
             if target - arr < MIN_TOPUP:
                 infeasible = True
-                warnings.append("No compatible fast charger far enough ahead after km %.0f to finish the trip; "
-                                "leave with more charge, or use Level 2 on the way" % pos)
+                lw.append("No compatible fast charger far enough ahead after km %.0f to finish the trip; %s"
+                          % (pos, remedy()))
                 break
             kwh = (target - arr) * usable
             kw = min(c["max_kw"] or m["assumed_kw_when_missing"], car["max_dc_kw"])
@@ -670,6 +715,24 @@ def plan_charging(poly, route_km, depart, car, soc_start, temp_c, warnings, opts
             detour_kwh += c["detour_km"] * cons / 100.0
             soc = target - half * per_km
             pos = c["km"]
+
+    stretch = m.get("max_soc_stretch", 0.95)
+    if infeasible and stops and not data_failed and not opts.get("_stop_cap") and max_soc < stretch - 1e-9:
+        # a gap after a stop that max_soc cannot bridge: plan again letting the stops charge up to the stretch
+        # limit (each only as far as its next leg needs), on the same stations
+        w2 = []
+        r2 = plan_charging(poly, route_km, depart, car, soc_start, temp_c, w2,
+                           dict(opts, _stop_cap=stretch, stations=stations, stations_source=source))
+        if r2["feasible"]:
+            warnings.extend(x for x in w2 if x not in warnings)
+            hi = [s for s in r2["stops"] if s["depart_soc"] > max_soc + 1e-9]
+            r2["stretch_note"] = ("No plan stays within the %.0f%% charge limit: charge to %s (charging above %.0f%% "
+                                  "is slower than the times shown)"
+                                  % (max_soc * 100, " and ".join("%.0f%% at %s" % (s["depart_soc"] * 100, s["name"])
+                                                                 for s in hi), max_soc * 100))
+            r2["notes"].append(r2["stretch_note"])   # kept apart too: a drive back's notes are not printed
+            return r2
+    warnings.extend(lw)
 
     arrive_soc = soc - (route_km - pos) * per_km
     if arrive_soc < reserve - 0.005 and not infeasible:
@@ -765,7 +828,8 @@ def _stop_list(stops, limit=4):
 
 def _return_plan(poly, route_km, car, arrive_soc, temp_c, m, per_km, reserve, max_soc, usable, back_opts):
     """The drive back when one charge cannot cover it: plan stops on the reversed route (chargers on the other
-    carriageway), first from the arrival charge, else after charging at the destination to max_soc.
+    carriageway), first from the arrival charge, else after charging at the destination (to the least charge that
+    reaches the first stop with its reserve, up to max_soc).
     Returns (plan summary, note, soc to leave with or None, destination charge needed, warnings)."""
     rev = list(reversed(poly))
     start = max(0.0, arrive_soc)
@@ -777,9 +841,29 @@ def _return_plan(poly, route_km, car, arrive_soc, temp_c, m, per_km, reserve, ma
         rp2 = plan_charging(rev, route_km, None, car, max_soc, temp_c, rw2, back_opts)
         if rp2["feasible"] or not rp["stops"]:
             rp, rw, charge_dest = rp2, rw2, True
+    if charge_dest and rp["feasible"] and rp["stops"]:
+        # the least destination charge that reaches the first stop with ITS reserve (20% at a single stall), and the
+        # plan from that charge, so the advice and the plan agree; whole percent, as the advice prints it
+        first = rp["stops"][0]
+        res1 = max(reserve, m["reserve"]["single_stall"]) if (first.get("ports") or 2) < 2 else reserve
+        need_back = min(max_soc, math.ceil((max_soc - first["arrive_soc"] + res1) * 100 - 1e-6) / 100.0)
+        if need_back < max_soc - 1e-9:
+            rw3 = []
+            rp3 = plan_charging(rev, route_km, None, car, need_back, temp_c, rw3, back_opts)
+            if rp3["feasible"]:
+                rp, rw = rp3, rw3
+            else:
+                need_back = max_soc
+    soc0 = (need_back if need_back is not None else max_soc) if charge_dest else start
+    # kwh_used and home_energy_cost price the drive back's battery energy, the destination top-up included, at
+    # the home rate
     summary = {"stops": rp["stops"], "public_cost": rp["public_cost"], "extra_s": rp["extra_s"],
-               "feasible": rp["feasible"], "start_soc": round(max_soc if charge_dest else start, 3),
+               "feasible": rp["feasible"], "start_soc": round(soc0, 3), "soc_start": round(soc0, 3),
+               "kwh_used": rp["kwh_used"], "home_energy_cost": rp["home_energy_cost"],
                "charge_at_destination": charge_dest, "estimated": rp["estimated"], "arrive_soc": rp["arrive_soc"]}
+    stretch = rp.get("stretch_note")
+    if stretch:
+        summary["stretch_note"] = stretch
     n = len(rp["stops"])
     est = " (estimate, charger lists unavailable)" if rp["estimated"] else ""
     head = "Return trip: the %.0f km drive back needs more than one charge" % route_km
@@ -791,11 +875,12 @@ def _return_plan(poly, route_km, car, arrive_soc, temp_c, m, per_km, reserve, ma
     tail = "%d charging stop%s on the way back%s, km counted from the destination: %s; about %s and %s extra" % (
         n, "" if n == 1 else "s", est, _stop_list(rp["stops"]), dc.money(rp["public_cost"]),
         dc.fmt_dur(rp["extra_s"]))
+    if stretch:   # stops above the charge limit: the note names them and their charge
+        tail += "; " + stretch[0].lower() + stretch[1:]
     if not charge_dest:
         txt = "%s: from the %.0f%% you arrive with, plan %s" % (head, start * 100, tail)
         return summary, txt, None, False, []
-    first = rp["stops"][0]
-    need_back = min(max_soc, max_soc - first["arrive_soc"] + reserve)   # reach the first stop with the reserve
+    need_back = soc0
     add = max(0.0, need_back - start)
     txt = ("%s: charge at the destination to at least %.0f%% (add %.0f%%, %.0f kWh: {CH%.2f}), then plan %s"
            % (head, need_back * 100, add * 100, add * usable, add * usable, tail))
@@ -1028,6 +1113,26 @@ def _pick(cands, pos, soc, per_km, reserve, max_soc, route_km, m):
     # among stations within 15 km of the farthest, take the fastest (then most ports)
     near = [c for c in pool if c["km"] >= far - 15]
     return max(near, key=lambda c: ((c["max_kw"] or 0), c["ports"], c["km"]))
+
+
+def _farther(c, cands, pos, soc, per_km, reserve, max_soc, route_km, m):
+    """The stop the plan makes after charging at `c` to max_soc, when the car also reaches it without the stop
+    at `c`, else None (also when the destination is reached from `c`)."""
+    start = max_soc - c["detour_km"] / 2.0 * per_km
+    if start - (route_km - c["km"]) * per_km >= reserve - 1e-9:
+        return None
+    nxt = _pick(cands, c["km"], start, per_km, reserve, max_soc, route_km, m)
+    if nxt is None or not any(x is nxt for x in _useful(cands, pos, soc, per_km, reserve, max_soc, m)):
+        return None
+    return nxt
+
+
+def _skip_saves(car, c, alt, kwh_c, kwh_alt, kwh_skip, temp_c):
+    """True when one stop at `alt` adding `kwh_skip` takes no longer than a stop at `c` adding `kwh_c` and then
+    the stop at `alt` adding `kwh_alt`."""
+    stop = (charge_minutes(car, kwh_c, c["max_kw"], temp_c) + c["detour_min"]
+            + charge_minutes(car, kwh_alt, alt["max_kw"], temp_c))
+    return charge_minutes(car, kwh_skip, alt["max_kw"], temp_c) <= stop
 
 
 def _target(c, cands, per_km, reserve, max_soc, route_km, m):

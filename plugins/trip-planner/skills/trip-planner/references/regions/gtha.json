@@ -2,6 +2,7 @@
   "id": "gtha",
   "name": "Greater Toronto and Hamilton Area and neighbours, Ontario, Canada",
   "timezone": "America/Toronto",
+  "country": "CA",
   "bbox": {
     "min_lat": 42.85,
     "max_lat": 44.45,
@@ -303,7 +304,7 @@
     ],
     "tax": 0.13,
     "uplift": 1.0,
-    "source": "Uber Ontario P2P rate addendum 2024-02-22 (Toronto region = Toronto, Halton, Peel) + 13% HST, no uplift. Uber's own UberX one-month route averages were 1.02x these estimates on average across 12 GTA routes (each route 0.90x to 1.19x), checked 2026-10-10. Off-peak usually at or below; Wait & Save 10-25% less; surge above. Rides that leave Uber's Toronto rate region (GTA, Simcoe, Grey, Dufferin, Kawartha Lakes; e.g. to Hamilton, Guelph, Niagara) add $0.35/km for the whole trip",
+    "source": "Uber Ontario P2P rate addendum 2024-02-22 (Toronto region = Toronto, Halton, Peel) + 13% HST, no uplift. A one-off check on 2026-10-10 found Uber's own UberX one-month route averages 1.02x these estimates on average across 12 GTA routes (each route 0.90x to 1.19x); that route list is not published in this repo, so the check cannot be re-run. tests/test_regressions.py pins two Milton routes (to Trafalgar 407 and to Square One) within $1. Off-peak usually at or below; Wait & Save 10-25% less; surge above. Rides that leave Uber's Toronto rate region (GTA, Simcoe, Grey, Dufferin, Kawartha Lakes; e.g. to Hamilton, Guelph, Niagara) add $0.35/km for the whole trip",
     "service_areas": [
       {
         "min_lat": 43.42,

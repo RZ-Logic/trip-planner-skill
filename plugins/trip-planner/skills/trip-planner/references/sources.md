@@ -30,6 +30,16 @@ the free public services below are best-effort and rate-limited.
 | Australia (Victoria) | https://data.ptv.vic.gov.au/downloads/gtfs.zip | No | NSW needs a free key. |
 | Statistics Canada transit network database | statcan.gc.ca catalogue 23260003 | No | Static GTFS (stops, routes, trips, stop times) for about 150 Canadian agencies in one product (edition 2025001, released 2025-01-31). Too old for current times; useful to find agencies and stop locations. |
 
+**Hand-entered Ontario timetables** (`manual` feeds in `regions/ontario.json`, for operators with no public GTFS) were typed in from the operators' public pages or published files, each listed in the feed's `source`
+(`ride-norfolk-brantford` also takes its holiday rules from its expired 2025-26 GTFS), except the three coach
+timetables below. Those were built on 2026-10-10 by automated searches of the operator's booking system. The operators' terms were not confirmed to allow this; the owner keeps these timetables by decision (2026-10-12). The skill never calls these systems at run time.
+
+| Feed | Operator | Booking system queried | Notes |
+|---|---|---|---|
+| `onex` | Onex (ONEXBUS) | Betterez booking API, `https://api.betterez.com/inventory/trips` with the key Onex's cart page (onexbus.betterez.com) uses; `inventory/routes` and `inventory/stations` for the schedule setup and stops | 2,688 searches: every date 2026-10-11 to 10-26 and every ordered stop pair on each route, plus 236 spot searches to 2027-04-30 |
+| `megabus-on-east` | Megabus Canada (Coach Canada) 2711/2720/2730 | Megabus journey API, `https://ca.megabus.com/journey-planner/api/journeys` | every city pair among the modelled stops, every date 2026-10-12 to 10-25, stitched into trips |
+| `megabus-on-west` | Megabus (Badder Bus) 2740 | Megabus journey API, `https://ca.megabus.com/journey-planner/api/journeys`, plus its `travel-dates` and `stops` calls | every date 2026-10-11 to 10-26 both ways, spot-checked on 14 later dates to 2027-01-05 |
+
 ## 2. Routing and second opinions
 
 | Source | URL | Key | Notes |
@@ -67,12 +77,20 @@ Operator trip planners (for example GO, MiWay) are authoritative for that operat
 
 | Source | URL | Key | Notes |
 |---|---|---|---|
-| OSRM demo | https://router.project-osrm.org/table/v1/driving/... | No | Coordinates are lon,lat. Free-flow times (no traffic). Max about 1 request per second. |
-| FOSSGIS OSRM | https://routing.openstreetmap.de/routed-car/table/v1/driving/... | No | Same API; fallback. 1 request per second, attribution required. |
-| Valhalla (FOSSGIS) | https://valhalla1.openstreetmap.de/sources_to_targets | No | POST JSON; models turn costs, slightly slower times than OSRM. |
+| OSRM demo | https://router.project-osrm.org/table/v1/driving/... | No | Coordinates are lon,lat. Free-flow times (no traffic). Non-commercial use only, at most 1 request per second (usage terms below). |
+| FOSSGIS OSRM | https://routing.openstreetmap.de/routed-car/table/v1/driving/... | No | Same API; fallback. Covered by the OSRM demo server policy (non-commercial). 1 request per second, attribution required (`trip_hubs.py` prints it on the `SOURCES` line, with the OpenStreetMap credit for its geocoding, OSRM and Overpass data, and the catalog licence page of each discovered feed it loaded; `drive_plan.py` prints the OpenStreetMap credit for Valhalla and OSRM routes and for Nominatim and Photon places). |
+| Valhalla (FOSSGIS) | https://valhalla1.openstreetmap.de/sources_to_targets | No | POST JSON; models turn costs, slightly slower times than OSRM. No terms on its own page (usage terms below). |
 | OSRM route (manual method) | https://router.project-osrm.org/route/v1/driving/LON1,LAT1;LON2,LAT2?overview=false&alternatives=3 | No | One route's free-flow `duration` (seconds) and `distance` (metres) per alternative. For a toll-free route use Valhalla's `/route` with `"costing_options":{"auto":{"exclude_tolls":true}}`. |
 | Nominatim | https://nominatim.openstreetmap.org/search | No | 1 request per second, identifying User-Agent, cache results. Often returns only the street for suburban house numbers. |
-| Photon | https://photon.komoot.io/api/ | No | Often finds the house when Nominatim only finds the street. |
+| Photon | https://photon.komoot.io/api/ | No | Often finds the house when Nominatim only finds the street. The script sends Nominatim's street as `lat`/`lon` bias parameters and does not use a house more than 5 km from it. |
+
+**Usage terms of the keyless routers and the weather API** (read from each provider's page on 2026-10-20):
+
+- OSRM demo servers, router.project-osrm.org and routing.openstreetmap.de ([Demo server wiki](https://github.com/Project-OSRM/osrm-backend/wiki/Demo-server)): "the demo server usage is restricted to reasonable, non-commercial use-cases"; "Do not exceed 1 request per second"; no guarantee of uptime, latency or data updates.
+- FOSSGIS routing service ([about page](https://routing.openstreetmap.de/about.html)): its summary of the usage policy asks for the required attribution with a link to https://www.openstreetmap.org/fixthemap, a valid User-Agent, one request per second at most, and no scraping or heavy use. The full policy is in German at https://www.fossgis.de/arbeitsgruppen/osm-server/nutzungsbedingungen/. That page returned a bot-protection challenge to this check, so its wording is not quoted here. The Valhalla server (valhalla1.openstreetmap.de) shows no terms of its own.
+- Open-Meteo ([terms](https://open-meteo.com/en/terms), [pricing](https://open-meteo.com/en/pricing)): "You may only use the free API services for non-commercial purposes", with "Less than 10'000 API calls per day, 5'000 per hour and 600 per minute". Examples of commercial use: sites or apps with subscriptions or ads, and commercial products. A paid plan grants a commercial licence and an API key for customer-api.open-meteo.com, which the scripts do not support yet.
+
+Personal use fits these terms: the scripts send each router at most 1 request per second, and ask Open-Meteo once per route for every point on it (cached for an hour). Commercial or hosted use needs your own or a paid router: set `TRIP_PLANNER_VALHALLA_URL` and `TRIP_PLANNER_OSRM_URL` (`driving.md`, "Your own routing servers").
 
 If geocoding returns only a street, the origin can be off by kilometres, which changes which hubs
 are in range. Ask the user for a dropped pin or `lat,lon`.
@@ -83,9 +101,9 @@ are in range. Ask the user for a dropped pin or `lat,lon`.
   forbid price comparison; Lyft's developer program is closed. Do not scrape app internals.
 - Estimate with the region's rate card (`ride_pricing` in the region JSON), then tell the user to
   confirm in the app. Upfront prices already include sales tax. Off-peak they sit close to the
-  published rate card plus tax (GTHA, checked 2026-10-10: Uber's own averages ran 0.90x to 1.19x of it,
-  about 1.02x on average; Uber's one-month average per route, and Uber does not say which hours or
-  surcharges it includes); surge raises them.
+  published rate card plus tax (GTHA, one-off check 2026-10-10 on 12 routes whose list is not in this
+  repo: Uber's own averages ran 0.90x to 1.19x of it, about 1.02x on average; Uber's one-month average
+  per route, and Uber does not say which hours or surcharges it includes); surge raises them.
 - **Calibration source**: Uber publishes average UberX prices per city pair (past month):
   `https://www.uber.com/global/en/r/routes/<from>-<state>-<country>-to-<to>-<state>-<country>/`
   (e.g. `milton-on-ca-to-mississauga-on-ca`). Use several pages to fit or check a region's rate card;
@@ -141,16 +159,16 @@ what a request did on the checked date, which is not a policy statement.
 
 | Job | Source (evidence) | Access | Checked | Notes |
 |---|---|---|---|---|
-| Traffic-aware routing | TomTom Routing API ([calculateRoute docs](https://docs.tomtom.com/routing-api/documentation/tomtom-maps/calculate-route), [pricing](https://docs.tomtom.com/pricing)) | free key, 20,000 requests a month, no card | 2026-10-10; live 2026-10-11 | `computeTravelTimeFor=all` gives live, historic and free-flow times; `departAt` or `arriveAt`; `avoid=tollRoads`; no toll prices |
+| Traffic-aware routing | TomTom Routing API ([calculateRoute docs](https://docs.tomtom.com/routing-api/documentation/tomtom-maps/calculate-route), [pricing](https://docs.tomtom.com/pricing)) | free key, 20,000 requests a month, no card | 2026-10-10; live 2026-10-11 | `computeTravelTimeFor=all` gives live, historic and free-flow times; `departAt` or `arriveAt`; `avoid=tollRoads`; `instructionsType=coded` gives the time at each turn (`pointIndex`, `travelTimeInSeconds`), which times the 407 entry; no toll prices |
 | Other keyed routing | HERE v8 ([pricing](https://www.here.com/get-started/pricing)), Mapbox ([Directions](https://docs.mapbox.com/api/navigation/directions/)), Google Routes ([computeRoutes](https://developers.google.com/maps/documentation/routes/reference/rest/v2/TopLevel/computeRoutes), [RouteModifiers](https://developers.google.com/maps/documentation/routes/reference/rest/v2/RouteModifiers)) | keys | 2026-10-10 | not used by the script. HERE prices tolls with transponder fares but needs a card; Google Routes has no driving arrive-by and no 407 pass |
-| Keyless routing | Valhalla on FOSSGIS ([API reference](https://valhalla.github.io/valhalla/api/route/api-reference/)), OSRM demo ([usage policy](https://github.com/Project-OSRM/osrm-backend/wiki/Demo-server)) | keyless, about 1 request per second | 2026-10-10 | **Observed:** these two endpoints returned free-flow times only (Valhalla gave the same time at 03:00 and 08:00); Valhalla `exclude_tolls` gave a toll-free route; OSRM refused `exclude=toll`, so `alternatives=3` is used |
+| Keyless routing | Valhalla on FOSSGIS ([API reference](https://valhalla.github.io/valhalla/api/route/api-reference/)), OSRM demo ([usage policy](https://github.com/Project-OSRM/osrm-backend/wiki/Demo-server)) | keyless, about 1 request per second, non-commercial (section 3) | 2026-10-10 | **Observed:** these two endpoints returned free-flow times only (Valhalla gave the same time at 03:00 and 08:00); Valhalla `exclude_tolls` gave a toll-free route; OSRM refused `exclude=toll`, so `alternatives=3` is used |
 | 407 ETR tolls | [407 ETR light-vehicle rate chart](https://www.407etr.com/en/rate-chart-light) | page | 2026-10-10 | **Observed:** the calculator API asks for reCAPTCHA, so it is never called |
 | Other tolls | [407 ETR rates page](https://www.407etr.com/en/rates) (407 East is provincial and free); bridge and tunnel operators' pages, one per bridge in `driving/tolls.json` | pages | 2026-10-10 | 412 and 418 have been free since 2022 |
 | Gas prices | [Ontario fuel price survey](https://data.ontario.ca/en/dataset/fuels-price-survey-information) CSV, weekly, 14 markets; [Statistics Canada 18-10-0001-01](https://www150.statcan.gc.ca/t1/tbl1/en/tv.action?pid=1810000101) as a monthly cross-check | keyless | 2026-10-10 | **Terms:** [GasBuddy](https://www.gasbuddy.com/disclaimer) forbids scraping, so it is not used |
 | Consumption | [NRCan Fuel Consumption Ratings](https://open.canada.ca/data/dataset/98f1a129-f628-4ce4-b24d-6f16bf24dd64) (gas, plug-in and battery-electric CSVs) | open data | 2026-10-10 | bundled index for 2010 to 2026 in `driving/vehicles-index.json`; class medians in `driving/costs.json`. Other years are downloaded from open.canada.ca (opencanada.blob.core.windows.net) with the skill's own User-Agent; if that is refused, the bundled index is used with a WARNING |
-| Weather | [Open-Meteo forecast](https://open-meteo.com/en/docs) | keyless, 16 days | 2026-10-10 | rain and snow adders (applied within 3 days), temperature for fuel and EV range |
+| Weather | [Open-Meteo forecast](https://open-meteo.com/en/docs) | keyless, 16 days, non-commercial only ([terms](https://open-meteo.com/en/terms)) | 2026-10-10 | rain and snow adders (applied within 3 days), temperature for fuel and EV range; API data under CC BY 4.0 ([licence](https://open-meteo.com/en/licence)), credited on the `SOURCES` line |
 | Parking, Toronto | [Green P carparks 2019](https://open.toronto.ca/dataset/green-p-parking/), [parking occupancy](https://open.toronto.ca/dataset/parking-occupancy/) (quarterly) | keyless | 2026-10-10 | **Observed:** the live Green P site returned bot-protection pages to scripts; its carpark pages render with JavaScript |
-| Parking, cities | ArcGIS layers of Burlington, Hamilton, Ottawa, Mississauga, Oakville, London, Kingston and Niagara Falls (each layer URL in `driving/parking.json`; each city's open data licence applies) | keyless near-point query | 2026-10-10 | Kingston and Niagara Falls give locations only; Oakville and London data date from 2018 |
+| Parking, cities | ArcGIS layers of Burlington, Hamilton, Ottawa, Mississauga, Oakville, London, Kingston and Niagara Falls (each layer URL, licence URL and the city's attribution statement, where it sets one, in `driving/parking.json`; the skill's NOTICE lists each city's licence) | keyless near-point query | 2026-10-10 | Kingston and Niagara Falls give locations only; Oakville and London data date from 2018. `drive_plan.py` prints the attribution statement of each layer with a lot shown on the `SOURCES` line |
 | Parking, anywhere | OpenStreetMap via Overpass ([usage notes](https://wiki.openstreetmap.org/wiki/Overpass_API)) | keyless; identifying User-Agent | 2026-10-10 | **Observed:** curl's default User-Agent got HTTP 406 and a second parallel query got 429. Only about 13% of Ontario lots carry a fee tag: good for free lots, weak for prices |
 | Parking, tourist spots | towns, Niagara Parks, Ontario Parks, Parks Canada, conservation authorities (source URL per place and lot in `driving/parking-places-*.json`) | pages, curated | 2026-10-10 | check seasons and reservation lead times |
 | Parking, commercial | Impark, SpotHero, ParkWhiz/Arrive, Parkopedia, HONK, Indigo, Precise ParkLink | none open | 2026-10-10 | **Terms:** [Impark](https://impark.com/terms-of-use/) forbids robots and scraping; SpotHero's robots.txt disallows `/api/`; [ParkWhiz/Arrive](https://developer.arrive.com/getting_started) is partner-only. **Observed:** no public API found for HONK or Indigo; the Precise ParkLink lot finder returned 403. Link out |

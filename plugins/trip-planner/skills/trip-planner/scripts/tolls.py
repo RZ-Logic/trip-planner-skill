@@ -96,33 +96,7 @@ def band_index(when, starts):
     return idx
 
 
-def _easter(year):
-    """Gregorian Easter Sunday (anonymous Gregorian algorithm)."""
-    a, b, c = year % 19, year // 100, year % 100
-    d, e = b // 4, b % 4
-    f = (b + 8) // 25
-    g = (b - f + 1) // 3
-    h = (19 * a + b - d - g + 15) % 30
-    i, k = c // 4, c % 4
-    l = (32 + 2 * e + 2 * i - h - k) % 7
-    m = (a + 11 * h + 22 * l) // 451
-    month = (h + l - 7 * m + 114) // 31
-    day = (h + l - 7 * m + 114) % 31 + 1
-    return dt.date(year, month, day)
-
-
-def _nth_monday(year, month, n):
-    first = dt.date(year, month, 1)
-    return first + dt.timedelta(days=(7 - first.weekday()) % 7 + 7 * (n - 1))
-
-
-def esa_holidays(year):
-    """Ontario ESA public holidays for any year (the rule behind holidays_priced_as_weekend)."""
-    may24 = dt.date(year, 5, 24)
-    days = [dt.date(year, 1, 1), _nth_monday(year, 2, 3), _easter(year) - dt.timedelta(days=2),
-            may24 - dt.timedelta(days=may24.weekday()), dt.date(year, 7, 1), _nth_monday(year, 9, 1),
-            _nth_monday(year, 10, 2), dt.date(year, 12, 25), dt.date(year, 12, 26)]
-    return set(d.isoformat() for d in days)
+esa_holidays = dc.th.esa_holidays   # one copy of the Ontario ESA rule, in trip_hubs
 
 
 _HOL = {}

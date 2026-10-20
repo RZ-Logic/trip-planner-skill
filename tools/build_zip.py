@@ -12,21 +12,28 @@ SKIP_DIRS = {"__pycache__", "node_modules", ".pytest_cache"}
 SKIP_FILES = {".DS_Store"}
 
 
+def zip_entries():
+    """(full path, name in the zip) for every file the zip holds, in walk order (sorted per folder)."""
+    entries = []
+    for base, dirs, files in os.walk(SKILL):
+        dirs[:] = sorted(d for d in dirs if d not in SKIP_DIRS)
+        for f in sorted(files):
+            if f in SKIP_FILES or f.endswith(".pyc"):
+                continue
+            full = os.path.join(base, f)
+            arc = os.path.join("trip-planner", os.path.relpath(full, SKILL)).replace(os.sep, "/")
+            entries.append((full, arc))
+    return entries
+
+
 def main():
     os.makedirs(os.path.join(ROOT, "dist"), exist_ok=True)
     out = os.path.join(ROOT, "dist", "trip-planner.zip")
-    count = 0
+    entries = zip_entries()
     with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as z:
-        for base, dirs, files in os.walk(SKILL):
-            dirs[:] = sorted(d for d in dirs if d not in SKIP_DIRS)
-            for f in sorted(files):
-                if f in SKIP_FILES or f.endswith(".pyc"):
-                    continue
-                full = os.path.join(base, f)
-                arc = os.path.join("trip-planner", os.path.relpath(full, SKILL)).replace(os.sep, "/")
-                z.write(full, arc)
-                count += 1
-    print("wrote %s (%d files)" % (out, count))
+        for full, arc in entries:
+            z.write(full, arc)
+    print("wrote %s (%d files)" % (out, len(entries)))
 
 
 if __name__ == "__main__":

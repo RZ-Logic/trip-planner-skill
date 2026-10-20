@@ -254,19 +254,19 @@ class GeocodeTests(unittest.TestCase):   # items 7 and 8
         country = [u for u in urls if "zoom=3" in u]
         self.assertEqual(len(country), 1)
         self.assertIn("lat=43.65&lon=-79.38", country[0])
-        for u in urls:   # no call sends more than 4 decimals
+        for u in urls:   # no call sends more than 3 decimals
             q = urllib.parse.parse_qs(urllib.parse.urlsplit(u).query)
-            self.assertLessEqual(len(q["lat"][0].split(".")[1]), 4, u)
+            self.assertLessEqual(len(q["lat"][0].split(".")[1]), 3, u)
 
-    def test_label_lookup_sends_four_decimals(self):
+    def test_label_lookup_sends_three_decimals(self):
         reply = {"address": {"house_number": "805", "road": "Santa Maria Boulevard", "town": "Milton",
                              "country_code": "ca"}}
         with mock.patch.object(dc, "fetch_json", return_value=reply) as f, mock.patch.dict(os.environ, {"TRIP_HOME": ""}):
             dp.place_label("43.498757,-79.855987", *tdp.MILTON)
         url = f.call_args[0][0]
-        self.assertIn("lat=43.4988&lon=-79.8560", url)
+        self.assertIn("lat=43.499&lon=-79.856", url)
         self.assertNotIn("43.498757", url)
-        self.assertIn("zoom=18", url)
+        self.assertIn("zoom=16", url)   # street level: no house number is asked for (security-tos-8)
 
     def test_reverse_country(self):
         with mock.patch.object(dc, "fetch_json", return_value={"address": {"country_code": "us"}}) as f:

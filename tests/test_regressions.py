@@ -57,9 +57,10 @@ class ReviewRegressions(unittest.TestCase):
         return p
 
     def test_frequencies_expand_headway_trips(self):
+        # exact_times=1: timed runs every 10 min (exact_times 0 is 'every N min' service, test_review_gtfs.HeadwayTests)
         p = self.feed("freq.zip", [("F", "WK", "f1", "C")],
                       [("f1", "06:00:00", "06:00:00", "A", 1, 0, 0), ("f1", "06:20:00", "06:20:00", "C", 2, 0, 0)],
-                      {"frequencies.txt": "trip_id,start_time,end_time,headway_secs,exact_times\nf1,06:00:00,22:00:00,600,0\n"})
+                      {"frequencies.txt": "trip_id,start_time,end_time,headway_secs,exact_times\nf1,06:00:00,22:00:00,600,1\n"})
         net, scan, idx = scan_for(p, hms(9, 0), hms(13, 0))
         self.assertGreaterEqual(len(net.conns), 24)
         self.assertEqual(scan.evaluate(idx["Hub A"], hms(9, 5))[0], hms(9, 30))   # 09:10 run arrives 09:30
@@ -411,7 +412,7 @@ class ThirdReviewRegressions(unittest.TestCase):
         local = {"https://files.example/tdg-1.zip": xb, "https://files.example/mdb-1077.zip": nl}
         rows = [row("tdg-1", "Cross-border Rail", "FR", (48.0, 53.0, 0.0, 10.0), "https://files.example/tdg-1.zip"),
                 row("mdb-1077", "OVapi", "NL", (50.0, 54.0, -2.0, 25.0), "https://files.example/mdb-1077.zip")]
-        self.patch("load_catalog", lambda max_age_h=168.0: rows)
+        self.patch("load_catalog", lambda max_age_h=168.0, refresh=False: rows)
         self.patch("fetch_url", lambda fid, url, *a, **k: local[url])
         self.patch("check_network", lambda hosts, timeout=6: {h: "ok" for h in hosts})
         self.patch("reverse_place_info", lambda lat, lon, w: {"names": set(), "country": "NL", "state": None})
@@ -488,9 +489,17 @@ class ClaudeAiSandboxRegressions(unittest.TestCase):
 
     def test_house_number_matched_only_to_the_street_stops_the_plan(self):
         street = [{"lat": "43.51", "lon": "-79.82", "addresstype": "road", "display_name": "Santa Maria Boulevard, Milton"}]
-        replies = iter([json.dumps(street).encode(), json.dumps({"features": []}).encode()] * 2)
-        saved = th.http_get
-        th.http_get = lambda *a, **k: next(replies)
+        # the second _geocode reads Nominatim's street from the geocode cache; the empty Photon reply is asked again
+        replies = iter([json.dumps(street).encode(), json.dumps({"features": []}).encode(),
+                        json.dumps({"features": []}).encode()])
+        asked = []
+
+        def http_get(url, *a, **k):
+            asked.append(url)
+            return next(replies)
+        saved, saved_cache = th.http_get, os.environ.get("TRIP_PLANNER_CACHE")
+        th.http_get = http_get
+        os.environ["TRIP_PLANNER_CACHE"] = tempfile.mkdtemp()   # a geocode cache of this test's own
         try:
             with self.assertRaises(SystemExit) as ctx:
                 th._geocode("805 Santa Maria Blvd, Milton, ON", "origin", [], strict=True)
@@ -501,6 +510,12 @@ class ClaudeAiSandboxRegressions(unittest.TestCase):
             self.assertTrue(w and "street level" in w[0])
         finally:
             th.http_get = saved
+            if saved_cache is None:
+                os.environ.pop("TRIP_PLANNER_CACHE", None)
+            else:
+                os.environ["TRIP_PLANNER_CACHE"] = saved_cache
+        self.assertEqual(sum("nominatim" in u for u in asked), 1)
+        self.assertEqual(sum("photon" in u for u in asked), 2)
 
     def test_shared_platforms_are_optional_when_a_mirror_exists(self):
         regions = th.load_regions()
@@ -589,7 +604,8 @@ class FareRegressions(unittest.TestCase):
         g = [self.group("MiWay", "07:00", 3.5), self.group("GO Transit", "07:20", 7.0), self.group("TTC", "08:30", 3.3)]
         self.charged(g)
         self.assertIn("credited back when you tap GO", g[0]["note"])
-        self.assertIn("One Fare", g[2]["note"])   # free from MiWay (2 h) or GO (3 h); both hold
+        self.assertIn("One Fare", g[2]["note"])   # free from GO (3 h): the credited MiWay fare gives no window
+        self.assertIn("free from GO Transit", g[2]["note"])
         g = [self.group("TTC", "07:00", 3.3), self.group("MiWay", "07:30", 3.5)]
         self.charged(g)
         self.assertEqual(g[1]["note"], "free from TTC (One Fare, within 2 h)")

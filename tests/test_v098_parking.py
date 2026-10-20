@@ -143,6 +143,17 @@ class GreenPDayRanges(unittest.TestCase):
                                                            "max": 9.0, "roll_min": 480}]}
         self.assertEqual(pk.price_rule(rule, WED.replace(hour=20), 10 * 60, set())[0], 15.0)   # $9 + 2 h at $3
 
+    def test_rolling_blocks_count_from_entry_with_free_hours_inside(self):
+        # gem-G3, kept as is by the owner on 2026-10-20: the blocks run on the clock from the first charged minute,
+        # free overnight hours included, as a garage clock bills (errs high against a daily reset)
+        rule = {"hourly": 4.0, "per_min": 60, "periods": [
+            {"days": [5, 6], "hours": ["08:00", "18:00"], "max": 9.0, "roll_min": 720},
+            {"days": [5, 6], "hours": ["18:00", "08:00"], "free": True}]}
+        sat14 = dt.datetime(2026, 10, 17, 14, 0)
+        # Sat 14-18 $9, Sun 08-14 $9 (block Sun 02:00-14:00), Sun 14-16 $8; a reset each day would give $18
+        self.assertEqual(pk.price_rule(rule, sat14, 26 * 60, set())[0], 26.0)
+        self.assertEqual(pk.price_rule(rule, sat14.replace(hour=8), 34 * 60, set())[0], 18.0)
+
 
 # --------------------------------------------------------------------------- 3, 13: checked replies and the cache
 

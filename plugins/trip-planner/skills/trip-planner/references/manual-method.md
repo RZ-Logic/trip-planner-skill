@@ -5,15 +5,17 @@ hand, label every number a manual estimate, and say the list is manual and may b
 drives, follow the manual method in `driving.md` instead.
 
 1. **Pick a tool that can request any URL.** Prefer a connector or MCP tool that makes plain HTTP
-   requests (an HTTP, fetch or scraping connector such as Scrapling, or a browser-automation tool).
-   Built-in web-fetch tools often refuse URLs you build yourself (claude.ai's does): they open pages
-   that came from a web search or the user, not API calls like the Transitous ones. If no such tool is
-   loaded, say so and suggest the user enable one, or allow the domains the NETWORK BLOCKED message
-   listed, then continue with steps 2 to 4 meanwhile.
+   requests (an HTTP or fetch connector, or a browser-automation tool; never stealth or bot-evasion
+   modes). Built-in web-fetch tools often refuse URLs you build yourself (claude.ai's does): they open
+   pages that came from a web search or the user, not API calls like the Transitous ones. If no such
+   tool is loaded, say so and suggest the user enable one, or allow the domains the NETWORK BLOCKED
+   message listed, then continue with steps 2 to 4 meanwhile.
 2. **Plan from the files first.** The region notes list the hubs, routes and seasons. With code
    execution but no network, `--timetable list` and `--timetable ID` print the hand-entered timetables
-   (rural buses, Onex, Megabus, WEGO and more) offline. Use web search to reach operators' schedule and
-   departure pages, which a restricted fetch tool can then open.
+   (rural buses, Onex, Megabus, WEGO and more) offline. With `lat,lon` and `--routing estimate`, a trip
+   whose timetables are all hand-entered or cached still plans offline, with an `OFFLINE` WARNING. Use
+   web search to reach operators' schedule and departure pages, which a restricted fetch tool can then
+   open.
 3. **Query Transitous from each candidate hub** (when a tool allows it) with the request format in
    `sources.md` section 2. Per hub ask `numItineraries=1` with no `maxTransfers` limit: `maxTransfers=0`
    returns direct trips only and can hide a faster trip with a change. Replies list every intermediate

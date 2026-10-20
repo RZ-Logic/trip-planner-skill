@@ -19,8 +19,8 @@ import tolls
 th = dc.th
 log = th.log
 
-VALHALLA_URL = "https://valhalla1.openstreetmap.de/route"
-OSRM_URLS = ["https://router.project-osrm.org", "https://routing.openstreetmap.de/routed-car"]
+# Valhalla and OSRM servers: th.valhalla_base() and th.osrm_bases() (TRIP_PLANNER_VALHALLA_URL, TRIP_PLANNER_OSRM_URL,
+# else the keyless non-commercial demo servers)
 TOMTOM_URL = "https://api.tomtom.com/routing/1/calculateRoute/%s/json"
 ENGINE_NAMES = {"tomtom": "TomTom", "valhalla": "Valhalla", "osrm": "OSRM"}
 MAX_POLY = 2000
@@ -134,6 +134,16 @@ def road_parts(pts, m, name, east):
     return [(lab, m * d / tot) for lab, d in segs]
 
 
+def _free_piece(pts, name, east):
+    """True when a toll piece the engine flags is a road tolls.json lists as toll-free now (free_roads: the
+    provincial 407 East, Hwys 412 and 418, all east of Brock Rd): by its name, with most of its points east of
+    east_end_lon. Engines can keep the old toll flag; an unnamed piece is not assumed free."""
+    free = set(road_name([fr.get("name") or ""]) for fr in tolls.data().get("free_roads") or []) - {""}
+    if not pts or name not in free:
+        return False
+    return sum(1 for p in pts if p[1] >= east) > 0.5 * len(pts)
+
+
 def _roads_summary(road_m, total_m):
     items = [(m, first, name) for name, (m, first) in road_m.items() if name]
     items.sort(key=lambda x: -x[0])
@@ -158,6 +168,7 @@ class _Builder(object):
         self.elapsed = 0.0
         self.total_m = 0.0
         self.free_407_east = False
+        self.other_tolls = []   # toll pieces off the 407 (point lists): a listed crossing, or a toll not priced here
         self._open = None   # 407 stretch being built
 
     def add(self, pts, s, m, name="", etr=False, hwy=None):
@@ -243,7 +254,10 @@ def _valhalla_trip(trip):
             s = float(mn.get("time") or 0.0)
             m = float(mn.get("length") or 0.0) * 1000.0
             on = _on_stretch(is_etr, ramp, i)
-            b.piece(pts, s, m, road_name(mn.get("street_names") or []), on, hwy=bool(mn.get("highway")) or None)
+            name = road_name(mn.get("street_names") or [])
+            if mn.get("toll") and not on and not _free_piece(pts, name, b.east):
+                b.other_tolls.append(pts)
+            b.piece(pts, s, m, name, on, hwy=bool(mn.get("highway")) or None)
         b.close_stretch()
     summ = trip.get("summary") or {}
     return b, {"engine_toll": bool(summ.get("has_toll"))}
@@ -265,7 +279,7 @@ def _valhalla_fetch(o, d, exclude_tolls, alternates, avoid_tolls_soft=False, thr
         req["costing_options"] = {"auto": {"use_tolls": 0.0}}
     elif exclude_tolls:
         req["costing_options"] = {"auto": {"exclude_tolls": True}}
-    url = VALHALLA_URL + "?json=" + urllib.parse.quote(json.dumps(req, separators=(",", ":")))
+    url = th.valhalla_base() + "/route?json=" + urllib.parse.quote(json.dumps(req, separators=(",", ":")))
     data = dc.fetch_json(url, timeout=40, min_interval=1.0, max_age_h=KEYLESS_CACHE_H)
     if not isinstance(data, dict) or "trip" not in data:
         raise RuntimeError((data or {}).get("error") or "no route")
@@ -280,7 +294,7 @@ def _valhalla(o, d, depart, opts, warnings, arrive_at=None):
     routes = [_finish(*_valhalla_trip(t), engine="valhalla", depart=depart, opts=opts) for t in trips]
     fast, others = routes[0], routes[1:]
     tollfree = None
-    if fast["etr"] or (fast["_engine_toll"] and not fast["bridges"]):
+    if fast["etr"] or fast["toll_unpriced"]:
         border = bool(fast["bridges"])
         try:
             tf = _valhalla_fetch(o, d, True, 0, avoid_tolls_soft=border)
@@ -298,13 +312,20 @@ def _valhalla(o, d, depart, opts, warnings, arrive_at=None):
 
 def _keep_comparison(fast, cand, engine, warnings):
     """The route compared with the 407 must keep the fastest route's border crossing: excluding tolls also
-    excludes the toll bridges, which can send the 'toll-free' route hundreds of km through the US."""
+    excludes the toll bridges, which can send the 'toll-free' route hundreds of km through the US. The same holds
+    for a route whose only tolls are unpriced, which may cross at a crossing tolls.json does not list."""
     if cand is None:
         return None
     if fast["bridges"] and (not cand["bridges"] or cand["km"] > 1.3 * fast["km"] or cand["etr"]):
         warnings.append("%s found no route without the 407 that keeps the border crossing (its toll-free route "
                         "was %.0f km against %.0f km); check Google Maps with tolls avoided"
                         % (engine, cand["km"], fast["km"]))
+        return None
+    if fast.get("toll_unpriced") and not fast.get("etr") and cand["km"] > 1.3 * fast["km"]:
+        # the unpriced toll can be a crossing missing from tolls.json (Sault Ste. Marie): excluding tolls bans it
+        warnings.append("%s found no toll-free route close to the route with tolls (its toll-free route was %.0f km "
+                        "against %.0f km; an unpriced toll can be a border crossing), so none is compared; check "
+                        "Google Maps with tolls avoided" % (engine, cand["km"], fast["km"]))
         return None
     return cand
 
@@ -325,9 +346,12 @@ def wants_407_option(route, depart, opts):
     tt = traffic_data()
     hol = set(opts.get("holidays") or ()) | tolls.holidays_default()
     getaway = _getaway_dir(route)
+    tor = _toronto(opts)
     t = gtha = busy = 0.0
     for c in route["chunks"]:
         when = depart + dt.timedelta(seconds=t)
+        if tor and (c.get("etr") or c["urban"]):
+            when = tor(when)
         if c["urban"] and c.get("area") == "GTHA":
             gtha += c["s"]
             if _row(tt["congested"], when, hol)["name"] in ("weekday peak", "weekday shoulder"):
@@ -406,6 +430,7 @@ def _valhalla_407_variant(o, d, fast, depart, opts):
     if not r["etr"] or r["km"] > 1.25 * fast["km"]:
         return None
     r["notes"].append("407 option added because this trip crosses the GTHA at a busy time")
+    r["_forced_407"] = True   # not the router's own pick: the navigation links need a via point to follow it
     return r
 
 
@@ -436,7 +461,7 @@ def _osrm_route(route):
 
 def _osrm(o, d, depart, opts, warnings, arrive_at=None):
     data, last = None, None
-    for base in OSRM_URLS:
+    for base in th.osrm_bases():
         url = "%s/route/v1/driving/%.6f,%.6f;%.6f,%.6f?overview=false&steps=true&geometries=geojson&alternatives=3" % (
             base, o[1], o[0], d[1], d[0])
         try:
@@ -489,6 +514,9 @@ def tomtom_url(o, d, depart, opts, arrive_at=None, avoid_tolls=False):
     params += [("routeType", "fastest"), ("travelMode", "car"), ("computeTravelTimeFor", "all"),
                ("sectionType", "toll"), ("sectionType", "traffic"), ("sectionType", "motorway"),
                ("sectionType", "importantRoadStretch"),
+               # guidance instructions carry pointIndex and the cumulative travelTimeInSeconds (calculateRoute docs:
+               # https://docs.tomtom.com/routing-api/documentation/tomtom-maps/calculate-route), see _point_times
+               ("instructionsType", "coded"),
                ("routeRepresentation", "polyline"), ("maxAlternatives", "1")]
     if avoid_tolls:
         params.append(("avoid", "tollRoads"))
@@ -506,6 +534,30 @@ def _near_407(pts):
     sample = west[::max(1, len(west) // 20)]
     near = sum(1 for p in sample if tolls.chain_km(p[0], p[1])[1] < 1500)
     return near >= 0.6 * len(sample)
+
+
+def _point_times(rt, cum, total_s):
+    """Seconds from the start at every route point, interpolated by distance between TomTom's guidance
+    instructions (pointIndex, cumulative travelTimeInSeconds); None without usable instructions (the caller then
+    spreads the time evenly by distance)."""
+    if len(rt.get("legs") or []) != 1:
+        return None   # pointIndex counts the reply's points; multi-leg replies are de-duplicated in _tomtom_route
+    n = len(cum)
+    anchors = {0: 0.0, n - 1: float(total_s)}
+    for ins in ((rt.get("guidance") or {}).get("instructions") or []):
+        k, s = ins.get("pointIndex"), ins.get("travelTimeInSeconds")
+        if isinstance(k, int) and 0 < k < n - 1 and isinstance(s, (int, float)):
+            anchors[k] = float(s)
+    ks = sorted(anchors)
+    if len(ks) < 3 or any(anchors[y] < anchors[x] for x, y in zip(ks, ks[1:])):
+        return None
+    out = [0.0] * n
+    for x, y in zip(ks, ks[1:]):
+        span = cum[y] - cum[x]
+        for j in range(x, y + 1):
+            f = (cum[j] - cum[x]) / span if span > 0 else (j - x) / float(y - x)
+            out[j] = anchors[x] + (anchors[y] - anchors[x]) * f
+    return out
 
 
 def _tomtom_route(rt):
@@ -526,29 +578,43 @@ def _tomtom_route(rt):
     mway_ix = [(s.get("startPointIndex", 0), s.get("endPointIndex", 0)) for s in secs
                if (s.get("sectionType") or "").upper() == "MOTORWAY"]
     etr_ix = [(a, z) for a, z in tolls_ix if _near_407(pts[a:z + 1])]
+    # Road names come from importantRoadStretch sections (street name and road numbers), in route order.
+    stretches = [s for s in secs if (s.get("sectionType") or "").upper() == "IMPORTANT_ROAD_STRETCH"]
+    stretches.sort(key=lambda s: (s.get("startPointIndex", 0), s.get("importantRoadStretchIndex", 0)))
+
+    def stretch_name(s):
+        names = [((s.get("streetName") or {}).get("text") or "")]
+        return road_name(names + [(rn or {}).get("text") or "" for rn in s.get("roadNumbers") or []])
+
+    def toll_name(a, z):
+        # the named stretch that overlaps the toll piece most, '' when none does
+        ov = [(min(z, s.get("endPointIndex", 0)) - max(a, s.get("startPointIndex", 0)), stretch_name(s))
+              for s in stretches]
+        best = max([x for x in ov if x[0] > 0] or [(0, "")])
+        return best[1]
     b = _Builder("tomtom")
+    b.other_tolls = [pts[a:z + 1] for a, z in tolls_ix
+                     if (a, z) not in etr_ix and not _free_piece(pts[a:z + 1], toll_name(a, z), b.east)]
     # Pieces between every section boundary, so 407 and motorway flags are exact per piece.
     cuts = sorted(set([0, max(0, len(pts) - 1)] + [i for ab in etr_ix + mway_ix for i in ab]))
     share = (total_s / cum[-1]) if cum[-1] > 0 else 0.0
+    # piece times from TomTom's turn-by-turn times when the reply has them (a slow approach puts the 407 entry
+    # later), else spread evenly by distance
+    times = _point_times(rt, cum, total_s) if len(pts) >= 2 else None
     for a, z in zip(cuts, cuts[1:]):
         piece = pts[a:z + 1]
         m = (cum[z] - cum[a]) * scale
-        s = (cum[z] - cum[a]) * share
+        s = (times[z] - times[a]) if times else (cum[z] - cum[a]) * share
         in_etr = any(x <= a and z <= y for x, y in etr_ix)
         in_mway = any(x <= a and z <= y for x, y in mway_ix)
         b.piece(piece, s, m, "", in_etr, hwy=in_mway)
     b.close_stretch()
     if len(pts) == 1:
         b.poly = list(pts)
-    # Road names come from importantRoadStretch sections (street name and road numbers), in route order.
-    stretches = [s for s in secs if (s.get("sectionType") or "").upper() == "IMPORTANT_ROAD_STRETCH"]
-    stretches.sort(key=lambda s: (s.get("startPointIndex", 0), s.get("importantRoadStretchIndex", 0)))
     for s in stretches:
         a = max(0, min(len(cum) - 1, s.get("startPointIndex", 0)))
         z = max(a, min(len(cum) - 1, s.get("endPointIndex", 0)))
-        names = [((s.get("streetName") or {}).get("text") or "")]
-        names += [(rn or {}).get("text") or "" for rn in s.get("roadNumbers") or []]
-        name = road_name(names)
+        name = stretch_name(s)
         if name:
             for nm, mm in road_parts(pts[a:z + 1], (cum[z] - cum[a]) * scale, name, b.east):
                 b.add_road(nm, mm)
@@ -604,7 +670,7 @@ def _tomtom(o, d, depart, opts, warnings, arrive_at=None):
     routes = [_tt_finish(r, when, opts, live) for r in rts]
     fast, others = routes[0], routes[1:]
     tollfree = None
-    if fast["etr"] or (fast["_engine_toll"] and not fast["bridges"]):
+    if fast["etr"] or fast["toll_unpriced"]:
         try:
             tf = _tomtom_fetch(o, d, depart, opts, arrive_at, True)
             w2 = _tt_depart(tf[0], depart) if arrive_at is not None else depart
@@ -628,6 +694,7 @@ def _finish(b, extra, engine, depart, opts):
     hwy_m = sum(c["m"] for c in b.chunks if c.get("hwy"))
     urban_s = sum(c["s"] for c in b.chunks if c["urban"])
     tt = extra.get("tomtom")
+    bridges = tolls.bridges_on(poly_full) if len(poly_full) > 1 else []
     r = {"label": "", "engine": engine, "traffic": "live" if engine == "tomtom" else "free-flow",
          "km": round(total_m / 1000.0, 1), "base_s": round(base_s, 1), "chunks": b.chunks,
          "typical_s": 0.0, "plan_s": 0.0, "depart": depart, "arrive": None, "arrive_plan": None,
@@ -635,9 +702,10 @@ def _finish(b, extra, engine, depart, opts):
          "urban_share": round(urban_s / base_s, 3) if base_s else 0.0,
          "roads": _roads_summary(b.road_m, total_m), "etr": segs,
          "toll_407_transponder": 0.0, "toll_407_camera": 0.0,
-         "bridges": tolls.bridges_on(poly_full) if len(poly_full) > 1 else [],
-         "toll_other_cad": 0.0, "has_tolls": False, "delays": extra.get("delays") or [], "notes": [],
-         "factor_note": "", "_engine_toll": extra.get("engine_toll"), "_queried_depart": depart,
+         "bridges": bridges, "toll_other_cad": 0.0, "has_tolls": False, "toll_unpriced": False,
+         "delays": extra.get("delays") or [], "notes": [], "factor_note": "", "_engine_toll": extra.get("engine_toll"),
+         "_toll_other": any(p and not _near_407(p) and not _bridge_piece(p, bridges) for p in b.other_tolls),
+         "_queried_depart": depart,
          "_return": False, "_live_now": bool(extra.get("live_now"))}
     if tt:
         r["tomtom"] = tt
@@ -653,11 +721,31 @@ def _finish(b, extra, engine, depart, opts):
 
 
 BORDER_NOTE = "border crossing: passport or NEXUS; check CBSA and CBP wait times; allow 15 to 60 min"
+UNPRICED_NOTE = ("unpriced toll: the routing engine reports tolls on this route that are not priced here (only the "
+                 "407 ETR and the listed border crossings are); check the toll operator's rates")
+BRIDGE_PLAZA_M = 3000.0   # a short toll piece within this of a listed crossing is that crossing's plaza or approach
+
+
+def _bridge_piece(pts, bridges):
+    """True when a toll piece is a listed crossing on this route: the bridge point lies within its radius_m of
+    the piece, or the piece is short and lies wholly within BRIDGE_PLAZA_M of it (the plaza)."""
+    by_name = dict((br["name"], br) for br in tolls.data()["bridges"])
+    cum = dc.cum_dist(pts) if len(pts) >= 2 else [0.0]
+    for b in bridges or []:
+        br = by_name.get(b["name"])
+        if br is None:
+            continue
+        if len(pts) >= 2 and dc.project(pts, cum, br["lat"], br["lon"])[1] <= br["radius_m"]:
+            return True
+        if cum[-1] <= BRIDGE_PLAZA_M and all(th.haversine_m(p[0], p[1], br["lat"], br["lon"]) <= BRIDGE_PLAZA_M
+                                             for p in pts):
+            return True
+    return False
 
 
 def _bridge_totals(r):
     r["toll_other_cad"] = round(sum(b["cad"] for b in r["bridges"] if b.get("cad")), 2)
-    r["notes"] = [n for n in r["notes"] if not n.startswith("border toll: ") and not n.startswith("border crossing: ")]
+    r["notes"] = [n for n in r["notes"] if not n.startswith(("border toll: ", "border crossing: ", "unpriced toll: "))]
     for b in r["bridges"]:
         if b.get("cad") is None:
             r["notes"].append("border toll: %s %s (US dollars only, not in the CAD total)" % (b["name"], b["text"]))
@@ -665,7 +753,13 @@ def _bridge_totals(r):
             r["notes"].append("border toll: %s %s (charged in US dollars)" % (b["name"], b["text"]))
     if r["bridges"]:
         r["notes"].append(BORDER_NOTE)
-    r["has_tolls"] = bool(r["etr"]) or any((b.get("cad") or 0) > 0 or b.get("cad") is None for b in r["bridges"])
+    priced = bool(r["etr"]) or any((b.get("cad") or 0) > 0 or b.get("cad") is None for b in r["bridges"])
+    # a toll the engine reports off the 407 and away from every listed crossing (a US toll road, a crossing
+    # missing from tolls.json): has_tolls, so the toll-free route is kept, but its price is not known here
+    r["toll_unpriced"] = bool(r.get("_toll_other"))
+    if r["toll_unpriced"]:
+        r["notes"].append(UNPRICED_NOTE)
+    r["has_tolls"] = priced or r["toll_unpriced"]
 
 
 def _money_toll(r):
@@ -844,8 +938,57 @@ def _cls(c):
     return "etr" if c.get("etr") else ("urban" if c["urban"] else "other")
 
 
+def set_stops(route, stops):
+    """stops: [(metres along the route, seconds stopped)] -> route["_stops"] = [(base seconds, seconds)], sorted.
+    retime puts each stop on the clock at its point, so later chunks and 407 entries are timed after it;
+    typical_s, plan_s and arrive stay driving time (drive_plan adds the stops to the arrival)."""
+    out = []
+    for m_at, dur in stops or []:
+        if not dur or dur <= 0:
+            continue
+        acc_m = acc_s = 0.0
+        pos = None
+        for c in route["chunks"]:
+            if acc_m + c["m"] >= m_at:
+                frac = (m_at - acc_m) / c["m"] if c["m"] > 0 else 0.0
+                pos = acc_s + c["s"] * max(0.0, min(1.0, frac))
+                break
+            acc_m += c["m"]
+            acc_s += c["s"]
+        out.append((round(acc_s if pos is None else pos, 1), float(dur)))
+    route["_stops"] = sorted(out)
+    return route
+
+
+def _clock(depart, opts):
+    """seconds after `depart` -> wall clock in the trip's time zone (it jumps at a daylight-saving change). Plain
+    addition when the UTC offset is the same a day later, which is every night but two a year."""
+    tz, reg = opts.get("tz") or "America/Toronto", opts.get("region")
+    off0 = th.offset_at_local(depart, tz, reg)[0]
+    if th.offset_at_utc(depart - off0 + dt.timedelta(days=1), tz, reg)[0] == off0:
+        return lambda s: depart + dt.timedelta(seconds=s)
+    return lambda s: dc.add_s(depart, s, tz, reg)
+
+
+TRAFFIC_TZ = "America/Toronto"   # the 407 rate bands and the congested areas' rows are Ontario Eastern clock times
+
+
+def _toronto(opts):
+    """trip wall clock -> Toronto wall clock, for the 407 rate bands and the congested-area traffic rows (every
+    area in traffic.json is in the Eastern zone); None when the trip is on Toronto time (--tz for another zone)."""
+    tz, reg = opts.get("tz") or TRAFFIC_TZ, opts.get("region")
+    if tz == TRAFFIC_TZ:
+        return None
+
+    def conv(when):
+        utc = when - th.offset_at_local(when, tz, reg)[0]
+        return utc + th.offset_at_utc(utc, TRAFFIC_TZ, None)[0]
+    return conv
+
+
 def retime(route, depart, opts):
-    """Recompute typical and plan times, arrivals, 407 entry times and toll prices for `depart`."""
+    """Recompute typical and plan times, arrivals, 407 entry times and toll prices for `depart`. Stops from
+    set_stops move the clock (later chunks and 407 entries) but not typical_s, plan_s or arrive."""
     w = float(opts.get("weather") or 1.0)
     hol = set(opts.get("holidays") or ()) | tolls.holidays_default()
     tomtom = route["engine"] == "tomtom"
@@ -855,12 +998,22 @@ def retime(route, depart, opts):
                 and abs((depart - q).total_seconds()) <= 600)
     wt = 1.0 if live else w
     getaway = None if tomtom else _getaway_dir(route)
+    clock = _clock(depart, opts)
+    tor = _toronto(opts)
     t = p = base = 0.0
-    marks = [(0.0, 0.0)]
+    marks = [(0.0, 0.0)]   # (base seconds, clock seconds: driving plus the stops passed)
     stats = {}   # (class, label) -> [base seconds, typical factor x base seconds, plan factor x base seconds]
     areas = []
+    stops = list(route.get("_stops") or [])
+    si, waited = 0, 0.0
     for c in route["chunks"]:
-        when = depart + dt.timedelta(seconds=t)
+        while si < len(stops) and stops[si][0] <= base + 1e-6:   # a stop at the chunk's start
+            waited += stops[si][1]
+            si += 1
+            marks.append((base, t + waited))
+        when = clock(t + waited)
+        if tor and (c.get("etr") or c["urban"]):
+            when = tor(when)
         if tomtom:
             ft = 1.0
             fp, lab = tomtom_plan_factor(c, when, hol)
@@ -873,31 +1026,43 @@ def retime(route, depart, opts):
         st[2] += c["s"] * fp
         if c["urban"] and not c.get("etr") and c.get("area") and c["area"] not in areas:
             areas.append(c["area"])
+        while si < len(stops) and stops[si][0] < base + c["s"]:   # a stop inside the chunk, at its own point
+            b_at = stops[si][0]
+            t_at = t + c["s"] * ft * wt * (b_at - base) / c["s"]
+            marks.append((b_at, t_at + waited))
+            waited += stops[si][1]
+            si += 1
+            marks.append((b_at, t_at + waited))
         t += c["s"] * ft * wt
         p += c["s"] * fp * wt
         base += c["s"]
-        marks.append((base, t))
+        marks.append((base, t + waited))
     route["typical_s"] = round(t, 1)
     route["plan_s"] = round(max(p, t), 1)
     route["depart"] = depart
-    route["arrive"] = depart + dt.timedelta(seconds=route["typical_s"])
-    route["arrive_plan"] = depart + dt.timedelta(seconds=route["plan_s"])
+    route["arrive"] = clock(route["typical_s"])
+    route["arrive_plan"] = clock(route["plan_s"])
 
     def to_typ(b):
+        # a stop at b adds a mark at the same base position: the time after the stop is the one returned
+        out, b = marks[-1][1], max(0.0, b)
         for (b0, t0), (b1, t1) in zip(marks, marks[1:]):
-            if b <= b1:
-                return t0 + (t1 - t0) * ((b - b0) / (b1 - b0) if b1 > b0 else 0.0)
-        return marks[-1][1]
+            if b1 > b0 and b0 <= b <= b1:
+                out = t0 + (t1 - t0) * (b - b0) / (b1 - b0)
+                if b < b1:
+                    return out
+        return out
 
     tot_tp = tot_cam = 0.0
     for sg in route["etr"]:
         sg["offset_s"] = round(to_typ(sg["offset_base_s"]), 1)
-        entry = (depart + dt.timedelta(seconds=sg["offset_s"])).replace(second=0, microsecond=0)
-        pt = tolls.price_407(sg, entry, True)
-        pc = tolls.price_407(sg, entry, False)
+        entry = clock(sg["offset_s"]).replace(second=0, microsecond=0)
+        at = tor(entry) if tor else entry   # entry_time stays on the trip's clock; the band is Toronto time
+        pt = tolls.price_407(sg, at, True)
+        pc = tolls.price_407(sg, at, False)
         sg.update({"entry_time": entry, "band_start": pt["band_start"], "day_type": pt["day_type"],
                    "toll_transponder": pt["toll"], "toll_camera": pc["toll"], "zones": pt["zones"],
-                   "note": pc["note"]})
+                   "note": pc["note"], "band_toronto": bool(tor)})
         tot_tp += pt["toll"]
         tot_cam += pc["toll"]
     route["toll_407_transponder"] = round(tot_tp, 2)
@@ -950,6 +1115,7 @@ def _factor_note(route, stats, areas, w, depart, live=False):
 def reverse_for_return(route, depart, opts):
     """The same roads driven back: reversed geometry and chunks, 407 direction flipped, retimed for `depart`."""
     r = copy.deepcopy(route)
+    r["_stops"] = []   # the outbound stops do not apply backwards; drive_plan sets the return's own
     chunks = route["chunks"]
     end = route["poly"][-1] if route["poly"] else (chunks[-1]["lat"], chunks[-1]["lon"]) if chunks else (0.0, 0.0)
     rev = []

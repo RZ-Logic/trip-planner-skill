@@ -1,6 +1,6 @@
 {
  "verified": "2026-10-10",
- "source": "trip-planner model, not measured traffic: keyless engines (Valhalla, OSRM) have no historical speeds (tested 2026-10-10, same time at 03:00, 08:00 and 17:30), so free-flow time is calibrated and then scaled by time of day; peak factor 1.45 matches trip_hubs.py traffic_factor_for. https://valhalla.github.io/valhalla/api/route/api-reference/",
+ "source": "trip-planner model, not measured traffic: keyless engines (Valhalla, OSRM) have no historical speeds (tested 2026-10-10, same time at 03:00, 08:00 and 17:30), so free-flow time is calibrated and then scaled by time of day; trip_hubs.py reads these rows too (typical for rides, plan for --access car). https://valhalla.github.io/valhalla/api/route/api-reference/",
  "note": "factors multiply free-flow time per route chunk, chosen by the clock time the chunk is driven and whether it is on the 407 ETR, inside a congested area or elsewhere; plan is a conservative planning allowance (modelled, not a measured on-time rate)",
  "areas": [
   {"name": "GTHA", "source": "boxes drawn around the built-up area, Hamilton to Oshawa south of the Oak Ridges Moraine, from OSM land use; Milton box starts at 43.47 and a box covers Hwy 401 from Milton to the 401/407 junction (no gaps on the 401, 2026-10-10)", "boxes": [

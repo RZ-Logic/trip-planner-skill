@@ -33,9 +33,14 @@ DEFAULT_TZ = "America/Toronto"
 DIRS = {"E": "eastbound", "W": "westbound"}
 LABELS = {"fastest": "Fastest", "toll-free": "Toll-free", "without 407": "Without 407", "alternative": "Alternative"}
 ENGINES = {"tomtom": "TomTom", "valhalla": "Valhalla", "osrm": "OSRM"}
+OSM_CREDIT = "(c) OpenStreetMap contributors, ODbL"   # the free routing engines and geocoders run on OSM data
+# Open-Meteo's API data are CC BY 4.0 and its licence page asks for a credit linking to Open-Meteo.com
+# (https://open-meteo.com/en/licence, read 2026-10-20)
+WEATHER_SOURCE = ("weather: Open-Meteo forecast, weather data by Open-Meteo.com "
+                  "(CC BY 4.0, https://open-meteo.com/en/licence)")
 CONF_ORDER = {"official": 0, "curated": 1, "osm": 2, "stale": 3}
 EV_FLAGS = ("ev_model", "battery_kwh", "soc", "max_dc_kw", "nacs_adapter", "kwh_per_100km")
-ROUTING_HOSTS = ["valhalla1.openstreetmap.de", "router.project-osrm.org", "routing.openstreetmap.de"]
+ROUTING_HOSTS = ["valhalla1.openstreetmap.de", "router.project-osrm.org", "routing.openstreetmap.de"]   # defaults
 DRIVE_HOSTS = ["nominatim.openstreetmap.org", "photon.komoot.io"] + ROUTING_HOSTS + [
     "www.ontario.ca", "prod-energy-fuel-prices.s3.amazonaws.com", "api.open-meteo.com", "overpass-api.de",
     "developer.nlr.gov", "secure.toronto.ca", "ckan0.cf.opendata.inter.prod-toronto.ca",
@@ -43,9 +48,19 @@ DRIVE_HOSTS = ["nominatim.openstreetmap.org", "photon.komoot.io"] + ROUTING_HOST
 GEOCODE_HOSTS = ["nominatim.openstreetmap.org", "photon.komoot.io"]
 
 
+def routing_hosts():
+    """The routing hosts in use: TRIP_PLANNER_VALHALLA_URL and TRIP_PLANNER_OSRM_URL when set, else ROUTING_HOSTS."""
+    return th.routing_hosts()
+
+
 def drive_hosts():
-    """Hosts the driving planner calls: the core list, then the city parking layers (each used only near its city)."""
-    hosts = list(DRIVE_HOSTS)
+    """Hosts the driving planner calls: the core list (with the configured routers in place of the default ones),
+    then the city parking layers (each used only near its city)."""
+    hosts = []
+    for h in DRIVE_HOSTS:
+        for x in (routing_hosts() if h in ROUTING_HOSTS else [h]):
+            if x not in hosts:
+                hosts.append(x)
     try:
         for layer in dc.load_data("parking").get("city_layers") or []:
             h = urllib.parse.urlsplit(layer.get("url", "")).netloc
@@ -57,17 +72,27 @@ def drive_hosts():
 
 
 def blocked_note(warnings):
-    """NETWORK BLOCKED text when the routing hosts cannot be reached at all (a sandbox), else None."""
-    status = th.check_network(ROUTING_HOSTS, timeout=6)
-    blocked = [h for h in ROUTING_HOSTS if status[h] != "ok"]
-    if len(blocked) < len(ROUTING_HOSTS):
+    """NETWORK BLOCKED text when the routing hosts cannot be reached at all (a sandbox), TLS FAILED text when this
+    Python could not verify their certificates, else None."""
+    hosts = routing_hosts()
+    status = th.check_network(hosts, timeout=6)
+    blocked = [h for h in hosts if status[h] != "ok"]
+    if len(blocked) < len(hosts):
         return None
-    return ("NETWORK BLOCKED: this environment cannot reach the routing hosts (%s), so there are no driving times. "
+    tls = [h for h in blocked if status[h].startswith("tls failed")]
+    if tls and len(tls) == len(blocked):   # certificates, not the allow-list
+        return th.tls_failed_message(tls) + (" Meanwhile the parking above comes from the curated files and the "
+                                             "post-2019 Green P carparks in parking.json only.")
+    note = ("NETWORK BLOCKED: this environment cannot reach the routing hosts (%s), so there are no driving times. "
             "This is not an address problem. Allow these domains in this environment's network settings (on "
             "claude.ai, the code execution network access setting): %s. Meanwhile follow the manual method in "
             "references/driving.md (Google Maps for times, the 407 zone table in references/driving/tolls.json, "
-            "the curated parking files); the parking above comes from those files only."
+            "the curated parking files); the parking above comes from those files and the post-2019 Green P "
+            "carparks in parking.json only."
             % (", ".join(blocked), ", ".join(drive_hosts())))
+    if tls:   # one host failed its certificate check, another is blocked: both need fixing
+        note += " The certificate check also failed for %s: %s" % (", ".join(tls), th.TLS_HELP)
+    return note
 
 
 def geocode_blocked_message():
@@ -94,6 +119,14 @@ def resolve_drive_place(text, label, warnings, strict):
 
 def costs():
     return dc.load_data("costs")
+
+
+def home_rate_note(day):
+    """A warning once the trip day is past the OEB rate period the home electricity estimate is from, else None."""
+    vt = costs()["electricity"].get("valid_to")
+    if vt and day > dt.date(*map(int, vt.split("-"))):
+        return ("home electricity rate is the OEB estimate in effect to %s; check oeb.ca for the current rate" % vt)
+    return None
 
 
 def _mod(name):
@@ -182,14 +215,24 @@ def _province_from_text(text):
     return None
 
 
+def _country_from_text(text):
+    """'CA' or 'US' from a geocoder display name ending in the country, else None."""
+    t = (text or "").strip().lower()
+    if t.endswith(", canada"):
+        return "CA"
+    if t.endswith(", united states") or t.endswith(", united states of america"):
+        return "US"
+    return None
+
+
 def reverse_address(lat, lon):
     """One Nominatim /reverse call (cached 30 days, 1 request per second): {"label", "country", "state"} or {}."""
     g = costs().get("geocode") or {}
     base = g.get("reverse_url", "https://nominatim.openstreetmap.org/reverse")
-    q = {"format": "jsonv2", "zoom": "18", "addressdetails": "1"}   # 18: building level, so house numbers come back
-    # 4 decimals (about 11 m) still find the building or street for the label, and the geocoder never gets the
-    # full precision of the coordinates the user typed; the cache key is the same request
-    url = base + "?" + urllib.parse.urlencode(dict(q, lat="%.4f" % lat, lon="%.4f" % lon))
+    q = {"format": "jsonv2", "zoom": "16", "addressdetails": "1"}   # 16: street level, enough for a label
+    # 3 decimals (about 100 m), like trip_hubs' reverse lookups, so a home pin never asks for its house number;
+    # the cache key is the same request
+    url = base + "?" + urllib.parse.urlencode(dict(q, lat="%.3f" % lat, lon="%.3f" % lon))
     key = url
     try:
         data = dc.fetch_json(url, timeout=20, max_age_h=g.get("cache_h", 720), min_interval=g.get("min_interval_s", 1.1),
@@ -247,7 +290,7 @@ def _home_label(lat, lon):
 
 def place_label(text, lat, lon):
     """(short label, {"country", "state"} or {}) for the DRIVE line. A 'lat,lon' input is reverse geocoded once
-    ('805 Santa Maria Blvd, Milton'); an address keeps the geocoder's name."""
+    at street level ('Santa Maria Blvd, Milton'); an address keeps the geocoder's name."""
     if not th.LATLON_RE.match(text or ""):
         st = _province_from_text(text)
         return short_label(text), ({"state": st} if st else {})
@@ -277,6 +320,18 @@ def nearest_market(lat, lon):
     cfg = costs()["fuel"]
     best = min(cfg["markets"], key=lambda m: th.haversine_m(lat, lon, m["lat"], m["lon"]))
     return best, th.haversine_m(lat, lon, best["lat"], best["lon"]) / 1000.0
+
+
+FUEL_CSV_MIN_COLUMNS = 19   # parse_fuel_csv falls back to column 18 (Fuel Type) when the header is renamed
+
+
+def _fuel_csv_check(body):
+    """fetch `validate` for the fuel price file: a proxy or login page sent with HTTP 200 is never cached."""
+    text = body.decode("utf-8-sig", "replace")
+    first = next(csv.reader(io.StringIO(text)), [])
+    if text.lstrip().startswith("<") or len(first) < FUEL_CSV_MIN_COLUMNS:
+        return "not the Ontario fuel price CSV"
+    return None
 
 
 def parse_fuel_csv(text, column, fuel_type):
@@ -341,7 +396,7 @@ def fuel_price(lat, lon, fuel, warnings, override=None, province=None):
     fb = cfg["fallback"]
     got = None
     try:
-        body = dc.fetch(cfg["csv_url"], timeout=60, max_age_h=cfg["cache_h"])
+        body = dc.fetch(cfg["csv_url"], timeout=60, max_age_h=cfg["cache_h"], validate=_fuel_csv_check)
         got = parse_fuel_csv(body.decode("utf-8", "replace"), column, cfg["fuel_types"][fuel])
         if got is None:
             warnings.append("the Ontario fuel price file had no %s price; using the %s figure" % (fuel, fb["basis"]))
@@ -615,6 +670,47 @@ def ev_battery_for(car):
     return LEAF_40[2] if key not in _ev_presets() else None
 
 
+TRIM_GAP = 0.10   # a looked-up EV whose NRCan range x rating implies a battery this much smaller gets a scaled one
+
+
+def _nrcan_energy(c):
+    """NRCan range x combined kWh/100 km (about the energy one full charge gives), or None."""
+    try:
+        return float(c["range_km"]) * float(c["comb"]) / 100.0
+    except (KeyError, TypeError, ValueError):
+        return None
+
+
+def _ref_ratio(p):
+    """A preset's usable kWh over the NRCan energy of its own reference row, or None (the generic preset)."""
+    ref = p.get("nrcan_ref") or {}
+    try:
+        return float(p["battery_kwh"]) / (float(ref["range_km"]) * float(ref["kwh_100km"]) / 100.0)
+    except (KeyError, TypeError, ValueError, ZeroDivisionError):
+        return None
+
+
+def ev_trim_battery(car, key):
+    """Usable kWh for a looked-up EV whose NRCan range and rating imply a battery more than TRIM_GAP smaller than
+    its preset's (a Standard Range or RWD trim on a Long Range preset; an EV with no preset on the generic one):
+    its NRCan energy x the preset's own ratio (for the generic preset, the median ratio of the presets). Never
+    larger than the preset's battery. Else None."""
+    presets = _ev_presets()
+    p = presets.get(key or "generic")
+    e = _nrcan_energy(car)
+    if not p or not e:
+        return None
+    ratio = _ref_ratio(p)
+    if ratio is None:
+        rs = sorted(r for r in (_ref_ratio(x) for x in presets.values()) if r)
+        if not rs:
+            return None
+        mid = len(rs) // 2
+        ratio = rs[mid] if len(rs) % 2 else (rs[mid - 1] + rs[mid]) / 2.0
+    kwh = round(e * ratio, 1)
+    return kwh if kwh < float(p["battery_kwh"]) * (1 - TRIM_GAP) else None
+
+
 def _figs(c):
     return {"label": c.get("label") or "your car", "city": float(c["city"]), "hwy": float(c["hwy"])} \
         if c.get("city") is not None and c.get("hwy") is not None else (
@@ -651,7 +747,9 @@ def build_ev(car, args, warnings):
     nr = ea.get("nrcan")
     if nr and not ea.get("kwh_per_100km"):   # the NRCan rating of the looked-up or saved EV
         e["kwh_100km_city"], e["kwh_100km_hwy"] = nr["city"], nr["hwy"]
-        e["name"] = "%s (NRCan rating; battery and charging from the %s preset)" % (nr["label"], e["key"])
+        e["name"] = ("%s (NRCan rating; battery scaled from its NRCan range, charging from the %s preset)"
+                     if car.get("battery_scaled") else
+                     "%s (NRCan rating; battery and charging from the %s preset)") % (nr["label"], e["key"])
     car["ev"] = e
     return e
 
@@ -809,18 +907,30 @@ def resolve_car(args, warnings):
                        class_given=bool(args.car_class), source=cfg["source"], source_url=cfg["source_url"])
     else:
         car["fuel"], car["unit"] = "electricity", "kWh/100 km"
-        model, stand_in_kwh = args.ev_model, None
+        model, stand_in_kwh, trim_kwh, trim_src = args.ev_model, None, None, None
         if not model and looked is not None:
-            model, stand_in_kwh = ev_preset_for(looked), ev_battery_for(looked)
+            model, stand_in_kwh, trim_src = ev_preset_for(looked), ev_battery_for(looked), looked
         if not model and using_saved:
             model = saved_flags.get("ev_model")
             if not model and saved:
-                model, stand_in_kwh = ev_preset_for(saved), ev_battery_for(saved)
+                model, stand_in_kwh, trim_src = ev_preset_for(saved), ev_battery_for(saved), saved
+        if trim_src is not None and not stand_in_kwh:   # the preset was matched, not given: check its battery fits
+            trim_kwh = ev_trim_battery(trim_src, model)
         sf = saved_flags if using_saved else {}
-        ea = {"model": model, "battery_kwh": args.battery_kwh or sf.get("battery_kwh") or stand_in_kwh,
+        ea = {"model": model,
+              "battery_kwh": args.battery_kwh or sf.get("battery_kwh") or stand_in_kwh or trim_kwh,
               "max_dc_kw": args.max_dc_kw or sf.get("max_dc_kw"),
               "kwh_per_100km": args.kwh_per_100km or (sf.get("kwh_per_100km") if not args.ev_model else None),
               "nacs_adapter": bool(args.nacs_adapter or sf.get("nacs_adapter")), "nrcan": None}
+        if trim_kwh and ea["battery_kwh"] == trim_kwh:
+            pk = model or "generic"
+            car["battery_scaled"] = {"kwh": trim_kwh, "preset": pk, "preset_kwh": _ev_presets()[pk]["battery_kwh"]}
+            warnings.append("%s: its NRCan range and rating imply about %.0f kWh usable, less than the %s preset's "
+                            "%.0f kWh, so charging uses %.0f kWh%s; pass --battery-kwh for your car's exact battery"
+                            % (car.get("label") or "your EV", trim_kwh, pk, car["battery_scaled"]["preset_kwh"],
+                               trim_kwh, "" if pk == "generic" else
+                               " (fast charging stays the preset's; smaller batteries often charge slower, so "
+                               "pass --max-dc-kw too if you know it)"))
         if stand_in_kwh and ea["battery_kwh"] == stand_in_kwh:
             pack = _old_leaf_pack(looked or saved or {})
             warnings.append("charging for %s uses the %s preset (the same CHAdeMO port and charging speed) with a "
@@ -970,7 +1080,11 @@ def car_lines(res):
             first = "%s%s: %s kWh/100 km (%s)%s" % (nm, saved, _fig(kwh_given),
                                                     "your saved figure" if how == "saved" else "your figure", tail)
         elif how in ("lookup", "saved") and ea.get("nrcan"):
-            where = ("from the %s preset" % preset if preset and preset != "generic" and not c.get("generic_ev")
+            scaled = c.get("battery_scaled")
+            where = ("battery scaled from its NRCan range, generic charging, pass --max-dc-kw"
+                     if scaled and c.get("generic_ev") else
+                     "battery scaled from its NRCan range, charging from the %s preset" % preset if scaled else
+                     "from the %s preset" % preset if preset and preset != "generic" and not c.get("generic_ev")
                      else "generic, pass --battery-kwh" if c.get("generic_ev") else "your figures")
             first = "%s%s: %s (%s)%s%s" % (label, saved, figs, _nrcan_text(c), "; %s %s" % (bat, where) if bat else "",
                                            rough)
@@ -1127,6 +1241,7 @@ def route_samples(route, o, d, depart):
     out = []
     for f in fracs:
         p = poly[int(round(f * (len(poly) - 1)))]
+        # naive addition: across a daylight-saving change the forecast hour is one off, which does not matter here
         out.append((p[0], p[1], depart + dt.timedelta(seconds=dur * f)))
     return out
 
@@ -1147,21 +1262,24 @@ def mid_point(route, o, d):
 
 def plan_backwards(dr, route, deadline, extra_s, opts):
     """Arrive-by: the latest whole-minute departure with depart + plan time + extra_s <= deadline. Two passes,
-    then step back while late and forward while it still holds (a traffic band edge moves the plan time)."""
+    then step back while late and forward while it still holds (a traffic band edge moves the plan time).
+    Clock sums follow opts["tz"] across a daylight-saving change."""
+    tz, reg = opts.get("tz"), opts.get("region")
+
     def late(dep):
-        return (dep + dt.timedelta(seconds=(route.get("plan_s") or 0) + extra_s) - deadline).total_seconds()
+        return dc.elapsed_s(deadline, dc.add_s(dep, (route.get("plan_s") or 0) + extra_s, tz, reg), tz, reg)
     dep = route.get("depart") or deadline
     for _ in range(2):
-        dep = floor_min(deadline - dt.timedelta(seconds=(route.get("plan_s") or 0) + extra_s))
+        dep = floor_min(dc.add_s(deadline, -((route.get("plan_s") or 0) + extra_s), tz, reg))
         dr.retime(route, dep, opts)
     for _ in range(8):
         lt = late(dep)
         if lt <= 0:
             break
-        dep = floor_min(dep - dt.timedelta(seconds=lt))
+        dep = floor_min(dc.add_s(dep, -lt, tz, reg))
         dr.retime(route, dep, opts)
     for _ in range(30):   # early at a band edge: move later one minute at a time while still on time
-        cand = dep + dt.timedelta(minutes=1)
+        cand = dc.add_s(dep, 60, tz, reg)
         dr.retime(route, cand, opts)
         if late(cand) <= 0:
             dep = cand
@@ -1169,6 +1287,16 @@ def plan_backwards(dr, route, deadline, extra_s, opts):
             dr.retime(route, dep, opts)
             break
     return dep
+
+
+def route_stops(route, charging, border_min):
+    """[(metres along, seconds)] for the border allowance at each listed crossing and each charging stop, for
+    drive_route.set_stops (a crossing missing from tolls.json has no position, so its allowance is not placed)."""
+    out = [(float(b.get("along_m") or 0.0), border_min * 60.0) for b in route.get("bridges") or []]
+    for s in (charging or {}).get("stops") or []:
+        out.append((float(s.get("km_along") or 0.0) * 1000.0,
+                    (float(s.get("charge_min") or 0.0) + float(s.get("detour_min") or 0.0)) * 60.0))
+    return out
 
 
 # --------------------------------------------------------------------------- money and the trade-off
@@ -1195,6 +1323,7 @@ def trade_off(items, vot, transponder, round_trip=False, fee_included=False, arr
                      and it["route"].get("label") == "without 407"), None)
     has_etr = any(it["route"].get("etr") for it in items)
     what = "The 407" if fast["route"].get("etr") else "The toll route"
+    unpriced = bool(fast["route"].get("toll_unpriced"))   # money leaves out tolls the engine reported off the 407
     if not fast["route"].get("has_tolls"):
         lead = "No tolls on the fastest route."
     elif free is None:
@@ -1210,23 +1339,30 @@ def trade_off(items, vot, transponder, round_trip=False, fee_included=False, arr
             out["typical_saved_min"] = typ
         typ_txt = ("" if typ is None else " (typical drive about %d min shorter)" % typ if typ >= 1
                    else " (typical drive about the same)")
+        tail = "; its tolls are not priced here." if unpriced else ""
         if saved < 1:
             lead = ("%s does not let you leave later than %s." if leave_later else "%s saves no time over %s.") % (
                 what, free["letter"])
         elif extra <= 0:
-            lead = ("%s lets you leave %d min later%s and costs no more." % (what, saved, typ_txt) if leave_later
-                    else "%s saves %d min and costs no more." % (what, saved))
+            costs_txt = "" if unpriced else " and costs no more"
+            lead = ("%s lets you leave %d min later%s%s." % (what, saved, typ_txt, costs_txt) if leave_later
+                    else "%s saves %d min%s." % (what, saved, costs_txt))
         else:
             per_h = extra / (saved / 60.0)
             out["per_hour"] = round(per_h, 2)
+            tail = ", plus tolls not priced here." if unpriced else ""
             lead = ("%s lets you leave %d min later%s for %s ($%d/h)." % (what, saved, typ_txt, dc.money(extra),
                                                                            round(per_h)) if leave_later
                     else "%s saves %d min for %s ($%d/h of time saved)." % (what, saved, dc.money(extra), round(per_h)))
         if round_trip and saved >= 1:
             lead = lead[:-1] + (", there and back (a later leave-by plus the drive back)." if arrive_by
                                 else ", there and back.")
+        if tail:
+            lead = lead[:-1] + tail
     rec_route = rec["route"]
     tag = LABELS.get(rec_route.get("label"), rec_route.get("label", "")).lower()
+    if rec_route.get("toll_unpriced"):
+        tag += ", tolls not priced"
     out["text"] = "%s At $%g/h of your time: take %s (%s)." % (lead, vot, rec["letter"], tag)
     if has_etr and not transponder:
         out["fee_note"] = ("Without a transponder 407 ETR also bills a $5 account fee in any month you drive on it "
@@ -1349,6 +1485,15 @@ def fix_json_escapes(text):
             return run + "\\" + nxt
         return m.group(0)
     return re.sub(r"(\\+)(.?)", fix, text, flags=re.S)
+
+
+def _toronto_check(body):
+    """fetch `validate` for the Toronto restrictions feed (JSON once fix_json_escapes has run)."""
+    try:
+        json.loads(fix_json_escapes(body.decode("utf-8", "replace")))
+    except ValueError:
+        return "not JSON"
+    return None
 
 
 def _sched_ok(sched, start, end):
@@ -1477,7 +1622,8 @@ def toronto_incidents(legs, tzname, region, warnings):
     if not legs:
         return []
     try:
-        text = dc.fetch(cfg["toronto_url"], timeout=60, max_age_h=1.0, stale_max_h=24.0).decode("utf-8", "replace")
+        text = dc.fetch(cfg["toronto_url"], timeout=60, max_age_h=1.0, stale_max_h=24.0,
+                        validate=_toronto_check).decode("utf-8", "replace")
         items = json.loads(fix_json_escapes(text)).get("Closure") or []
     except Exception as e:  # noqa: BLE001
         warnings.append("Toronto road restrictions feed unavailable (%s)" % e)
@@ -1618,7 +1764,8 @@ def hub_args(o, d, when, arrive_by, cost_per_km, stay_h, warnings, traffic_facto
     if hasattr(th, "build_parser"):
         return th.build_parser().parse_args(argv), argv
     warnings.append("trip_hubs.build_parser is missing (older trip_hubs), so park and ride uses built-in defaults")
-    ns = dict(TH_DEFAULTS, origin=ll(o), dest=ll(d), car_cost_per_km=cost_per_km, stay_hours=stay_h)
+    ns = dict(TH_DEFAULTS, origin=ll(o), dest=ll(d), car_cost_per_km=cost_per_km, stay_hours=stay_h,
+              osrm_url=getattr(th, "osrm_bases", lambda: [TH_DEFAULTS["osrm_url"]])()[0])
     ns["arrive_by" if arrive_by else "depart"] = when.strftime("%Y-%m-%d %H:%M")
     if traffic_factor:
         ns["traffic_factor"] = round(traffic_factor, 2)
@@ -1627,7 +1774,7 @@ def hub_args(o, d, when, arrive_by, cost_per_km, stay_h, warnings, traffic_facto
     return argparse.Namespace(**ns), argv
 
 
-def _run_with_timeout(fn, arg, timeout_s):
+def _run_with_timeout(fn, arg, timeout_s, cancel=None):
     box = {}
 
     def go():
@@ -1639,6 +1786,8 @@ def _run_with_timeout(fn, arg, timeout_s):
     t.start()
     t.join(timeout_s)
     if t.is_alive():
+        if cancel is not None:
+            cancel(t)   # its next request raises, so the abandoned search stops using the network
         return None, "took longer than %d s" % timeout_s
     if "err" in box:
         return None, str(box["err"]) or box["err"].__class__.__name__
@@ -1661,6 +1810,26 @@ def _parking_cost(p):
         c = p.get("cost")
         return c if isinstance(c, (int, float)) else 0.0
     return 0.0
+
+
+def pr_parking_cost(lots, best):
+    """(cost, note) of the destination parking for the park-and-ride trigger and the driving baseline: #1's price
+    when it needs no check; when #1's price is unknown or has a check line (OpenStreetMap, old or unverified data),
+    the higher of it and the cheapest walkable lot that fits the stay with a price needing no check, so an unchecked
+    '$5' or 'free' at #1 cannot switch park and ride off or zero the parking. note: None, or why #1's price was not
+    used."""
+    if not best:
+        return None, None
+    cost = best.get("cost")
+    if cost is not None and not best.get("check"):
+        return cost, None
+    ok = [x["cost"] for x in lots or [] if x is not best and x.get("cost") is not None and not x.get("check")
+          and x.get("fits_stay", True) and not x.get("beyond_walk")]
+    if not ok or (cost is not None and cost >= min(ok)):
+        return cost, None
+    why = (best.get("check") or {}).get("why") or "price unknown"
+    at = "" if cost is None else " (free)" if cost == 0 else " (%s)" % dc.money(cost)
+    return min(ok), "the cheapest lot with a checked price; #1%s needs a check: %s" % (at, why)
 
 
 def _crosses(start, end, a_hm, b_hm):
@@ -1740,7 +1909,7 @@ def park_and_ride(o, d, when, arrive_by, cost_per_km, stay_h, drive_total, park_
                         ctx.get("safety_min"))
     cmd = "python3 trip_hubs.py " + " ".join('"%s"' % a if " " in a else a for a in argv[:-1])
     log("park and ride: running trip_hubs in car mode")
-    res, err = _run_with_timeout(th.plan, ns, timeout_s)
+    res, err = _run_with_timeout(th.plan, ns, timeout_s, getattr(th, "cancel_thread", None))
     if err:
         warnings.append("park and ride search failed (%s). Run it yourself: %s" % (err, cmd))
         return {"ran": False, "command": cmd, "error": err}
@@ -1918,6 +2087,9 @@ def validate(args):
         raise SystemExit("--l-per-100km is for a fuel car; for an EV use --kwh-per-100km")
     if ev_set and args.vehicle == "gas":
         args.vehicle = "ev"   # EV options imply --vehicle ev
+    tz = getattr(args, "tz", None)
+    if tz and th._zoneinfo(tz) is None and tz not in th.TZ_TABLE:
+        raise SystemExit("--tz %r: unknown time zone; use an IANA name such as America/Winnipeg" % tz)
 
 
 def plan(args):
@@ -1938,7 +2110,12 @@ def _plan(args):
     d_lat, d_lon, d_label = resolve_drive_place(args.dest, "destination", warnings, strict)
     o, d = (o_lat, o_lon), (d_lat, d_lon)
     region = th.pick_region(regions, "auto", o_lat, o_lon)
-    tzname = (region or {}).get("timezone") or DEFAULT_TZ
+    tz_arg = getattr(args, "tz", None)
+    tzname = tz_arg or (region or {}).get("timezone") or DEFAULT_TZ
+    if not tz_arg and region is None:
+        warnings.append("the origin is outside the bundled region files, so the times you gave and the times shown "
+                        "are %s time; if the origin keeps another clock (northwestern Ontario is on Central time), "
+                        "rerun with --tz ZONE, an IANA name such as America/Winnipeg" % DEFAULT_TZ)
     holidays = dc.holidays_for(regions)
     now, _ = th.local_now(tzname, region)
     arrive_by = bool(args.arrive_by)
@@ -2009,6 +2186,23 @@ def _plan(args):
         dest_cc = reverse_country(d_lat, d_lon)
     res["destination"]["country"] = dest_cc
     res["origin"]["short"], res["destination"]["short"] = o_short, d_short
+    # a crossing missing from tolls.json: told apart by the two ends' countries (the origin's looked up only when
+    # no listed crossing explains the trip), it gets the border allowance and a warning, its toll unpriced
+    a_cfg = costs()["arrival"]
+    border_min = float(a_cfg.get("border_wait_min", 30))
+    orig_cc = (o_info or {}).get("country") or _country_from_text(o_label)
+    listed = all(r.get("bridges") for r in routes)   # each route without a listed crossing needs the allowance
+    if not orig_cc and dest_cc and not listed:
+        if _home_label(o_lat, o_lon):
+            orig_cc = (region.get("country") or REGION_COUNTRY) if region else None
+        else:
+            orig_cc = reverse_country(o_lat, o_lon)
+    res["origin"]["country"] = orig_cc
+    unlisted_border = bool(orig_cc and dest_cc and orig_cc != dest_cc and not listed)
+    if unlisted_border:
+        warnings.append("this drive crosses the Canada-US border at a crossing with no data here: its toll, if any, "
+                        "is not priced; bring a passport or NEXUS card and check CBSA and CBP wait times; a %d min "
+                        "allowance is included" % round(border_min))
 
     # ---- weather along the route, at the hour each part is driven
     fast = routes[0]
@@ -2017,7 +2211,7 @@ def _plan(args):
     else:
         wx = weather_points(route_samples(fast, o, d, depart), tzname, warnings, today=now.date())
         if wx.get("forecast"):
-            sources.append("weather: Open-Meteo forecast")
+            sources.append(WEATHER_SOURCE)
     if args.temp_c is not None:
         wx["temp_c"] = args.temp_c
     res["weather"] = wx
@@ -2055,6 +2249,9 @@ def _plan(args):
         warnings.append("ev_charging.py is missing, so no charging stops were planned; energy is priced at the home "
                         "rate")
     home_rate = costs()["electricity"]["home_rate"]
+    rate_note = home_rate_note(depart.date()) if ev else None
+    if rate_note:   # the home rate prices every EV plan's energy
+        warnings.append(rate_note)
     shared = {}
     api_key = dc.env_key("NLR_API_KEY") or "DEMO_KEY"
 
@@ -2075,13 +2272,16 @@ def _plan(args):
             shared["stations"] += [s for s in got if s.get("id") not in ids]
             shared["polys"].append(poly)
 
-    def energy_for(r):
+    def energy_for(r, temp_c=None):
+        """Fuel or energy for route r at temp_c (default: the outbound weather). The charging plan (an EV with
+        ev_charging) always uses the outbound weather: the drive back plans its own in make_return."""
+        tc = wx.get("temp_c") if temp_c is None else temp_c
         if not ev:
             cls = car_block.get("class") if car_block.get("how") == "class default" else args.car_class
             l100, basis = consumption(args.vehicle, cls, r.get("hwy_share"),
-                                      wx.get("temp_c"), car_block.get("l_per_100km"), car_block.get("figures"))
+                                      tc, car_block.get("l_per_100km"), car_block.get("figures"))
             cost = fuel_cost(r, l100, price)
-            cf = cold_factor(wx.get("temp_c"))
+            cf = cold_factor(tc)
             return {"kind": "fuel", "l100": l100, "basis": basis, "cost": cost, "extra_s": 0.0,
                     "text": "fuel ~%s (%.0f km at %.1f L/100 km%s, $%.3f/L %s)" % (
                         dc.money(cost), r.get("km", 0.0), l100,
@@ -2097,6 +2297,8 @@ def _plan(args):
                                    wx.get("temp_c"), warnings, eo)
             keep_stations(ch, poly)
             ch = {k: v for k, v in ch.items() if not k.startswith("_")}
+            ch.setdefault("soc_start", soc)
+            ch["soc_assumed"] = args.soc is None   # the CHARGING header marks the 90% default
             cost = (ch.get("public_cost") or 0.0) + (ch.get("home_energy_cost") or 0.0)
             return {"kind": "ev", "charging": ch, "cost": cost, "extra_s": ch.get("extra_s") or 0.0,
                     "kwh": ch.get("kwh_used"), "kwh100": ch.get("kwh_100km"),
@@ -2108,7 +2310,7 @@ def _plan(args):
         ea_ = car_block.get("ev_args") or {}
         nr = ea_.get("nrcan")
         k100 = (ea_.get("kwh_per_100km") or (nr and (nr["city"] + nr["hwy"]) / 2.0) or dflt) * \
-            cold_factor(wx.get("temp_c"))
+            cold_factor(tc)
         kwh = r.get("km", 0.0) * k100 / 100.0
         return {"kind": "ev", "charging": None, "cost": kwh * home_rate, "extra_s": 0.0, "kwh": kwh, "kwh100": k100,
                 "text": "energy ~%s (%.1f kWh/100 km x %.0f km at $%.2f/kWh home rate)" % (
@@ -2116,24 +2318,36 @@ def _plan(args):
 
     for r in routes[:3]:
         energy[id(r)] = energy_for(r)
-
-    a_cfg = costs()["arrival"]
-    border_min = float(a_cfg.get("border_wait_min", 30))
+        st = route_stops(r, energy[id(r)].get("charging"), border_min)
+        if st and hasattr(dr, "set_stops"):   # the waits go on the clock, so the 407 band is for after them
+            dr.set_stops(r, st)
+            dr.retime(r, r.get("depart") or depart, opts)
+    if ev and evc is not None and args.soc is None:
+        warnings.append("the starting charge was not given, so charging assumes you leave with 90%; pass --soc "
+                        "with the battery percent")
+    if hasattr(dr, "relabel") and any(r.get("_stops") for r in routes):
+        dr.relabel(routes)
+        fast = routes[0]
 
     def border_s(r):
-        """Planning allowance for each border crossing on the route (CBSA / CBP wait)."""
-        return border_min * 60.0 * len((r or {}).get("bridges") or [])
+        """Planning allowance for each border crossing on the route (CBSA / CBP wait); one for a crossing
+        missing from tolls.json."""
+        n = len((r or {}).get("bridges") or [])
+        if not n and unlisted_border:
+            n = 1
+        return border_min * 60.0 * n
 
     def lot_arrival(r):
         a = r.get("arrive") or r.get("depart") or depart
-        return a + dt.timedelta(seconds=energy[id(r)]["extra_s"] + border_s(r))
+        return dc.add_s(a, energy[id(r)]["extra_s"] + border_s(r), tzname, region)
 
     # ---- when you leave the destination, and the first parking search (search and walk minutes)
-    door_est = deadline if arrive_by else lot_arrival(fast) + dt.timedelta(minutes=a_cfg["default_search_min"])
+    door_est = deadline if arrive_by else dc.add_s(lot_arrival(fast), a_cfg["default_search_min"] * 60.0, tzname,
+                                                   region)
     leave_at = parse_leave_at(args.leave_at, day, door_est, tzname, region, warnings) if args.leave_at else None
     stay_min = (args.stay_hours if args.stay_hours is not None else 2.0) * 60.0
     if leave_at:
-        stay_min = (leave_at - door_est).total_seconds() / 60.0
+        stay_min = dc.elapsed_s(door_est, leave_at, tzname, region) / 60.0
     pk = _mod("parking")
     park_arrive = (deadline - dt.timedelta(minutes=10)) if arrive_by else lot_arrival(fast)
     park_minutes = stay_min
@@ -2170,23 +2384,24 @@ def _plan(args):
         """(lot arrival, lot departure, cap text or None, slot (start, end) or None)."""
         arr = lot_arrival(r)
         if leave_at:
-            end = leave_at + dt.timedelta(minutes=walk_min)
+            end = dc.add_s(leave_at, walk_min * 60.0, tzname, region)
         elif arrive_by:
-            end = deadline + dt.timedelta(minutes=stay_min + walk_min)
+            end = dc.add_s(deadline, (stay_min + walk_min) * 60.0, tzname, region)
         else:
-            end = arr + dt.timedelta(minutes=search_min + 2 * walk_min + stay_min)
+            end = dc.add_s(arr, (search_min + 2 * walk_min + stay_min) * 60.0, tzname, region)
         cap, slot = None, None
-        park_start = arr + dt.timedelta(minutes=search_min)
+        park_start = dc.add_s(arr, search_min * 60.0, tzname, region)
         if best and best.get("reservation") and "slot" in str(best.get("reservation")).lower():
             slot = pick_slot(parse_slots((parking or {}).get("place_rules")), park_start)
             if slot and end > slot[1]:
                 end, cap = slot[1], "slot ends %s" % dc.fmt_clock(slot[1])
         if best and best.get("max_stay_min"):
-            lim = max(park_start, slot[0] if slot else park_start) + dt.timedelta(minutes=best["max_stay_min"])
+            lim = dc.add_s(max(park_start, slot[0] if slot else park_start), best["max_stay_min"] * 60.0, tzname,
+                           region)
             fits = None
             if end > lim and pk is not None and hasattr(pk, "stay_fits"):
                 # a limit tied to the paid hours (Burlington "Mon-Fri 9-6, 3 hr limit") does not bind on a free day
-                fits = pk.stay_fits(best, park_start, (end - park_start).total_seconds() / 60.0, holidays)
+                fits = pk.stay_fits(best, park_start, dc.elapsed_s(park_start, end, tzname, region) / 60.0, holidays)
             if end > lim and not fits:
                 end, cap = lim, "max stay %s" % fmt_stay(best["max_stay_min"])
         return arr, end, cap, slot
@@ -2207,40 +2422,67 @@ def _plan(args):
             o_back = dict(opts, weather=wb["mult"])
         else:
             wb = wx
+        t_back = wb.get("temp_c") if wb.get("temp_c") is not None else wx.get("temp_c")
         back = dr.reverse_for_return(r, back_at, o_back)
         back["depart"] = back.get("depart") or back_at
         back["weather"] = {k: wb.get(k) for k in ("mult", "temp_c", "text", "kind")}
         en = energy[id(r)]
         back["energy_cost"], back["charge_s"], back["charging"] = en["cost"], 0.0, None
+        if not ev or evc is None:   # fuel, or an EV priced at the home rate: at the drive back's temperature
+            back["energy_cost"] = energy_for(back, t_back)["cost"]
         ch = en.get("charging")
         if ev and evc is not None and ch:
             rp = ch.get("return_plan")
             soc0 = ch.get("arrive_soc") or 0.0
             need = ch.get("return_soc_needed")
+            tf, t_out = getattr(evc, "temp_factor", None), ch.get("temp_c")
+            if rp is None and need is not None and tf is not None and None not in (t_back, t_out, ch.get("reserve")):
+                # the need at the drive back's own temperature (its energy, and the 20% reserve below 0 C); a
+                # warmer drive back keeps the outbound need, as the outbound note advises
+                m_ev = dc.load_data("ev")["model"]
+                need_b = ((need - ch["reserve"]) * tf(t_back) / tf(t_out)
+                          + m_ev["reserve"]["below_0C" if t_back < 0 else "default"])
+                if soc0 >= need and soc0 < need_b - 1e-9:   # the outbound note said no charging is needed
+                    ch["notes"] = [n for n in ch.get("notes") or [] if not n.startswith("Return trip")]
+                    ch["notes"].append("Return trip: you arrive with %.0f%% but at its forecast %d C the drive back "
+                                       "needs about %.0f%%: charge at the destination, or stop on the way back as "
+                                       "planned above" % (soc0 * 100, round(t_back), need_b * 100))
+                    if need_b <= m_ev["max_soc"] + 1e-9:
+                        ch["return_soc_needed"] = round(need_b, 3)
+                    else:
+                        ch.pop("return_soc_needed", None)
+                need = max(need, need_b)
             if rp is None and need is not None and soc0 < need:
                 bw = []
                 bpoly = back.get("poly") or list(reversed(r.get("poly") or [o, d]))
                 eo = ev_opts(bpoly, False, o)
                 eo["hwy_share"] = back.get("hwy_share", r.get("hwy_share"))
                 rp = evc.plan_charging(bpoly, back.get("km", r.get("km", 0.0)), back_at, car, soc0,
-                                       wb.get("temp_c") if wb.get("temp_c") is not None else wx.get("temp_c"), bw, eo)
+                                       t_back, bw, eo)
                 keep_stations(rp, bpoly)
                 rp = {k: v for k, v in rp.items() if not k.startswith("_")}
                 warnings.extend("drive back: %s" % w for w in bw)
             if rp is not None:
-                rp.setdefault("soc_start", soc0)
+                rp.setdefault("soc_start", rp.get("start_soc", soc0))   # a destination charge, else the arrival
                 back["charging"] = rp
                 back["energy_cost"] = (rp.get("public_cost") or 0.0) + (rp.get("home_energy_cost") or 0.0)
                 back["charge_s"] = rp.get("extra_s") or 0.0
                 if rp.get("feasible") is False:
                     back["charging_infeasible"] = True
             else:   # no charging needed on the way back: the energy is recharged at home
-                back["energy_cost"] = (ch.get("kwh_used") or en.get("kwh") or 0.0) * home_rate
+                kwh_b = ch.get("kwh_used") or en.get("kwh") or 0.0
+                if tf is not None and t_back is not None and t_out is not None:
+                    kwh_b *= tf(t_back) / tf(t_out)   # the drive back at its own temperature
+                back["energy_cost"] = kwh_b * home_rate
+        st = route_stops(back, back.get("charging"), border_min)
+        if st and hasattr(dr, "set_stops"):   # before the arrival additions below: retime resets arrive
+            dr.set_stops(back, st)
+            dr.retime(back, back_at, o_back)
         back["border_s"] = border_s(back)
         if back["charge_s"] or back["border_s"]:
             for k in ("arrive", "arrive_plan"):
                 if back.get(k):
-                    back[k] = back[k] + dt.timedelta(seconds=back["charge_s"] + back["border_s"])
+                    back[k] = dc.add_s(back[k], back["charge_s"] + back["border_s"], tzname, region)
         return back
 
     returns = {}
@@ -2259,7 +2501,7 @@ def _plan(args):
         en = energy[id(r)]
         money = en["cost"] + route_tolls(r, args.transponder)
         if arrive_by and r.get("leave_by"):
-            time_s = (deadline - r["leave_by"]).total_seconds()   # what you commit to: leave-by to the door
+            time_s = dc.elapsed_s(r["leave_by"], deadline, tzname, region)   # what you commit to: leave-by to the door
         else:
             time_s = (r.get("typical_s") or 0.0) + en["extra_s"] + border_s(r)
         back = returns.get(id(r))
@@ -2280,6 +2522,9 @@ def _plan(args):
             for b in (it["route"].get("bridges") or []) + ((back or {}).get("bridges") or []):
                 if b.get("cad") is None:
                     notes.append("%s charges in US dollars only (%s); not in the totals" % (b["name"], b["text"]))
+            if it["route"].get("toll_unpriced") or (back or {}).get("toll_unpriced"):
+                notes.append("%s has tolls this planner does not price (only the 407 ETR and the listed border "
+                             "crossings are); its total leaves them out" % it["letter"])
         cands = its
         if arrive_by:
             late = [it for it in its if it["route"]["leave_by"] < now]
@@ -2292,6 +2537,17 @@ def _plan(args):
                     " and ".join(it["letter"] for it in late),
                     " / ".join(dc.fmt_clock(it["route"]["leave_by"]) for it in late),
                     "it is" if len(late) == 1 else "they are"))
+
+        # a route whose charging stops (or drive back) cannot be planned is not recommended while another's can
+        def no_charge(it):
+            ch_ = energy[id(it["route"])].get("charging") or {}
+            back_ = returns.get(id(it["route"])) or {}
+            return ch_.get("feasible") is False or bool(back_.get("charging_infeasible"))
+        stuck = [it for it in cands if no_charge(it)]
+        if stuck and len(stuck) < len(cands):
+            cands = [it for it in cands if it not in stuck]
+            notes.append("%s cannot be driven on the fast chargers found (see CHARGING), so %s not recommended" % (
+                " and ".join(it["letter"] for it in stuck), "it is" if len(stuck) == 1 else "they are"))
         t = trade_off(cands, args.value_of_time, args.transponder, args.round_trip,
                       fee_included=count_fee and any(it["fee"] for it in its), arrive_by=arrive_by)
         if not count_fee and not args.transponder and t.get("fee_note"):
@@ -2302,8 +2558,12 @@ def _plan(args):
     rec_r = rec["route"]
 
     # ---- parking at the recommended arrival, for the time the car is actually parked
+    def parked_min(a, b):
+        return dc.elapsed_s(a, b, tzname, region) / 60.0   # elapsed time: the clock may change while parked
+
     lot_arr, lot_end, cap, slot = lot_leave(rec_r)
-    parked = (lot_end - lot_arr).total_seconds() / 60.0
+    parked = parked_min(lot_arr, lot_end)
+
     def _key(at, minutes):
         return floor_min(at), int(round(minutes))
 
@@ -2315,7 +2575,7 @@ def _plan(args):
     skipped = []
     for _ in range(4):   # each lot has its own walk, which moves the time parked: search until the pick holds
         lot_arr, lot_end, cap, slot = lot_leave(rec_r)
-        parked = (lot_end - lot_arr).total_seconds() / 60.0
+        parked = parked_min(lot_arr, lot_end)
         key = _key(lot_arr, parked)
         if parking is None or pk is None or _same(key, parking_key):
             break
@@ -2336,11 +2596,11 @@ def _plan(args):
             best = cand
             search_min, walk_min = lot_minutes(cand)
             a2, e2, _c, _s = lot_leave(rec_r)
-            ok = _key(a2, (e2 - a2).total_seconds() / 60.0)
+            ok = _key(a2, parked_min(a2, e2))
             if _same(ok, key) or not any(_same(k, ok) for k in results):
                 pick = cand
                 break
-            skipped.append((cand, (e2 - a2).total_seconds() / 60.0))
+            skipped.append((cand, parked_min(a2, e2)))
         best, search_min, walk_min = prev
         if pick is None:
             lots_now = targets(parking.get("options"))
@@ -2364,7 +2624,7 @@ def _plan(args):
     warnings.extend(tr_notes)
     res["trade_off"] = {k: v for k, v in tr.items()}
     lot_arr, lot_end, cap, slot = lot_leave(rec_r)
-    parked = (lot_end - lot_arr).total_seconds() / 60.0
+    parked = parked_min(lot_arr, lot_end)
     if parking is not None and best is not None and (parking.get("options") or [None])[0] is not best:
         opts_now = [x for x in parking.get("options") or [] if x is not best]
         parking = dict(parking, options=[best] + [x for x in opts_now if all(x is not y for y, _m in skipped)]
@@ -2412,9 +2672,9 @@ def _plan(args):
     lot_plan = rec_r.get("arrive_plan")
     rch = energy[id(rec_r)]["extra_s"] + border_s(rec_r)
     if rch:
-        lot_typ = lot_typ + dt.timedelta(seconds=rch) if lot_typ else lot_typ
-        lot_plan = lot_plan + dt.timedelta(seconds=rch) if lot_plan else lot_plan
-    at_door = lot_typ + dt.timedelta(minutes=search_min + walk_min) if lot_typ else None
+        lot_typ = dc.add_s(lot_typ, rch, tzname, region) if lot_typ else lot_typ
+        lot_plan = dc.add_s(lot_plan, rch, tzname, region) if lot_plan else lot_plan
+    at_door = dc.add_s(lot_typ, (search_min + walk_min) * 60.0, tzname, region) if lot_typ else None
     res["arrival"] = {"leave": rdep, "at_lot": lot_typ, "at_lot_plan": lot_plan, "lot": best["name"] if best else None,
                       "search_min": search_min, "walk_min": walk_min, "slack_min": slack_min,
                       "charge_min": round(energy[id(rec_r)]["extra_s"] / 60.0), "at_door": at_door,
@@ -2431,7 +2691,7 @@ def _plan(args):
             best.get("name") or "the parking lot",
             " (%s)" % (best.get("check") or {}).get("url") if (best.get("check") or {}).get("url") else ""))
     if arrive_by and rdep:
-        res["arrival"]["leave_in_min"] = round((rdep - now).total_seconds() / 60.0)
+        res["arrival"]["leave_in_min"] = round(dc.elapsed_s(now, rdep, tzname, region) / 60.0)
     if slot:
         res["arrival"]["slot"] = {"start": slot[0], "end": slot[1]}
     if leave_at and at_door and leave_at <= at_door:
@@ -2445,8 +2705,8 @@ def _plan(args):
                                     "border_min": round((back.get("border_s") or 0) / 60.0)}
         if back.get("charging_infeasible"):
             warnings.append("the drive back from %d%% needs charging that could not be planned (see CHARGING); the "
-                            "round trip time leaves it out" % round(((energy[id(rec_r)].get("charging") or {})
-                                                                     .get("arrive_soc") or 0) * 100))
+                            "round trip time leaves it out" % round(max(0.0, (back.get("charging") or {})
+                                                                        .get("soc_start") or 0) * 100))
 
     # ---- charging
     ch = energy[id(rec_r)].get("charging")
@@ -2458,7 +2718,7 @@ def _plan(args):
     gtha_boxes = next((a["boxes"] for a in dc.load_data("traffic")["areas"] if a["name"] == "GTHA"), [])
     in_gtha = dc.in_any(d_lat, d_lon, gtha_boxes)
     downtown = th.in_bbox(d_lat, d_lon, pr_cfg["downtown_toronto"])
-    best_cost = best.get("cost") if best else None
+    best_cost, park_note = pr_parking_cost((parking or {}).get("options"), best)
     trigger = None
     if args.park_and_ride == "on":
         trigger = "asked for"
@@ -2466,15 +2726,32 @@ def _plan(args):
         if downtown:
             trigger = "the destination is in downtown Toronto"
         elif best_cost is not None and best_cost > pr_cfg["trigger_parking_cad"]:
-            trigger = "parking near the destination costs %s for the stay" % dc.money(best_cost)
+            trigger = "parking near the destination costs %s for the stay%s" % (
+                dc.money(best_cost), " (%s)" % park_note if park_note else "")
     res["park_and_ride"] = None
     if trigger:
         en_r = energy[id(rec_r)]
-        per_km = (en_r["cost"] / rec_r["km"]) if rec_r.get("km") else 0.14
+        if en_r.get("kind") == "ev" and en_r.get("kwh") is not None and rec_r.get("km"):
+            per_km = en_r["kwh"] / rec_r["km"] * home_rate   # the short drive to the station is charged at home
+        else:
+            per_km = (en_r["cost"] / rec_r["km"]) if rec_r.get("km") else 0.14
         one_way = en_r["cost"] + route_tolls(rec_r, args.transponder)
-        drive_rt = (rec["money"] if args.round_trip else 2 * (rec["money"] - rec["fee"]) + rec["fee"]) + (best_cost or 0.0)
+        if args.round_trip:
+            drive_rt = rec["money"]
+        else:   # the drive back at its own 407 band and direction (a one-way bridge toll is not doubled), the
+                # same energy again, the account fee once
+            drive_rt = 2 * (rec["money"] - rec["fee"]) + rec["fee"]
+            try:
+                pr_back = dr.reverse_for_return(rec_r, lot_leave(rec_r)[1], opts)
+            except Exception as e:  # noqa: BLE001
+                warnings.append("park and ride: the drive back could not be priced (%s), so driving there and "
+                                "back is the drive there doubled" % e)
+            else:
+                fee = rec["fee"] or (fee_amt if count_fee and pr_back.get("etr") else 0.0)
+                drive_rt = (rec["money"] - rec["fee"]) + en_r["cost"] + route_tolls(pr_back, args.transponder) + fee
+        drive_rt += best_cost or 0.0
         ratio = (rec_r.get("plan_s") or 0) / float(rec_r.get("typical_s") or 1) if rec_r.get("typical_s") else 1.0
-        ride_time = deadline - dt.timedelta(minutes=60) if arrive_by else rdep
+        ride_time = dc.add_s(deadline, -3600.0, tzname, region) if arrive_by else rdep
         if hasattr(th, "plan_traffic_factor"):   # the same planning-allowance rows as this drive, times the weather
             tf = th.plan_traffic_factor(ride_time, holidays)[0] * (opts.get("weather") or 1.0)
         else:
@@ -2486,6 +2763,7 @@ def _plan(args):
                                 "drive_leave": rdep if arrive_by else None, "day": day, "traffic_factor": tf,
                                 "safety_min": slack_min, "vot": args.value_of_time})
         pr["trigger"] = trigger
+        pr["park_note"] = park_note
         res["park_and_ride"] = pr
 
     # ---- incidents
@@ -2510,21 +2788,27 @@ def _plan(args):
     # ---- links (navigation goes to the parking, not the door, and follows the recommended route)
     any_tolls = any(r.get("has_tolls") for r in routes)
     toll_free = not rec_r.get("has_tolls") and any_tolls
-    via = alt_waypoint(rec_r, routes) if rec_r.get("label") == "alternative" else None
-    links = {"google": google_link(o, target, toll_free, via),
+    avoid = toll_free and not rec_r.get("bridges")   # avoid=tolls would also avoid the border crossing
+    # a via point for a route Google would not pick by itself: an alternative, the 'without 407' route on a border
+    # trip, the forced 407 option, or a toll-free route that keeps a toll bridge
+    not_default = (rec_r.get("label") in ("alternative", "without 407") or rec_r.get("_forced_407")
+                   or (toll_free and not avoid))
+    via = alt_waypoint(rec_r, routes) if not_default else None
+    links = {"google": google_link(o, target, avoid, via),
+             # the other way: the route with tolls when the first link is the toll-free one (via or avoid=tolls)
              "google_alt": google_link(o, target, not toll_free) if any_tolls else None,
              "google_alt_text": ("with tolls" if toll_free else "avoid tolls") if any_tolls else None,
              "google_avoid_tolls": google_link(o, target, True) if any_tolls else None,
-             "via": via, "waze": waze_link(target, toll_free), "apple": apple_link(o, target, toll_free),
+             "via": via, "waze": waze_link(target, avoid), "apple": apple_link(o, target, avoid),
              "walk": walk_link(target, d) if best else None, "target": target,
              "target_name": best["name"] if best else "the destination", "follows": rec["letter"]}
     if arrive_by:
-        lot_by = deadline - dt.timedelta(minutes=search_min + walk_min)
-        links["google_timed"] = google_time_link(o, target, lot_by, True, toll_free)
+        lot_by = dc.add_s(deadline, -(search_min + walk_min) * 60.0, tzname, region)
+        links["google_timed"] = google_time_link(o, target, lot_by, True, avoid)
         links["timed_text"] = "Google Maps arrive by %s (desktop%s)" % (
             dc.fmt_clock(lot_by), "; Google picks its own route" if via else "")
     else:
-        links["google_timed"] = google_time_link(o, target, rdep, False, toll_free)
+        links["google_timed"] = google_time_link(o, target, rdep, False, avoid)
         links["timed_text"] = "Google Maps with this departure time (desktop%s)" % (
             "; Google picks its own route" if via else "")
     res["links"] = links
@@ -2535,10 +2819,14 @@ def _plan(args):
         sources.insert(0, "407 ETR %s rate chart" % yr)
     if parking and parking.get("sources"):
         sources.append("parking: %s" % "; ".join(parking["sources"]))
+    sources += parking_attributions(parking)
     if review_source(parking):
         sources.append(review_source(parking))
-    eng = ENGINES.get(fast.get("engine"), fast.get("engine") or "?")
-    sources.append("routing: %s" % eng)
+    sources.append(routing_source(fast.get("engine")))
+    # an address was geocoded (Nominatim, Photon when it found the house) or a lat,lon end got a Nominatim label
+    typed = not (th.LATLON_RE.match(args.origin or "") and th.LATLON_RE.match(args.dest or ""))
+    if typed or any((i or {}).get("label") for i in (o_info, d_info)):
+        sources.append("geocoding: %s, %s" % ("Nominatim/Photon" if typed else "Nominatim", OSM_CREDIT))
     if ch and ch.get("source"):
         sources.append("charging: %s" % ch["source"])
     rch_back = res.get("charging_return") or {}
@@ -2577,7 +2865,8 @@ def band_text(s):
             end = starts[(starts.index(start) + 1) % len(starts)]
         except (KeyError, ValueError, IndexError):
             end = None
-    return "%s %s to %s band" % (kind, start, end) if end else "%s band from %s" % (kind, start)
+    tor = " (Toronto time)" if s.get("band_toronto") else ""   # --tz for another zone: the 407 runs on Toronto's clock
+    return ("%s %s to %s band%s" % (kind, start, end, tor)) if end else "%s band from %s%s" % (kind, start, tor)
 
 
 def etr_lines(r, transponder, fee):
@@ -2603,7 +2892,7 @@ def route_lines(row, res):
     cs = row.get("charge_s") or 0
     bs = row.get("border_s") or 0
     if arr and (cs or bs):
-        arr = arr + dt.timedelta(seconds=cs + bs)
+        arr = dc.add_s(arr, cs + bs, res.get("timezone"), None)
     when = ("leave by %s, arrive %s" % (dc.fmt_clock(row["leave_by"], ref), dc.fmt_clock(arr, ref))
             if res["mode"] == "arrive_by" and row.get("leave_by") else "arrive %s" % dc.fmt_clock(arr, ref)
             if arr else "")
@@ -2815,6 +3104,24 @@ def attach_reviews(parking, dest, best, warnings, today=None):
     return parking
 
 
+def routing_source(engine):
+    """SOURCES entry for the routing engine, with the OpenStreetMap credit the free engines need."""
+    name = ENGINES.get(engine, engine or "?")
+    if engine in ("valhalla", "osrm"):
+        return "routing: %s, map data %s" % (name, OSM_CREDIT)
+    return "routing: %s" % name
+
+
+def parking_attributions(parking):
+    """The licence statement of each city's open data behind a lot the text shows (the first SHOWN_LOTS), once
+    each, in order: a lot from a city layer or Green P carries its city's "attribution" (parking.json)."""
+    out = []
+    for x in ((parking or {}).get("options") or [])[:SHOWN_LOTS]:
+        if x.get("attribution") and x["attribution"] not in out:
+            out.append(x["attribution"])
+    return out
+
+
 def review_source(parking):
     """The SOURCES entry for Google review rates (the attribution Google's terms require), or None. It claims
     review rates only when one of the lots the text shows (the first SHOWN_LOTS) carries them."""
@@ -2843,6 +3150,9 @@ def check_text(items):
             how = c["url"]
         elif c.get("search"):
             how = 'search "%s"' % c["search"]
+        if c.get("osm_url"):   # an OSM website tag: shown labelled, never the check link (parking.check_hint)
+            osm = "OSM-supplied, unverified: %s" % c["osm_url"]
+            how = "%s (%s)" % (how, osm) if how else osm
         out.append("#%d %s: %s%s" % (c.get("n") or 0, c.get("name") or "parking", c.get("why") or "check",
                                      ", " + how if how else ""))
     return "; ".join(out)
@@ -2901,6 +3211,8 @@ def clip(text, n):
 def pr_lines(pr, res):
     by = res["mode"] == "arrive_by"
     first = "run because %s" % pr.get("trigger")
+    if pr.get("park_note") and pr["park_note"] not in (pr.get("trigger") or ""):
+        first += "; parking counted at %s (%s)" % (dc.money(pr["park_cost"]), pr["park_note"])
     if pr.get("traffic_factor"):
         first += "; hub drives planned like the drive (x%.2f traffic allowance, %g min spare)" % (
             pr["traffic_factor"], pr.get("safety_min") or 0)
@@ -2971,7 +3283,9 @@ def parking_lines(res, day):
             fmt_stay(res.get("stay_min", res["parking_stay_min"])), span, fmt_stay(res["parking_stay_min"]),
             pk.get("radius_m") or 0, est))
         lots = pk.get("options") or []
-        if not lots:
+        if not lots and pk.get("offline"):
+            L.append("  no curated parking for this spot in the offline data; live parking sources were blocked")
+        elif not lots:
             L.append("  no public parking found in the data; check signs or the venue's site")
         for i, lot_d in enumerate(lots[:SHOWN_LOTS], 1):
             L.append(lot_line(i, lot_d, pk.get("radius_m")))
@@ -2995,7 +3309,8 @@ def parking_lines(res, day):
 
 def plain_text(lines):
     """The text output: names and text from feeds, maps, APIs and reviews (lot and charger names, closure and 511
-    text, review snippets) can hold control or bidi-override characters, which print as spaces."""
+    text, review snippets) can hold control or bidi-override characters, which print as spaces, and invisible
+    characters, which are dropped (th.safe_text)."""
     return "\n".join(th.safe_text(x) for x in lines)
 
 
@@ -3008,6 +3323,8 @@ def render(res):
     when = "arrive by %s" % dc.fmt_clock(res["deadline"]) if res["mode"] == "arrive_by" else \
         "depart %s" % dc.fmt_clock(res["depart"])
     rt = ", round trip" if res["round_trip"] else ""
+    if res.get("timezone") and res["timezone"] != DEFAULT_TZ:
+        rt += ", times %s" % res["timezone"]
     L += sec("DRIVE", "%s -> %s, %s%s, %s%s" % (o, d, day.strftime("%a %Y-%m-%d"), hol, when, rt))
     routes = res.get("routes") or []
     if not routes:
@@ -3097,18 +3414,21 @@ def render(res):
     ch = res.get("charging")
     if ch is not None:
         n_st = len(ch.get("stops") or [])
+        start = "from %d%%%s" % (round((ch.get("soc_start") or 0) * 100),
+                                 " (assumed; pass --soc)" if ch.get("soc_assumed") else "")
         if ch.get("needed") and ch.get("feasible") is False:
-            first = ("%d stop(s) planned, but no reachable compatible fast charger was found for the rest of the trip "
-                     "(see WARNINGS): leave with more charge or plan Level 2 stops" % n_st if n_st else
-                     "charging is needed, but no reachable compatible fast charger was found (see WARNINGS): leave "
-                     "with more charge or plan Level 2 stops")
+            first = ("%d stop(s) planned %s, but no reachable compatible fast charger was found for the rest of the "
+                     "trip (see WARNINGS): plan Level 2 stops" % (n_st, start) if n_st else
+                     "charging is needed %s, but no reachable compatible fast charger was found (see WARNINGS): "
+                     "leave with more charge or plan Level 2 stops" % start)
         elif ch.get("needed"):
-            first = "%d stop%s%s, %s extra, public charging ~%s; arrive with %d%%" % (
-                n_st, "" if n_st == 1 else "s", " (estimate, charger lists unavailable)" if ch.get("estimated") else "",
+            first = "%d stop%s %s%s, %s extra, public charging ~%s; arrive with %d%%" % (
+                n_st, "" if n_st == 1 else "s", start,
+                " (estimate, charger lists unavailable)" if ch.get("estimated") else "",
                 dc.fmt_dur(ch.get("extra_s") or 0), dc.money(ch.get("public_cost") or 0),
                 round((ch.get("arrive_soc") or 0) * 100))
         else:
-            first = "no stop needed; arrive with about %d%%" % round((ch.get("arrive_soc") or 0) * 100)
+            first = "no stop needed %s; arrive with about %d%%" % (start, round((ch.get("arrive_soc") or 0) * 100))
         L += sec("CHARGING", first)
         for i, st in enumerate(ch.get("stops") or [], 1):
             L.append("  %d. %s (%s, %s kW%s) at km %.0f: %d%% to %d%%, %d min, ~%s (%s)%s" % (
@@ -3123,17 +3443,21 @@ def render(res):
         rp = res.get("charging_return")
         if rp:
             stops = rp.get("stops") or []
+            back_from = "%d%%%s" % (round(max(0.0, rp.get("soc_start") or 0) * 100),
+                                    " (charged at the destination)" if rp.get("charge_at_destination") else "")
             if rp.get("feasible") is False:
-                L.append("     drive back from %d%%: no reachable fast charger found for the whole way (see "
-                         "WARNINGS); charge at the destination" % round((rp.get("soc_start") or 0) * 100))
+                L.append("     drive back from %s: no reachable fast charger found for the whole way (see "
+                         "WARNINGS); charge at the destination" % back_from)
             elif stops:
-                L.append("     drive back from %d%%: %d stop%s%s, %s extra, public charging ~%s (in the round trip "
+                L.append("     drive back from %s: %d stop%s%s, %s extra, public charging ~%s (in the round trip "
                          "total): %s" % (
-                             round((rp.get("soc_start") or 0) * 100), len(stops), "" if len(stops) == 1 else "s",
+                             back_from, len(stops), "" if len(stops) == 1 else "s",
                              " (estimate)" if rp.get("estimated") else "", dc.fmt_dur(rp.get("extra_s") or 0),
                              dc.money(rp.get("public_cost") or 0),
                              "; ".join("%s at km %.0f, %d min" % (s.get("name"), s.get("km_along") or 0,
                                                                   round(s.get("charge_min") or 0)) for s in stops)))
+                if rp.get("stretch_note"):   # stops that charge above the charge limit, and to how much
+                    L.append("     drive back: %s%s" % (rp["stretch_note"][0].lower(), rp["stretch_note"][1:]))
         for dch in (ch.get("dest_chargers") or [])[:3]:
             L.append("     near the destination: %s (%s, %s kW, %.1f km)%s" % (
                 dch.get("name"), dch.get("network") or "?", _num(dch.get("max_kw")), dch.get("km") or 0,
@@ -3200,7 +3524,7 @@ def _num_arg(lo=None, hi=None, lo_open=False, cast=float):
             v = cast(s)
         except ValueError:
             raise argparse.ArgumentTypeError("%r is not a number" % s)
-        if v != v:   # NaN
+        if v != v or v in (math.inf, -math.inf):   # NaN, inf, 1e999 (isfinite overflows on a huge int)
             raise argparse.ArgumentTypeError("%r is not a number" % s)
         if lo is not None and (v < lo or (lo_open and v == lo)):
             raise argparse.ArgumentTypeError("must be %s %g" % ("above" if lo_open else "at least", lo))
@@ -3220,6 +3544,8 @@ def build_parser():
     g = ap.add_mutually_exclusive_group()
     g.add_argument("--depart", default="now", help="'YYYY-MM-DD HH:MM', 'HH:MM' or 'now' (local time)")
     g.add_argument("--arrive-by", help="be at the door by 'YYYY-MM-DD HH:MM' or 'HH:MM'")
+    ap.add_argument("--tz", help="IANA time zone for the times you give and the times printed, for an origin on "
+                                 "another clock (default: the region file's, America/Toronto)")
     s = ap.add_mutually_exclusive_group()
     s.add_argument("--stay-hours", type=pos, help="hours at the destination (default 2)")
     s.add_argument("--leave-at", help="when you leave the destination: 'HH:MM' on the trip day, or "
@@ -3295,6 +3621,7 @@ def main(argv=None):
             pass
     ap = build_parser()
     args = ap.parse_args(argv)
+    routing_hosts()   # a TRIP_PLANNER_VALHALLA_URL or TRIP_PLANNER_OSRM_URL that is not a URL stops here, in one line
     if args.check_network:
         hosts = drive_hosts()
         status = th.check_network(hosts)
@@ -3303,6 +3630,8 @@ def main(argv=None):
         blocked = [h for h in hosts if status[h] != "ok"]
         print("\n%d of %d reachable.%s" % (len(hosts) - len(blocked), len(hosts),
                                             " Allow the blocked ones to run the live planner." if blocked else ""))
+        if any(status[h].startswith("tls failed") for h in hosts):
+            print(th.TLS_HELP)
         return 1 if blocked else 0
     if not args.origin or not args.dest:
         if args.forget_car or args.save_car:   # car only: save or forget, then exit

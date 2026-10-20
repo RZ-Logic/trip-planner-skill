@@ -1,0 +1,520 @@
+"""Regression tests for the review fixes in region selection, ride areas, geocoding and discovery (trip_hubs.py):
+region files never claim a point in another country (US border cities), the first ride from a place with no
+ride-hail is a taxi, the Transitous second opinion uses the plan's safety margin, Photon's house match stays near
+Nominatim's street, discovered feeds that cannot be near the trip are not downloaded, and OpenStreetMap is credited.
+
+Offline: synthetic feeds and regions, every network call mocked, a fixed clock.
+Run: PYTHONPATH=tools/ci TRIP_PLANNER_NO_NETWORK=1 python -m unittest tests.test_review_region_geo -v
+"""
+import os as _os
+for _k in ("TOMTOM_API_KEY", "NLR_API_KEY", "ON511_API_KEY", "GOOGLE_PLACES_API_KEY"):
+    _os.environ.pop(_k, None)   # offline tests never use the developer's real API keys
+import atexit as _atexit
+import shutil as _shutil
+import tempfile as _tempfile
+_TMP = _tempfile.mkdtemp(prefix="trip-planner-tests-")   # never the saved car or the cache in the home folder,
+_atexit.register(_shutil.rmtree, _TMP, True)            # even when exported: set before any script is imported
+_os.environ["TRIP_PLANNER_CONFIG"] = _os.path.join(_TMP, "config", "car.json")
+_os.environ["TRIP_PLANNER_CACHE"] = _os.path.join(_TMP, "cache")
+_os.environ.setdefault("TRIP_PLANNER_QUIET", "1")   # no progress lines on stderr (TRIP_PLANNER_QUIET=0 shows them)
+import datetime as dt
+import json
+import os
+import sys
+import tempfile
+import unittest
+import urllib.parse
+from unittest import mock
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from test_engine import pin_clock, th  # noqa: E402  (test_engine adds the scripts folder)
+from test_regressions import add_files  # noqa: E402
+from test_v098_hubs import feed, ok_network, osrm_reply, run  # noqa: E402  (functions only: never import TestCase classes)
+import test_drive_plan as tdp  # noqa: E402  (module only: its TestCase classes stay out of this file's namespace)
+import drive_common as dc  # noqa: E402
+import drive_plan as dp  # noqa: E402
+
+DAY = dt.date(2026, 10, 15)   # Thursday
+BASE = ["--region", "none", "--no-discover", "--routing", "estimate"]
+REGIONS = {r["id"]: r for r in th.load_regions()}
+ONTARIO = REGIONS["ontario"]
+TZ = {"timezone": "America/Toronto", "utc_std_offset_hours": -5, "dst_rule": "north_america"}
+_CLOCK = pin_clock()
+_ENV = None
+
+
+def setUpModule():
+    global _ENV
+    _CLOCK.start()
+    tmp = tempfile.mkdtemp()
+    _ENV = mock.patch.dict(os.environ, {"TRIP_PLANNER_CACHE": os.path.join(tmp, "cache"),
+                                        "TRIP_PLANNER_CONFIG": os.path.join(tmp, "config", "car.json")})
+    _ENV.start()
+
+
+def tearDownModule():
+    _ENV.stop()
+    _CLOCK.stop()
+
+
+def place_info_by_lat(cut, south="CA", north="US"):
+    """reverse_place_info stand-in: country by latitude (north of `cut` is `north`), no names."""
+    return lambda lat, lon, warnings: {"names": set(), "country": north if lat >= cut else south, "state": None}
+
+
+def catalog_row(fid, provider, url, box):
+    """One MobilityDatabase catalog row (the CSV columns discover_feeds reads)."""
+    return {"id": fid, "data_type": "gtfs", "status": "active", "provider": provider, "name": "",
+            "urls.latest": url, "urls.direct_download": "", "urls.authentication_type": "0", "is_official": "True",
+            "location.bounding_box.minimum_latitude": str(box[0]),
+            "location.bounding_box.maximum_latitude": str(box[1]),
+            "location.bounding_box.minimum_longitude": str(box[2]),
+            "location.bounding_box.maximum_longitude": str(box[3])}
+
+
+# ---------------------------------------------------------------------------------------- hubs-pricing-io-1
+class RegionCountry(unittest.TestCase):
+    """A region file never claims a point that reverse geocoding places in another country."""
+
+    def test_detroit_trip_is_not_claimed_by_an_ontario_box(self):
+        region = dict(TZ, id="on", country="CA",
+                      bbox={"min_lat": 41.6, "max_lat": 46.7, "min_lon": -83.2, "max_lon": -74.3},
+                      ride_pricing={"label": "Windsor card", "base": 2.5, "per_km": 0.81, "per_min": 0.18,
+                                    "tax": 0.13, "currency": "CAD"}, feeds=[])
+        ddot = feed([("S1", "Downtown", 42.3320, -83.0460), ("S2", "Zoo", 42.4760, -83.1490)],
+                    [("4", "WK", "w1", "Zoo")],
+                    [("w1", "10:00:00", "10:00:00", "S1", 1, 0, 0), ("w1", "10:40:00", "10:40:00", "S2", 2, 0, 0)])
+        add_files(ddot, {"agency.txt": "agency_id,agency_name,agency_url,agency_timezone\n"
+                                       "T,DDOT,http://x,America/Detroit\n"})
+        row = catalog_row("mdb-ddot", "DDOT", "https://files.example/ddot.zip", (42.2, 42.6, -83.3, -82.9))
+        with mock.patch.object(th, "load_regions", return_value=[region]), \
+                mock.patch.object(th, "check_network", side_effect=ok_network), \
+                mock.patch.object(th, "reverse_place_info", side_effect=place_info_by_lat(0.0)), \
+                mock.patch.object(th, "load_catalog", return_value=[row]), \
+                mock.patch.object(th, "fetch_url", side_effect=lambda fid, url, *a, **k: ddot):
+            res = run(["--origin", "42.3314,-83.0458", "--dest", "42.4765,-83.1497", "--depart", "2026-10-15 09:30",
+                       "--routing", "estimate"])
+        self.assertIsNone(res["region"])
+        self.assertIn("DDOT", [f["name"] for f in res["feeds"]])
+        self.assertEqual(res["pricing"]["label"], "generic ride-hail estimate")
+        self.assertEqual(res["pricing"]["currency"], "USD")
+        self.assertNotIn("tax", res["pricing"])
+
+    def test_region_never_claims_a_point_in_another_country(self):
+        regions = list(REGIONS.values())
+        self.assertEqual(th.regions_for_trip(regions, "auto", (42.8864, -78.8784), (42.9405, -78.7322), 13000,
+                                             countries=("US", "US")), (None, []))
+        plain = th.regions_for_trip(regions, "auto", (43.4988, -79.8560), (43.5812, -79.6475), 20000)
+        same = th.regions_for_trip(regions, "auto", (43.4988, -79.8560), (43.5812, -79.6475), 20000,
+                                   countries=("CA", "CA"))
+        self.assertEqual(plain[0]["id"], "gtha")
+        self.assertEqual((same[0]["id"], [r["id"] for r in same[1]]), (plain[0]["id"], [r["id"] for r in plain[1]]))
+        self.assertIsNone(th.pick_region(regions, "auto", 42.3314, -83.0458, country="US"))
+        self.assertEqual(th.pick_region(regions, "auto", 42.3149, -83.0364, country="CA")["id"], "ontario")
+        self.assertEqual(th.pricing_at(ONTARIO, 42.3314, -83.0458, {"label": "fb"}, country="US")["label"], "fb")
+        windsor = th.pricing_at(ONTARIO, 42.3149, -83.0364, {"label": "fb"}, country="CA")
+        self.assertIn("Windsor", windsor["label"])
+        self.assertEqual(th.pricing_regions(regions, 42.3314, -83.0458, country="US"), [])
+
+    def test_cross_border_destination_discovers_feeds_and_drops_drop_points_across_the_border(self):
+        box = {"min_lat": 43.3, "max_lat": 43.9, "min_lon": -80.0, "max_lon": -79.6}
+        local = feed([("A", "Home stop", 43.5000, -79.8000), ("Z", "Far stop", 43.7880, -79.8000)],
+                     [("1", "WK", "t1", "Z")],
+                     [("t1", "10:00:00", "10:00:00", "A", 1, 0, 0), ("t1", "10:50:00", "10:50:00", "Z", 2, 0, 0)])
+        there = feed([("D1", "Dest stop", 43.8110, -79.8000), ("D2", "Dest centre", 43.8200, -79.8000)],
+                     [("2", "WK", "d1", "D2")],
+                     [("d1", "11:00:00", "11:00:00", "D1", 1, 0, 0), ("d1", "11:10:00", "11:10:00", "D2", 2, 0, 0)])
+        region = dict(TZ, id="home", country="CA", bbox=box,
+                      feeds=[{"id": "local", "name": "Home Bus", "urls": [local], "bbox": box}])
+        row = catalog_row("mdb-7", "Dest Transit", "https://files.example/dest.zip", (43.75, 43.85, -79.85, -79.75))
+        urls = {"https://files.example/dest.zip": there, local: local}
+        with mock.patch.object(th, "load_regions", return_value=[region]), \
+                mock.patch.object(th, "check_network", side_effect=ok_network), \
+                mock.patch.object(th, "reverse_place_info", side_effect=place_info_by_lat(43.80)), \
+                mock.patch.object(th, "load_catalog", return_value=[row]), \
+                mock.patch.object(th, "fetch_url", side_effect=lambda fid, url, *a, **k: urls[url]):
+            res = run(["--origin", "43.5000,-79.8000", "--dest", "43.8100,-79.8000", "--depart", "2026-10-15 09:30",
+                       "--routing", "estimate", "--final-ride", "on", "--min-saving", "0"])
+        self.assertIn("Dest Transit", [f["name"] for f in res["feeds"]])
+        self.assertTrue(any("the destination is in US, outside the region files' country (CA)" in w
+                            for w in res["warnings"]), res["warnings"])
+        self.assertNotIn("Far stop", [p["name"] for p in res["finish_info"]["drop_points"]])
+        self.assertTrue(any("drop points across the border" in w for w in res["warnings"]), res["warnings"])
+        self.assertTrue(any("this trip crosses the CA-US border" in w for w in res["warnings"]), res["warnings"])
+
+    def test_country_lookup_is_skipped_when_preflight_found_nominatim_blocked(self):
+        region = dict(TZ, id="home", country="CA", feeds=[],
+                      bbox={"min_lat": 43.3, "max_lat": 43.9, "min_lon": -80.0, "max_lon": -79.6})
+        p = feed([("A", "Hub A", 43.5000, -79.8000), ("C", "Dest C", 43.5500, -79.8000)], [("1", "WK", "t1", "C")],
+                 [("t1", "10:00:00", "10:00:00", "A", 1, 0, 0), ("t1", "10:20:00", "10:20:00", "C", 2, 0, 0)])
+
+        def half_blocked(hosts, timeout=6):
+            return {h: ("blocked: refused" if h == "nominatim.openstreetmap.org" else "ok") for h in hosts}
+        with mock.patch.object(th, "load_regions", return_value=[region]), \
+                mock.patch.object(th, "check_network", side_effect=half_blocked), \
+                mock.patch.object(th, "reverse_place_info", side_effect=AssertionError("no lookup")):
+            res = run(["--origin", "43.4990,-79.8000", "--dest", "43.5500,-79.8000", "--depart", "2026-10-15 09:30",
+                       "--routing", "estimate", "--no-discover", "--feed", "t=" + p])
+        self.assertEqual(res["region"], "home")   # the box decides, as before
+
+    def test_trip_domains_names_nominatim_as_optional_near_a_border(self):
+        ns = th.argparse.Namespace(origin="42.3314,-83.0458", dest="42.4765,-83.1497", region="auto",
+                                   routing="estimate", crosscheck=False, feed=None, no_discover=False,
+                                   radius_km=None, dest_walk_m=1500)
+        hosts, note = th.trip_domains(ns, list(REGIONS.values()))
+        self.assertNotIn("nominatim.openstreetmap.org", hosts)
+        self.assertIn("nominatim.openstreetmap.org", note)
+
+    def test_shipped_regions_name_their_country(self):
+        self.assertEqual(REGIONS["gtha"]["country"], "CA")
+        self.assertEqual(REGIONS["ontario"]["country"], "CA")
+
+
+
+# ---------------------------------------------------------------------------------- hubs-pricing-io-2 (+ ap-7)
+class OriginRideArea(unittest.TestCase):
+    """The first ride starts where the region file may say there is no ride-hail (the trip home from a getaway)."""
+
+    def trip(self, area_name, origin):
+        area = next(a for a in ONTARIO["ride_areas"] if a["name"] == area_name)
+        region = dict(TZ, id="sb", name="sb", pickup_wait_min=8, feeds=[], ride_areas=[area],
+                      bbox={"min_lat": 44.0, "max_lat": 46.0, "min_lon": -82.5, "max_lon": -80.5},
+                      taxi_pricing_default=ONTARIO["taxi_pricing_default"])
+        lat, lon = origin
+        p = feed([("H", "Hub stop", lat + 0.0801, lon), ("D", "Dest stop", 45.0000, lon)], [("1", "WK", "t1", "D")],
+                 [("t1", "10:00:00", "10:00:00", "H", 1, 0, 0), ("t1", "11:00:00", "11:00:00", "D", 2, 0, 0)])
+        args = ["--origin", "%.4f,%.4f" % origin, "--dest", "45.0010,%.4f" % lon, "--depart", "2026-10-15 09:00",
+                "--region", "sb", "--feed", "t=" + p, "--routing", "estimate", "--no-discover", "--min-saving", "0",
+                "--final-ride", "off"]
+        with mock.patch.object(th, "load_regions", return_value=[region]), \
+                mock.patch.object(th, "check_network", side_effect=ok_network):
+            return run(args), run(args, as_json=False), region, area
+
+    def test_no_ride_hail_origin_prices_a_taxi_with_its_wait_and_no_uber_link(self):
+        res, txt, region, area = self.trip("Sauble Beach", (44.6299, -81.2649))
+        self.assertEqual(res["pickup_wait_min"], 30.0)
+        self.assertTrue(res["pricing"]["label"].startswith("rural Ontario taxi estimate"), res["pricing"])
+        self.assertEqual(res["pricing"]["currency"], "CAD")
+        o = res["pareto"][0]
+        self.assertIsNone(o["uber"])
+        self.assertNotIn("m.uber.com", txt)
+        self.assertNotIn("uber quote", txt)
+        warn = next((w for w in res["warnings"]
+                     if w.startswith("there is no ride-hail near Sauble Beach (the origin)")), None)
+        self.assertIsNotNone(warn, res["warnings"])
+        self.assertIn("Bayshore Taxi (Owen Sound)", warn)
+        self.assertIn("30 min", warn)
+        taxi = th.taxi_pricing(region, area)
+        ra = res["ride_all"]
+        self.assertAlmostEqual(ra["cost"], th.ride_cost(taxi, ra["ride_km"], ra["ride_s"]), places=6)
+        # the option's km and minutes are rounded to 0.1
+        self.assertAlmostEqual(o["ride_cost"], th.ride_cost(taxi, o["ride_km"], o["ride_min"] * 60), delta=0.1)
+        # book the taxi 30 min ahead, not the region's 8 min: ride, platform and the 3 min margin on top
+        self.assertLessEqual(abs(o["book_by"] - (o["board"] - 30 * 60 - o["ride_min"] * 60 - th.PLATFORM_S - 3 * 60)),
+                             60)
+
+    def test_sparse_origin_warns_to_book_ahead(self):
+        res, txt, _region, _area = self.trip("Owen Sound", (44.5687, -80.9415))
+        self.assertTrue(any(w.startswith("ride-hail near Owen Sound (the origin) is sparse") for w in res["warnings"]),
+                        res["warnings"])
+        self.assertIsNotNone(res["pareto"][0]["uber"])
+        self.assertIn("uber quote", txt)
+        self.assertEqual(res["pickup_wait_min"], 8.0)
+
+    def test_origin_outside_every_area_keeps_the_ride_hail_plan(self):
+        res, txt, _region, _area = self.trip("Sauble Beach", (44.4000, -81.2649))   # 25 km south of Sauble
+        self.assertEqual(res["pickup_wait_min"], 8.0)
+        self.assertIsNotNone(res["pareto"][0]["uber"])
+        self.assertFalse(any("(the origin)" in w for w in res["warnings"]), res["warnings"])
+
+
+# ------------------------------------------------------------------------------ hubs-pricing-io-6 (+ hubs-engine-6)
+def transitous_trip(walk_from, board, arrive):
+    """One Transitous itinerary (UTC clock strings, EDT = local + 4 h): walk to Hub A, bus 1 to Dest C."""
+    return {"legs": [
+        {"mode": "WALK", "startTime": "2026-10-15T%sZ" % walk_from, "endTime": "2026-10-15T%sZ" % board,
+         "from": {"name": "Origin"}, "to": {"name": "Hub A"}},
+        {"mode": "BUS", "agencyName": "Test Transit", "routeShortName": "1", "startTime": "2026-10-15T%sZ" % board,
+         "endTime": "2026-10-15T%sZ" % arrive, "from": {"name": "Hub A"}, "to": {"name": "Dest C"}}]}
+
+
+class CrossCheckMargin(unittest.TestCase):
+    """The second opinion is asked with the plan's own safety margin, so the departure the margin excluded is not
+    reported as a better connection."""
+
+    def crosscheck(self, trips, replies, when):
+        stops = [("A", "Hub A", 43.5000, -79.8000), ("C", "Dest C", 43.5500, -79.8000)]
+        times = []
+        for tid, (dep, arr) in trips.items():
+            times += [(tid, dep, dep, "A", 1, 0, 0), (tid, arr, arr, "C", 2, 0, 0)]
+        p = feed(stops, [("1", "WK", tid, "C") for tid in trips], times)
+        asked = []
+
+        def http_get(url, *a, **k):   # Transitous answers with the trips leaving at or after the asked time
+            q = urllib.parse.parse_qs(urllib.parse.urlsplit(url).query)
+            asked.append(q)
+            its = replies if q["arriveBy"] == ["true"] else [
+                i for i in replies if i["legs"][0]["startTime"] >= q["time"][0]]
+            return json.dumps({"itineraries": its}).encode()
+        with mock.patch.object(th, "http_get", side_effect=http_get),                 mock.patch.object(th, "check_network", side_effect=ok_network):
+            res = run(["--origin", "43.4955,-79.8000", "--dest", "43.5500,-79.8000", "--feed", "t=" + p,
+                       "--crosscheck"] + when + BASE)
+        return res, asked
+
+    def test_arrive_by_bus_inside_the_margin_is_not_a_better_connection(self):
+        res, asked = self.crosscheck({"a1": ("08:20:00", "08:40:00"), "a2": ("08:37:00", "08:58:00")},
+                                     [transitous_trip("12:11:00", "12:20:00", "12:40:00"),
+                                      transitous_trip("12:28:00", "12:37:00", "12:58:00")],
+                                     ["--arrive-by", "2026-10-15 09:00"])
+        self.assertEqual(asked[0]["time"], ["2026-10-15T12:57:00Z"])   # 09:00 less the 3 min margin
+        self.assertEqual(res["crosscheck"]["transit_only"]["verdict"], "agrees")
+        self.assertFalse(any("Transitous finds a better connection" in w for w in res["warnings"]), res["warnings"])
+
+    def test_depart_bus_inside_the_margin_is_not_a_better_connection(self):
+        res, asked = self.crosscheck({"a1": ("08:10:00", "08:30:00"), "a2": ("08:20:00", "08:40:00")},
+                                     [transitous_trip("12:00:30", "12:10:00", "12:30:00"),
+                                      transitous_trip("12:10:30", "12:20:00", "12:40:00")],
+                                     ["--depart", "2026-10-15 08:00"])
+        self.assertEqual(asked[0]["time"], ["2026-10-15T12:03:00Z"])   # 08:00 plus the 3 min margin
+        self.assertEqual(res["transit_only"]["arrive"] // 60, 8 * 60 + 40)
+        self.assertEqual(res["crosscheck"]["transit_only"]["verdict"], "agrees")
+        self.assertFalse(any("Transitous finds a better connection" in w for w in res["warnings"]), res["warnings"])
+
+
+# ---------------------------------------------------------------------------------------- hubs-pricing-io-7
+class PhotonFallback(unittest.TestCase):
+    """Photon's house match is biased to the street Nominatim found and is not used when it is far from it; its
+    label names the province and country, and a Photon match that misses the query's town is flagged."""
+    STREET = {"lat": "43.51", "lon": "-79.88", "addresstype": "road", "category": "highway",
+              "display_name": "Santa Maria Boulevard, Milton, Ontario, Canada"}
+
+    def setUp(self):   # geocoder replies are cached on disk (security-tos-7): each test asks with its own replies
+        p = mock.patch.dict(os.environ, {"TRIP_PLANNER_CACHE": tempfile.mkdtemp()})
+        p.start()
+        self.addCleanup(p.stop)
+
+    def geocode(self, nominatim, lat, lon, city, state, country, strict):
+        photon = {"features": [{"geometry": {"coordinates": [lon, lat]},
+                                "properties": {"type": "house", "housenumber": "805", "street": "Santa Maria Boulevard",
+                                               "city": city, "state": state, "country": country}}]}
+        asked = []
+
+        def http_get(url, *a, **k):
+            asked.append(url)
+            return json.dumps(photon if "photon.komoot.io" in url else nominatim).encode()
+        w = []
+        with mock.patch.object(th, "http_get", side_effect=http_get):
+            try:
+                return th.resolve_place("805 Santa Maria Blvd, Milton", "origin", w, strict=strict), w, asked
+            except SystemExit as e:
+                return str(e), w, asked
+
+    def test_far_photon_house_is_not_used(self):
+        got, w, asked = self.geocode([self.STREET], 39.78, -89.65, "Springfield", "Illinois", "United States",
+                                     strict=True)
+        self.assertIn("ADDRESS NOT PRECISE", got)
+        self.assertTrue(any(x.startswith("Photon's house match for origin") and "km from the street" in x
+                            for x in w), w)
+        q = urllib.parse.parse_qs(urllib.parse.urlsplit(next(u for u in asked if "photon" in u)).query)
+        self.assertEqual((q["lat"], q["lon"]), (["43.510"], ["-79.880"]))
+
+    def test_near_photon_house_label_has_province_and_country(self):
+        got, w, _asked = self.geocode([self.STREET], 43.5125, -79.8790, "Milton", "Ontario", "Canada", strict=True)
+        self.assertEqual(got, (43.5125, -79.879, "805, Santa Maria Boulevard, Milton, Ontario, Canada"))
+        self.assertEqual(w, [])
+
+    def test_photon_only_match_in_another_town_is_flagged(self):
+        got, w, asked = self.geocode([], 39.78, -89.65, "Springfield", "Illinois", "United States", strict=False)
+        self.assertEqual(got[:2], (39.78, -89.65))
+        self.assertTrue(any("does not mention milton" in x for x in w), w)
+        self.assertNotIn("lat=", next(u for u in asked if "photon" in u))   # nothing to bias toward
+
+
+# ---------------------------------------------------------------------------------------- hubs-pricing-io-8
+class DiscoveryDownloads(unittest.TestCase):
+    """Discovered feeds that cannot have a stop near the trip are not downloaded: town-name matches in another
+    country, catalog boxes out of reach of both ends, and anything past the per-run download limit."""
+    AGENCY = {"agency.txt": "agency_id,agency_name,agency_url,agency_timezone\nT,Bus,http://x,America/Toronto\n"}
+
+    def bus(self, a, b):
+        """A feed with one weekday trip from stop A at `a` to stop B at `b` (lat, lon)."""
+        p = feed([("A", "Stop A", a[0], a[1]), ("B", "Stop B", b[0], b[1])], [("1", "WK", "t1", "B")],
+                 [("t1", "09:45:00", "09:45:00", "A", 1, 0, 0), ("t1", "10:15:00", "10:15:00", "B", 2, 0, 0)])
+        add_files(p, self.AGENCY)
+        return p
+
+    def discover(self, rows, files, origin, dest):
+        fetched = []
+
+        def fetch_url(fid, url, *a, **k):
+            fetched.append(url)
+            return files[url]
+        info = {"names": {"london"}, "country": "CA", "state": "ontario"}
+        with mock.patch.object(th, "load_regions", return_value=[]),                 mock.patch.object(th, "check_network", side_effect=ok_network),                 mock.patch.object(th, "reverse_place_info", side_effect=lambda lat, lon, w: dict(info)),                 mock.patch.object(th, "load_catalog", return_value=rows),                 mock.patch.object(th, "fetch_url", side_effect=fetch_url):
+            res = run(["--origin", origin, "--dest", dest, "--depart", "2026-10-15 09:30", "--routing", "estimate"])
+        return res, fetched
+
+    def test_town_name_match_in_another_country_is_not_downloaded(self):
+        on = self.bus((42.9850, -81.2450), (43.0095, -81.2735))
+        gb = self.bus((51.5000, -0.1200), (51.5100, -0.1300))
+        here = dict(catalog_row("mdb-1", "London Transit", "https://files.example/ltc.zip",
+                                (42.90, 43.10, -81.40, -81.10)), **{"location.country_code": "CA"})
+        abroad = catalog_row("mdb-2", "London Buses", "https://files.example/tfl.zip", (0, 0, 0, 0))
+        abroad = {k: v for k, v in abroad.items() if "bounding_box" not in k}
+        abroad.update({"location.country_code": "GB", "location.municipality": "London"})
+        res, fetched = self.discover([here, abroad], {here["urls.latest"]: on, abroad["urls.latest"]: gb},
+                                     "42.9849,-81.2453", "43.0096,-81.2737")
+        self.assertNotIn("https://files.example/tfl.zip", fetched)
+        self.assertIn("London Transit", [f["name"] for f in res["feeds"]])
+        self.assertFalse(any("London Buses" in w for w in res["warnings"]), res["warnings"])
+        with mock.patch.object(th, "reverse_place_info",   # the --discover listing leaves it out too
+                               side_effect=lambda lat, lon, w: {"names": {"london"}, "country": "CA", "state": None}),                 mock.patch.object(th, "load_catalog", return_value=[here, abroad]):
+            listed = run(["--discover", "--origin", "42.9849,-81.2453"])
+        self.assertEqual([f["provider"] for f in listed["feeds"]], ["London Transit"])
+
+    def test_feed_whose_box_is_out_of_reach_is_not_downloaded(self):
+        good = self.bus((43.5005, -79.8000), (43.7995, -79.4000))
+        corner = self.bus((43.8150, -80.1700), (43.8200, -80.1650))
+        rows = [catalog_row("mdb-1", "Good Transit", "https://files.example/good.zip", (43.4, 43.9, -79.9, -79.3)),
+                catalog_row("mdb-2", "Corner Bus", "https://files.example/corner.zip", (43.81, 43.825, -80.18, -80.16))]
+        with mock.patch.object(th, "load_catalog", return_value=rows):   # the corner box is in the trip's query box
+            ns = th.argparse.Namespace(radius_km=None, dest_walk_m=1500, final_ride="auto")
+            box = th.trip_geometry(43.5000, -79.8000, 43.8000, -79.4000, ns)[3]
+            self.assertIn("Corner Bus", [h["provider"] for h in th.discover_feeds(box)[0]])
+        res, fetched = self.discover(rows, {rows[0]["urls.latest"]: good, rows[1]["urls.latest"]: corner},
+                                     "43.5000,-79.8000", "43.8000,-79.4000")
+        self.assertNotIn("https://files.example/corner.zip", fetched)
+        self.assertIn("Good Transit", [f["name"] for f in res["feeds"]])
+        self.assertTrue(any(w.startswith("discovered but skipped") and "Corner Bus" in w for w in res["warnings"]),
+                        res["warnings"])
+
+    def test_discovered_downloads_are_capped(self):
+        good = self.bus((43.5005, -79.8000), (43.7995, -79.4000))
+        far = self.bus((45.3000, -79.8000), (45.3100, -79.8100))   # 200 km north: the catalog box is wrong
+        rows = [catalog_row("mdb-%d" % i, name, "https://files.example/%d.zip" % i,
+                            (43.4 - pad, 43.9 + pad, -79.9 - pad, -79.3 + pad))
+                for i, (name, pad) in enumerate((("Good Transit", 0.0), ("Far One", 0.1), ("Far Two", 0.2)))]
+        files = {rows[0]["urls.latest"]: good, rows[1]["urls.latest"]: far, rows[2]["urls.latest"]: far}
+        with mock.patch.object(th, "DISCOVER_MAX_DOWNLOADS", 2, create=True):
+            res, fetched = self.discover(rows, files, "43.5000,-79.8000", "43.8000,-79.4000")
+        self.assertEqual(sorted(set(fetched)), ["https://files.example/0.zip", "https://files.example/1.zip"])
+        self.assertTrue(any(w.startswith("over the") and "Far Two" in w for w in res["warnings"]), res["warnings"])
+
+
+# --------------------------------------------------------------------------------------- hubs-pricing-io-10
+class OsmAttribution(unittest.TestCase):
+    """A run that used an OpenStreetMap-based service (geocoding, OSRM, Overpass) credits OpenStreetMap."""
+
+    def trip(self, routing, origin="43.4990,-79.8000"):
+        p = feed([("A", "Hub A", 43.5000, -79.8000), ("C", "Dest C", 43.5500, -79.8000)], [("1", "WK", "t1", "C")],
+                 [("t1", "10:00:00", "10:00:00", "A", 1, 0, 0), ("t1", "10:20:00", "10:20:00", "C", 2, 0, 0)])
+        args = ["--origin", origin, "--dest", "43.5500,-79.8000", "--depart", "2026-10-15 09:50",
+                "--feed", "t=" + p, "--region", "none", "--no-discover", "--routing", routing]
+        place = [{"lat": "43.4990", "lon": "-79.8000", "addresstype": "building",
+                  "display_name": "Milton GO Station, Milton, Ontario, Canada"}]
+
+        def http_get(url, *a, **k):
+            return json.dumps(place).encode() if "nominatim" in url else osrm_reply(url)
+        with mock.patch.object(th, "http_get", side_effect=http_get),                 mock.patch.object(th, "check_network", side_effect=ok_network):
+            return run(args), run(args, as_json=False)
+
+    def test_osrm_run_prints_the_openstreetmap_credit(self):
+        res, txt = self.trip("auto")
+        self.assertIn("OpenStreetMap contributors", res["attribution"])
+        self.assertIn("ODbL", res["attribution"])
+        self.assertIn("router.project-osrm.org", res["attribution"])
+        self.assertNotIn("geocoding", res["attribution"])   # both ends were lat,lon
+        lines = txt.splitlines()
+        src = [i for i, ln in enumerate(lines) if ln.startswith("SOURCES  Map data (c) OpenStreetMap contributors")]
+        self.assertEqual(len(src), 1, txt)
+        self.assertFalse(any(ln.startswith("WARNING") for ln in lines[:src[0]]), txt)   # before the warnings
+
+    def test_no_osm_service_no_credit_line(self):
+        res, txt = self.trip("estimate")
+        self.assertIsNone(res["attribution"])
+        self.assertNotIn("SOURCES", txt)
+
+    def test_address_run_credits_the_geocoders(self):
+        res, _txt = self.trip("estimate", origin="Milton GO Station")
+        self.assertIn("OpenStreetMap contributors", res["attribution"])
+        self.assertIn("geocoding: Nominatim/Photon", res["attribution"])
+        self.assertNotIn("OSRM", res["attribution"])
+
+
+# --------------------------------------------------------------------------------------------- security-tos-6
+class DriveAttribution(unittest.TestCase):
+    """Drive plans credit OpenStreetMap for Valhalla/OSRM routes and Nominatim labels, and Open-Meteo with its
+    CC BY 4.0 licence; transit plans list the licence URL of each discovered feed they loaded."""
+    AGENCY = DiscoveryDownloads.AGENCY
+    bus = DiscoveryDownloads.bus
+    discover = DiscoveryDownloads.discover
+
+    def drive(self, label):
+        def wp(points, tz, warnings, today=None):
+            return {"mult": 1.0, "temp_c": 12, "text": "clear", "kind": "clear", "forecast": True}
+        rev = {"label": label, "country": "CA", "state": "ontario"} if label else {}
+        with tdp.Env(), tdp.at_now(tdp.NOW), mock.patch.object(dp, "weather_points", side_effect=wp),                 mock.patch.object(dp, "reverse_address", return_value=rev),                 mock.patch.object(dp, "reverse_country", return_value="CA"),                 mock.patch.dict(os.environ, {"TRIP_HOME": ""}):
+            res = dp.plan(tdp.args_for("--origin", "%f,%f" % tdp.MILTON, "--dest", "%f,%f" % tdp.MARKHAM,
+                                       "--depart", "2026-10-12 09:00", "--incidents", "off", "--park-and-ride", "off"))
+            return res, dp.render(res)
+
+    def test_routing_source_credits_openstreetmap_for_free_engines(self):
+        for engine in ("valhalla", "osrm"):
+            self.assertIn("OpenStreetMap contributors", dp.routing_source(engine))
+            self.assertIn("ODbL", dp.routing_source(engine))
+        self.assertEqual(dp.routing_source("tomtom"), "routing: TomTom")
+
+    def test_drive_sources_credit_openstreetmap_and_open_meteo(self):
+        res, txt = self.drive("Santa Maria Blvd, Milton")
+        src = res["sources"]
+        self.assertTrue(any(s.startswith("routing: Valhalla") and "OpenStreetMap contributors" in s for s in src), src)
+        self.assertTrue(any(s.startswith("geocoding: Nominatim") and "OpenStreetMap" in s for s in src), src)
+        wx = [s for s in src if s.startswith("weather: ")]
+        self.assertEqual(len(wx), 1, src)
+        self.assertIn("CC BY 4.0", wx[0])
+        self.assertIn("open-meteo.com", wx[0].lower())
+        self.assertIn("CC BY 4.0", txt)
+
+    def test_no_label_lookup_no_geocoding_credit(self):
+        res, _txt = self.drive(None)   # both ends lat,lon and the label lookup gave nothing
+        self.assertFalse(any(s.startswith("geocoding") for s in res["sources"]), res["sources"])
+
+    def test_discovered_feed_licence_is_listed(self):
+        a = self.bus((43.5005, -79.8000), (43.7995, -79.4000))
+        b = self.bus((43.5006, -79.8001), (43.7994, -79.4001))
+        box = (43.4, 43.9, -79.9, -79.3)
+        rows = [dict(catalog_row("mdb-1", "Good Transit", "https://files.example/a.zip", box),
+                     **{"urls.license": "https://example.org/licence?token=abc"}),
+                dict(catalog_row("mdb-2", "Other Transit", "https://files.example/b.zip", box),
+                     **{"urls.license": "file:///etc/passwd"})]
+        res, _fetched = self.discover(rows, {rows[0]["urls.latest"]: a, rows[1]["urls.latest"]: b},
+                                      "43.5000,-79.8000", "43.8000,-79.4000")
+        self.assertIn("feed licences: Good Transit: https://example.org/licence?token=REDACTED", res["attribution"])
+        self.assertNotIn("abc", res["attribution"])
+        self.assertNotIn("file:", res["attribution"])
+        self.assertNotIn("Other Transit", res["attribution"])   # no web licence URL: nothing to list
+
+
+# --------------------------------------------------------------------------------------------- security-tos-8
+class LabelLookupPrivacy(unittest.TestCase):
+    """The label lookup for a lat,lon end asks Nominatim at street level with 3-decimal coordinates (about 100 m),
+    like trip_hubs' reverse lookups, so a home pin never returns a house number."""
+
+    def test_label_lookup_is_street_level_with_three_decimals(self):
+        reply = {"category": "highway", "type": "residential", "name": "Santa Maria Boulevard",
+                 "address": {"road": "Santa Maria Boulevard", "town": "Milton", "state": "Ontario",
+                             "country_code": "ca"}}
+        with mock.patch.object(dc, "fetch_json", return_value=reply) as f,                 mock.patch.dict(os.environ, {"TRIP_HOME": ""}):
+            label, info = dp.place_label("43.498757,-79.855987", 43.498757, -79.855987)
+        self.assertEqual(label, "Santa Maria Blvd, Milton")
+        self.assertEqual(dp.province_of(info), "ontario")
+        url = f.call_args[0][0]
+        self.assertIn("zoom=16", url)
+        self.assertIn("lat=43.499&lon=-79.856", url)
+        self.assertNotIn("zoom=18", url)
+        self.assertNotIn("43.4988", url)
+        self.assertEqual(f.call_args[1]["cache_key"], url)
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -1,7 +1,7 @@
 {
  "verified": "2026-10-10",
- "description": "Curated parking for tourist places west and north of Toronto (agent PLACES-W). Coordinates are OSM elements (lot centre) or OSM street vertices, never estimated; 'osm' names the element. rule null = price unknown, check signs. 'price_confidence' is the curator's view of the price data (high: current official page; medium: partly inferred; low: no fee published).",
- "rule_conventions": "hourly is $ per hour; per_min is the billing increment in minutes (charge = ceil(minutes / per_min) x hourly x per_min / 60); flat is per entry or per booking; season ends that move by year use named anchors (labour_day, victoria_day, fri_before_victoria_day, thanksgiving), resolved for the trip year; fixed operator dates for one year carry season_year. Lot hours and no-overnight rules go in the lot's rule as no_parking ([{\"days\": [0-6], \"hours\": [from, to], \"all_days\": true}], plus \"season\": [MM-DD, MM-DD] for a winter ban), not only in notes: notes do not affect whether a lot fits the stay.",
+ "description": "Curated parking for tourist places west and north of Toronto (agent PLACES-W). Coordinates are OSM elements (lot centre) or OSM street vertices, never estimated; 'osm' names the element. rule null = price unknown, check signs. 'price_confidence' is the curator's view of the price data (high: current official page; medium: partly inferred; low: no fee published, so its lots get a check line). free_source: osm marks a free lot whose only evidence of being free is an OSM fee=no tag; it is shown as unverified.",
+ "rule_conventions": "hourly is $ per hour; per_min is the billing increment in minutes (charge = ceil(minutes / per_min) x hourly x per_min / 60); flat is per entry or per booking; season ends that move by year use named anchors (labour_day, victoria_day, fri_before_victoria_day, thanksgiving), resolved for the trip year; fixed operator dates for one year carry season_year; off season a lot is free unless the rule has off_season_rule (a full rule priced when no day of the stay is in season) or off_season \"unknown\" (no published price off season). Lot hours and no-overnight rules go in the lot's rule as no_parking ([{\"days\": [0-6], \"hours\": [from, to], \"all_days\": true}], plus \"season\": [MM-DD, MM-DD] for a winter ban), not only in notes: notes do not affect whether a lot fits the stay.",
  "osm_attribution": "Coordinates (c) OpenStreetMap contributors, ODbL 1.0",
  "places": [
   {
@@ -418,6 +418,7 @@
      "rule": {
       "free": true
      },
+     "free_source": "osm",
      "capacity": null,
      "notes": "downtown public lot, OSM fee=no; not matched to one of the Town's listed addresses",
      "source": "https://www.goderich.ca/living-here/parking/",
@@ -729,7 +730,7 @@
      "lon": -81.66693,
      "kind": "lot",
      "rule": {
-      "flat": 15.0,
+      "daily_max": 15.0,
       "season": [
        "05-15",
        "09-15"
@@ -1247,6 +1248,7 @@
    "source": "https://blog.ontarioparks.ca/wasaga-beach/",
    "source_date": "2026 (operating dates from the park page, fee from the park blog)",
    "confidence": "curated",
+   "rate_year": 2026,
    "price_confidence": "high",
    "rules": [
     "Ontario Parks daily vehicle permit $21.00 (Ontario seniors $16.75); not valid in town lots and not transferable between beach areas.",
@@ -1266,7 +1268,7 @@
      "lon": -80.044791,
      "kind": "park",
      "rule": {
-      "flat": 21.0,
+      "daily_max": 21.0,
       "season": [
        "04-06",
        "10-12"
@@ -1287,7 +1289,7 @@
      "lon": -80.052053,
      "kind": "park",
      "rule": {
-      "flat": 21.0,
+      "daily_max": 21.0,
       "season": [
        "04-06",
        "10-12"
@@ -1308,7 +1310,7 @@
      "lon": -80.059739,
      "kind": "park",
      "rule": {
-      "flat": 21.0,
+      "daily_max": 21.0,
       "season": [
        "04-06",
        "10-12"
@@ -3020,6 +3022,7 @@
    "source": "https://blog.ontarioparks.ca/visit-pinery/",
    "source_date": "2026",
    "confidence": "curated",
+   "rate_year": 2026,
    "price_confidence": "high",
    "rules": [
     "Daily vehicle permit $21.00 (Ontario seniors $16.75), valid in all day-use lots; open all year.",
@@ -3039,7 +3042,7 @@
      "lon": -81.802509,
      "kind": "park",
      "rule": {
-      "flat": 21.0
+      "daily_max": 21.0
      },
      "capacity": null,
      "notes": "beach day-use lot; $21 daily vehicle permit",
@@ -3052,7 +3055,7 @@
      "lon": -81.815211,
      "kind": "park",
      "rule": {
-      "flat": 21.0
+      "daily_max": 21.0
      },
      "capacity": null,
      "notes": "beach day-use lot",
@@ -3065,7 +3068,7 @@
      "lon": -81.828465,
      "kind": "park",
      "rule": {
-      "flat": 21.0
+      "daily_max": 21.0
      },
      "capacity": null,
      "notes": "beach day-use lot",
@@ -3078,7 +3081,7 @@
      "lon": -81.848102,
      "kind": "park",
      "rule": {
-      "flat": 21.0
+      "daily_max": 21.0
      },
      "capacity": null,
      "notes": "",
@@ -3177,6 +3180,7 @@
    "source": "https://www.algonquinpark.on.ca/visit/general_park_info/fees-day-use.php",
    "source_date": "2026",
    "confidence": "curated",
+   "rate_year": 2026,
    "price_confidence": "high",
    "rules": [
     "Daily vehicle permit $21.00 for any stop on Hwy 60 (trails, beaches, Visitor Centre, picnic areas); driving straight through needs no permit.",
@@ -3301,6 +3305,7 @@
    "source": "https://www.algonquinpark.on.ca/visit/general_park_info/fees-day-use.php",
    "source_date": "2026",
    "confidence": "curated",
+   "rate_year": 2026,
    "price_confidence": "high",
    "rules": [
     "Daily vehicle permit $21.00 for any stop on Hwy 60 (trails, beaches, Visitor Centre, picnic areas); driving straight through needs no permit.",
@@ -3693,6 +3698,7 @@
      "rule": {
       "free": true
      },
+     "free_source": "osm",
      "capacity": null,
      "notes": "OSM fee=no; public parking on the Town map",
      "source": "https://gravenhurst-005-ca.govstack.com/media/o3shexy3/muskoka-wharf-map-rev-2024-with-access-points.pdf",
@@ -3706,6 +3712,7 @@
      "rule": {
       "free": true
      },
+     "free_source": "osm",
      "capacity": null,
      "notes": "OSM fee=no",
      "source": "https://gravenhurst-005-ca.govstack.com/media/o3shexy3/muskoka-wharf-map-rev-2024-with-access-points.pdf",
@@ -3987,6 +3994,7 @@
      "rule": {
       "free": true
      },
+     "free_source": "osm",
      "capacity": null,
      "notes": "OSM fee=no",
      "source": "https://www.orillia.ca/roads-and-environment/parking/",

@@ -255,7 +255,8 @@ priced.
   ("Mo-Fr"), and OpenStreetMap opening hours with day forms, several rules, "off" and public holidays
   ("Mo-Fr 07:00-19:00; Sa 08:00-17:00; Su off", past midnight too): a lot closed during the stay does
   not fit, and hours the script cannot read are shown in the lot's notes and on its check line. A
-  night or overnight maximum with no hours is noted, never used as the day maximum, and a rate that
+  night or overnight maximum with no hours is noted, never used as the day maximum, a price given only
+  for some hours ("$5 after 6pm") leaves the other hours as price unknown, not free, and a rate that
   calls every paid day free is shown as price unknown, never free. One unreadable lot is left out
   with a WARNING; the rest of its source still counts.
 - **OpenStreetMap searches** wait at most 60 s in total. After a timeout or a busy reply, later

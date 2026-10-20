@@ -29,10 +29,12 @@ Extensions used by the open-data parsers (all optional):
   exclude HST); "per_person": {"adult", "child", "senior"} or true (admission per person: the cost is one
   adult unless the party is known); "per_passenger": $ (vehicle price covers the driver, plus $ for each
   passenger); "first_hour": $ (the first hour costs this, later hours the hourly rate; the day maximum
-  still caps the day); "fill_cap": $ (cap per day on time charged by "fill"); "_partial_days": [0-6] (the rate text priced only these weekdays;
-  other days are unknown, not free); a period may carry "no_limit": true (max_stay does not bind in it) and
-  "entry_max": [{"from", "to", "max"}] (the cap depends on the arrival time), "months": [1-12] (the window
-  applies in those months only), "free_first_min": n (the first n minutes of the stay in it are free) and
+  still caps the day); "fill_cap": $ (cap per day on time charged by "fill"); "_partial_days": [0-6] (the
+  rate text priced only these weekdays; other days are unknown, not free); "_partial_hours": true (the rate
+  text priced only some hours, with no base rate; other hours are unknown, not free); a period may carry
+  "no_limit": true (max_stay does not bind in it) and "entry_max": [{"from", "to", "max"}] (the cap depends on
+  the arrival time), "months": [1-12] (the window applies in those months only), "free_first_min": n (the
+  first n minutes of the stay in it are free) and
   "roll_min": n (its "max" is a rolling maximum: each n-minute block of the stay from the first charged minute
   costs at most "max", across midnight, as Green P's "Any 4 hour Period" or "24 Hour Rolling Maximum").
 
@@ -453,8 +455,9 @@ def parse_rate_text(text):
     "First hour FREE. $1 per 1/2 hour. $9 Daily.", "Mon-Fri, 8:30 -18:00, $0.50/7.5 min, $19 Max, ...
     // Sat,Sun,Holidays - Free", "$18 a day weekdays" (other days unknown, not free), "Weekdays $15, Weekends $8",
     "$3/h, $12 max, free after 6pm", "$20 per day, $10 after 5pm", "$3/hr, $10 after 5pm" ($3/h until 17:00),
-    "$5 first hour, $2 each additional hour", "$5 1st hour, $3/hr after", "2 hours free, then $3/hr",
-    "$2.25/hour, max 3 hours", "$2/hr Mon-Fri 8am-6pm; $1/hr Sat 9am-5pm" (each price before its window), "$12 Day Max, $5 Night Max" (a night maximum without hours is
+    "$5 after 6pm" (other hours unknown, not free), "$5 first hour, $2 each additional hour", "$5 1st hour,
+    $3/hr after", "2 hours free, then $3/hr", "$2.25/hour, max 3 hours", "$2/hr Mon-Fri 8am-6pm; $1/hr Sat
+    9am-5pm" (each price before its window), "$12 Day Max, $5 Night Max" (a night maximum without hours is
     noted, not used), "$2/hr Mon-Fri, Sat-Sun free" (a paid day list, then the free one), "$2/hr 8am-6pm, free
     evenings and weekends". Unknown parts are left out; an empty dict means nothing was understood, or that the
     text calls every paid day free ("$2/hr, free Mon-Sun")."""
@@ -754,6 +757,10 @@ def parse_rate_text(text):
         else:
             rule["paid_days"] = [d for d in (rule.get("paid_days") if rule.get("paid_days") is not None else range(7))
                                  if d not in free_days]
+    if rule.get("periods") and not any(k in rule for k in ("hourly", "flat", "daily_max")) and not qperiods             and not rule.get("_partial_days") and not any(p.get("free") or p.get("hourly") is not None for p in rule["periods"])             and any(p.get("flat") is not None or p.get("max") is not None for p in rule["periods"]):
+        # "$5 after 6pm", "$6 Day (8am-6pm)": a price for some hours only, with no base rate; the other hours are
+        # unknown, not free (hourly windows such as "Mon-Fri 8:30-18:00 $0.50/7.5 min" stay paid hours)
+        rule["_partial_hours"] = True
     if night_max:
         if any(k in rule for k in ("hourly", "flat", "daily_max")) or rule.get("periods"):
             notes.append("night maximum %s not used (its hours are not given)" % dc.money(min(night_max)))
@@ -1094,6 +1101,17 @@ def _longest_run(ivs):
     return best
 
 
+def _merged(ivs):
+    """The intervals joined where they touch or overlap: [(start, end)] in time order."""
+    out = []
+    for a, b in sorted(x for x in ivs if x[1] > x[0]):
+        if out and a <= out[-1][1] + dt.timedelta(seconds=30):
+            out[-1] = (out[-1][0], max(out[-1][1], b))
+        else:
+            out.append((a, b))
+    return out
+
+
 def price_rule(rule, arrive, stay_min, holidays=None):
     """Cost in CAD (float) of parking under a normalized rule, or None when the rule cannot price this stay.
     Also returns why: (cost, basis_text, fits_stay). A rule's "tax" is added on top."""
@@ -1394,6 +1412,23 @@ def _price_core(rule, arrive, stay_min, holidays=None):
                     and (not season or _in_season(d, season)):
                 total += float(rule["evening_flat"])
             d += dt.timedelta(days=1)
+    if rule.get("_partial_hours") and hourly is None and rule.get("flat") is None and rule.get("daily_max") is None:
+        # the rate text priced only some hours: time outside them (but not a free holiday) is unknown, not free
+        known = list(covered)
+        if hol_free:
+            for x in stay_days:
+                if x.isoformat() in holidays:
+                    d0 = dt.datetime.combine(x, dt.time())
+                    known.append((max(d0, arrive), min(d0 + dt.timedelta(days=1), end)))
+        if sum((b - a).total_seconds() for a, b in _merged(known)) / 60.0 < stay_min - 0.5:
+            hrs = []
+            for p in rule["periods"]:
+                h_txt = "%s-%s" % tuple(p["hours"])
+                if p.get("days") is not None and len(set(p["days"])) < 7:
+                    h_txt = "%s %s" % (days_text(p["days"]), h_txt)
+                if not p.get("free") and h_txt not in hrs:
+                    hrs.append(h_txt)
+            return None, "price published for %s only (%s)" % (", ".join(hrs), desc), fits
     if total <= 0:
         when = "Sat" if arrive.weekday() == 5 else ("Sun" if arrive.weekday() == 6 else arrive.strftime("%a"))
         if arrive.date().isoformat() in holidays:

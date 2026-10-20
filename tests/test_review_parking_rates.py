@@ -1,5 +1,5 @@
 """Offline regression tests for the parking rate-text parser and pricing findings of the 2026-10 review
-(parking-1, -2, -5, -6, -9, parking-verifier-1, -2).
+(parking-1, -2, -5, -6, -7, -9, parking-verifier-1, -2).
 
 Every HTTP call is mocked (Overpass through parking._overpass); nothing here touches the network.
 
@@ -219,6 +219,20 @@ class AcrossMidnight(unittest.TestCase):             # parking-6
                     early = pk.price_rule(rule, dt.datetime(2026, 7, 15, 22, 30), 60)[0]
                     if late and early:
                         self.assertLessEqual(late, early + 0.005, lot["name"])   # HEAD: 17 lots double
+
+
+class EveningOnlyPrice(unittest.TestCase):           # parking-7
+    def test_daytime_is_unknown_not_free(self):
+        cost, basis, _ = pk.price_rule(pk.parse_rate_text("$5 after 6pm")[0], WED10, 180, set())
+        self.assertIsNone(cost)                                             # HEAD: 0.0 "free at this time"
+        self.assertIn("price published for 18:00-24:00 only", basis)
+        self.assertEqual(price("$5 after 6pm", WED10.replace(hour=19), 120), 5.0)
+        self.assertEqual(osm_lot(WED10, 180, charge="$5 after 6pm")["cost_text"], "price unknown, check signs")
+
+    def test_a_base_rate_or_full_day_prices_are_not_partial(self):
+        self.assertEqual(price("$1/Hr $6 Day (7am-6pm), $5 Eve (6pm-midnight)", WED10.replace(hour=8), 600), 6.0)
+        self.assertEqual(price("Weekdays $15, Weekends $8", WED10, 180), 15.0)
+        self.assertNotIn("_partial_hours", pk.parse_rate_text("Mon-Fri, 8:30 -18:00, $0.50/7.5 min, $19 Max")[0])
 
 
 if __name__ == "__main__":

@@ -611,5 +611,34 @@ class TomTomPointTimes(unittest.TestCase):
         self.assertIn("instructionsType=coded", key)   # a new cache key: replies cached without guidance are not reused
 
 
+class InterchangeChain(unittest.TestCase):
+    """data-integrity-12: the road between two consecutive 407 interchanges cannot be shorter than the straight
+    line between their points, so every km gap must be at least 0.95 x the distance between the stored points."""
+    # York-Durham Line (km 99.4) to Whites Rd (km 102.3): both km posts match the Wikipedia exit list (rechecked
+    # 2026-10-19) but the OSM crossings re-taken on 2026-10-19 are 3.67 km apart, so one source is off. The km
+    # posts are not edited without a source and the 0.95 threshold is not loosened; remove the pair from this set
+    # when the data is fixed (test_known_conflicts_still_fail says when).
+    KNOWN_SOURCE_CONFLICTS = {("York-Durham Line", "Whites Rd")}
+
+    def _short_pairs(self):
+        ics = sorted(tolls.data()["etr407"]["interchanges"], key=lambda x: x["km"])
+        out = {}
+        for a, b in zip(ics, ics[1:]):
+            line_km = th.haversine_m(a["lat"], a["lon"], b["lat"], b["lon"]) / 1000.0
+            if b["km"] - a["km"] < 0.95 * line_km:
+                out[(a["name"], b["name"])] = "%s (km %.1f) to %s (km %.1f): km gap %.1f, straight line %.2f km" % (
+                    a["name"], a["km"], b["name"], b["km"], b["km"] - a["km"], line_km)
+        return out
+
+    def test_km_gap_not_shorter_than_straight_line(self):
+        bad = self._short_pairs()
+        self.assertEqual([v for k, v in sorted(bad.items()) if k not in self.KNOWN_SOURCE_CONFLICTS], [])
+
+    def test_known_conflicts_still_fail(self):
+        bad = self._short_pairs()
+        for pair in self.KNOWN_SOURCE_CONFLICTS:
+            self.assertIn(pair, bad, "%s to %s now passes: remove it from KNOWN_SOURCE_CONFLICTS" % pair)
+
+
 if __name__ == "__main__":
     unittest.main()

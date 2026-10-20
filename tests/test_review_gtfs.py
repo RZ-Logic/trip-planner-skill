@@ -152,5 +152,35 @@ class HeadwayTests(unittest.TestCase):
         self.assertNotIn("headway_min", legs[0])
 
 
+class WindowBoardingTests(unittest.TestCase):
+    """hubs-engine-verifier-1: a bus boarded inside the window keeps the stops it reaches after the window end."""
+
+    TIMES = [("t1", "09:50:00", "09:50:00", "A", 1, 0, 0), ("t1", "10:05:00", "10:05:00", "B", 2, 0, 0),
+             ("t1", "10:20:00", "10:20:00", "C", 3, 0, 0)]
+
+    def test_trip_boarded_in_the_window_keeps_its_later_stops(self):
+        net, scan, idx = scan_for(feed([("1", "WK", "t1", "C")], self.TIMES), hms(6, 0), hms(10, 0))
+        self.assertIn("Dest C", idx)
+        self.assertEqual(scan.evaluate(idx["Hub A"], hms(9, 0))[0], hms(10, 20))
+        # riding on past 10:00 is fine; boarding after it is outside the window
+        self.assertGreaterEqual(scan.evaluate(idx["Transfer B"], hms(10, 0))[0], th.INF)
+
+    def test_plan_finds_the_bus_that_leaves_inside_the_window(self):
+        p = feed([("1", "WK", "t1", "C")], self.TIMES)
+        res = run(["--origin", "43.4990,-79.8000", "--dest", "43.5500,-79.8000", "--depart", "2026-10-15 06:00",
+                   "--feed", "t=" + p, "--origin-walk-m", "300"] + BASE)
+        self.assertEqual((res["transit_only"] or {}).get("arrive"), hms(10, 20))
+        self.assertFalse([w for w in res["warnings"] if "no transit stop within" in w], res["warnings"])
+
+    def test_stops_near_the_destination_with_no_arrivals_are_not_called_missing(self):
+        p = feed([("1", "WK", "t1", "B"), ("2", "WK", "t2", "C")],
+                 [("t1", "07:00:00", "07:00:00", "A", 1, 0, 0), ("t1", "07:10:00", "07:10:00", "B", 2, 0, 0),
+                  ("t2", "12:00:00", "12:00:00", "B", 1, 0, 0), ("t2", "12:10:00", "12:10:00", "C", 2, 0, 0)])
+        res = run(["--origin", "43.4990,-79.8000", "--dest", "43.5500,-79.8000", "--depart", "2026-10-15 06:00",
+                   "--feed", "t=" + p, "--origin-walk-m", "300"] + BASE)
+        self.assertFalse([w for w in res["warnings"] if "no transit stop within" in w], res["warnings"])
+        self.assertTrue([w for w in res["warnings"] if "have no arrivals in the time window" in w], res["warnings"])
+
+
 if __name__ == "__main__":
     unittest.main()

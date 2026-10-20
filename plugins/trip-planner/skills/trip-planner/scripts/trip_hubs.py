@@ -1618,8 +1618,10 @@ def load_feed(net, fid, label, path, day, t0, t_end, holidays=None, local_tz=Non
                 for k in range(len(trows) - 1):
                     r0, r1 = trows[k], trows[k + 1]
                     dep = r0[2] + o + shift + fx
-                    if dep < t0 or dep > t_end:
+                    if dep < t0:
                         continue
+                    if dep > t_end and (ti is None or dep > hi):
+                        break   # times rise along a trip (fix_time_order): nothing later boards in the window
                     s0, s1 = gstop(r0[3]), gstop(r1[3])
                     if s0 is None or s1 is None:
                         continue
@@ -1635,7 +1637,8 @@ def load_feed(net, fid, label, path, day, t0, t_end, holidays=None, local_tz=Non
                     flag = ("b" if r0[7] in ("2", "3") else "") + ("a" if r1[8] in ("2", "3") else "")
                     if flag:   # phone ahead or tell the driver
                         net.request[(ti, k)] = flag
-                    net.conns.append((dep, r1[1] + o + shift + fx, s0, s1, ti, r0[4], r1[5], k))
+                    board = r0[4] and dep <= t_end   # ride on past the window end, but board only inside it
+                    net.conns.append((dep, r1[1] + o + shift + fx, s0, s1, ti, board, r1[5], k))
     if wrapped_n:
         net.warnings.append("%s: %d trips had times that ran backwards past midnight (00:06 written for 24:06) and "
                             "were read as after midnight; check them with the operator." % (label, wrapped_n))
@@ -2968,13 +2971,16 @@ def plan(args):
             break
         warnings.append("no stop within %d m of the destination; widened to %d m" % (dest_m, dest_m * 2))
         dest_m *= 2
+    idle_near = not egress and any(haversine_m(d_lat, d_lon, a, b) <= dest_m
+                                   for pts in net.feed_stops.values() for a, b in pts)
+    near_txt = ("the transit stops within %d m of the destination have no arrivals in the time window" if idle_near
+                else "no transit stop within %d m of the destination") % dest_m
     if not egress:
         if final_m <= 0 and getattr(args, "final_ride", "auto") != "off":
             final_m = final_ride_radius(od_m, args, force=True)   # a short trip to a place with no stop
         if final_m <= 0:
             raise SystemExit("no transit stop near the destination in the loaded feeds")
-        warnings.append("no transit stop within %d m of the destination, so every transit plan ends with a ride "
-                        "(see FINISH WITH A RIDE)." % dest_m)
+        warnings.append("%s, so every transit plan ends with a ride (see FINISH WITH A RIDE)." % near_txt)
 
     t = time.time()
     min_change_s = int(args.min_change_min * 60)
@@ -3498,8 +3504,7 @@ def plan(args):
         warnings.append("transit only is no longer possible: its last workable departure needed leaving by %s."
                         % fmt_t(missed_dep))
     elif not egress:
-        warnings.append("transit only cannot reach the door: no stop within %d m of the destination (see FINISH WITH "
-                        "A RIDE)." % dest_m)
+        warnings.append("transit only cannot reach the door: %s (see FINISH WITH A RIDE)." % near_txt)
     elif near_origin:
         warnings.append("%d stops within %d m of the origin have departures in the window, but none of them reaches "
                         "the destination in time. Transit only does not work at this hour; try --max-hours or "

@@ -1233,6 +1233,31 @@ def fill_missing_times(rows):
     return out
 
 
+def fix_time_order(rows):
+    """rows: sorted [seq, arr, dep, ...]. Times must not fall along a trip. A fall of more than 12 h is a midnight
+    wrap written as 00:06 instead of 24:06: add 24 h from there on. Returns (rows, wrapped), or (None, False) when
+    times fall otherwise (the trip cannot be used)."""
+    add, prev, wrapped, out = 0, None, False, []
+    for r in rows:
+        if r[1] is None:   # untimed: interpolated afterwards
+            out.append(r)
+            continue
+        a, d = r[1] + add, r[2] + add
+        if prev is not None and a < prev:
+            if prev - a <= 12 * 3600:
+                return None, False
+            add, a, d, wrapped = add + 86400, a + 86400, d + 86400, True
+        if d < a:
+            if a - d <= 12 * 3600:
+                return None, False
+            add, d, wrapped = add + 86400, d + 86400, True
+        r = list(r)
+        r[1], r[2] = a, d
+        out.append(r)
+        prev = d
+    return out, wrapped
+
+
 class Network:
     def __init__(self):
         self.stop_name, self.stop_lat, self.stop_lon, self.stop_feed, self.stop_zone = [], [], [], [], []
@@ -1546,8 +1571,14 @@ def load_feed(net, fid, label, path, day, t0, t_end, holidays=None, local_tz=Non
             g = local[sid] = net.add_stop(raw[0], raw[1], raw[2], label, raw[3])
         return g
 
+    wrapped_n = bad_order = 0
     for tid, trows in per_trip.items():
         trows.sort(key=lambda x: x[0])
+        trows, wrapped = fix_time_order(trows)   # before interpolation, or untimed stops fill in backwards
+        if trows is None:
+            bad_order += 1
+            continue
+        wrapped_n += wrapped
         trows = fill_missing_times(trows)
         if len(trows) < 2:
             continue
@@ -1582,6 +1613,11 @@ def load_feed(net, fid, label, path, day, t0, t_end, holidays=None, local_tz=Non
                     if flag:   # phone ahead or tell the driver
                         net.request[(ti, k)] = flag
                     net.conns.append((dep, r1[1] + o + shift, s0, s1, ti, r0[4], r1[5], k))
+    if wrapped_n:
+        net.warnings.append("%s: %d trips had times that ran backwards past midnight (00:06 written for 24:06) and "
+                            "were read as after midnight; check them with the operator." % (label, wrapped_n))
+    if bad_order:
+        net.warnings.append("%s: %d trips with times running backwards were skipped." % (label, bad_order))
 
     # transfers.txt: forbidden transfers and minimum transfer times
     if gz.has("transfers.txt"):

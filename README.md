@@ -319,6 +319,10 @@ The plan's numbers come from deterministic scripts. The model asks what's missin
 - **Climate normals:** weather data by [Open-Meteo.com](https://open-meteo.com/) (CC BY 4.0), with modified Copernicus Climate Change Service information 2026. **USD/CAD rate:** Bank of Canada, unchanged.
 - **Fares, timetables and prices** copied from operators' public pages are facts; each keeps its source URL in the data file.
 - **Data fetched while planning** (Ontario fuel prices under the Open Government Licence – Ontario, Toronto and other city open data, OpenStreetMap services, Open-Meteo forecasts) is cached only on your machine and keeps its own licence.
+- **Privacy: which hosts get your locations.**
+  - Geocoders (Nominatim, Photon) get the address you type. Reverse lookups of a `lat,lon` place (its label, town or country) send at most 3 decimals (about 100 m) at street level or coarser; set `TRIP_HOME` and a drive labels your home with no lookup.
+  - Routing engines (Valhalla, OSRM, TomTom with a key) and Transitous get the full start and end points; Open-Meteo gets points along the route (4 decimals).
+  - Overpass, the charger API and Google Places (with a key) get the route or the area around the destination and stations.
 
 ---
 

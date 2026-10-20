@@ -495,5 +495,26 @@ class DriveAttribution(unittest.TestCase):
         self.assertNotIn("Other Transit", res["attribution"])   # no web licence URL: nothing to list
 
 
+# --------------------------------------------------------------------------------------------- security-tos-8
+class LabelLookupPrivacy(unittest.TestCase):
+    """The label lookup for a lat,lon end asks Nominatim at street level with 3-decimal coordinates (about 100 m),
+    like trip_hubs' reverse lookups, so a home pin never returns a house number."""
+
+    def test_label_lookup_is_street_level_with_three_decimals(self):
+        reply = {"category": "highway", "type": "residential", "name": "Santa Maria Boulevard",
+                 "address": {"road": "Santa Maria Boulevard", "town": "Milton", "state": "Ontario",
+                             "country_code": "ca"}}
+        with mock.patch.object(dc, "fetch_json", return_value=reply) as f,                 mock.patch.dict(os.environ, {"TRIP_HOME": ""}):
+            label, info = dp.place_label("43.498757,-79.855987", 43.498757, -79.855987)
+        self.assertEqual(label, "Santa Maria Blvd, Milton")
+        self.assertEqual(dp.province_of(info), "ontario")
+        url = f.call_args[0][0]
+        self.assertIn("zoom=16", url)
+        self.assertIn("lat=43.499&lon=-79.856", url)
+        self.assertNotIn("zoom=18", url)
+        self.assertNotIn("43.4988", url)
+        self.assertEqual(f.call_args[1]["cache_key"], url)
+
+
 if __name__ == "__main__":
     unittest.main()

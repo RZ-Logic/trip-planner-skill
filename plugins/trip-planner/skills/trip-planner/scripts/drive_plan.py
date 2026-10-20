@@ -215,10 +215,10 @@ def reverse_address(lat, lon):
     """One Nominatim /reverse call (cached 30 days, 1 request per second): {"label", "country", "state"} or {}."""
     g = costs().get("geocode") or {}
     base = g.get("reverse_url", "https://nominatim.openstreetmap.org/reverse")
-    q = {"format": "jsonv2", "zoom": "18", "addressdetails": "1"}   # 18: building level, so house numbers come back
-    # 4 decimals (about 11 m) still find the building or street for the label, and the geocoder never gets the
-    # full precision of the coordinates the user typed; the cache key is the same request
-    url = base + "?" + urllib.parse.urlencode(dict(q, lat="%.4f" % lat, lon="%.4f" % lon))
+    q = {"format": "jsonv2", "zoom": "16", "addressdetails": "1"}   # 16: street level, enough for a label
+    # 3 decimals (about 100 m), like trip_hubs' reverse lookups, so a home pin never asks for its house number;
+    # the cache key is the same request
+    url = base + "?" + urllib.parse.urlencode(dict(q, lat="%.3f" % lat, lon="%.3f" % lon))
     key = url
     try:
         data = dc.fetch_json(url, timeout=20, max_age_h=g.get("cache_h", 720), min_interval=g.get("min_interval_s", 1.1),
@@ -276,7 +276,7 @@ def _home_label(lat, lon):
 
 def place_label(text, lat, lon):
     """(short label, {"country", "state"} or {}) for the DRIVE line. A 'lat,lon' input is reverse geocoded once
-    ('805 Santa Maria Blvd, Milton'); an address keeps the geocoder's name."""
+    at street level ('Santa Maria Blvd, Milton'); an address keeps the geocoder's name."""
     if not th.LATLON_RE.match(text or ""):
         st = _province_from_text(text)
         return short_label(text), ({"state": st} if st else {})

@@ -943,8 +943,8 @@ class LabelTests(unittest.TestCase):   # K6, F18, UX10
         kw = f.call_args[1]
         self.assertEqual(kw["max_age_h"], 720)
         self.assertGreaterEqual(kw["min_interval"], 1.0)
-        self.assertIn("lat=43.4988&", kw["cache_key"])
-        self.assertIn("zoom=18", f.call_args[0][0])
+        self.assertIn("lat=43.499&", kw["cache_key"])   # street level, 3 decimals: never the house (security-tos-8)
+        self.assertIn("zoom=16", f.call_args[0][0])
         road_only = {"category": "highway", "type": "tertiary", "name": "Santa Maria Boulevard",
                      "address": {"road": "Santa Maria Boulevard", "town": "Milton"}}
         walkway = {"category": "highway", "type": "footway", "name": "PATH",

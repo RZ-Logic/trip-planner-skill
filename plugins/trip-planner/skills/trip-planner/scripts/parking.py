@@ -71,6 +71,8 @@ UNVERIFIED_FREE_TEXT = "free per OpenStreetMap, unverified; check signs"
 FACILITY_FREE_TEXT = "free per OpenStreetMap, unverified; may be for facility users"
 # an unverified free OSM lot ranks after verified priced options up to this cost for the stay
 UNVERIFIED_FREE_RANK_COST = 5.0
+# an old or unverified price ranks as if it cost this much more, so a verified price up to 25% dearer comes first
+UNVERIFIED_PRICE_RANK_PCT = 0.25
 
 
 def _today():
@@ -1658,6 +1660,12 @@ def curated(lat, lon, arrive, stay_min, holidays, radius_m, warnings, party=None
                            lot.get("source") or src, lot.get("confidence") or p.get("confidence") or "curated", (lat, lon),
                            arrive, stay_min, hol, capacity=lot.get("capacity"), notes=lot.get("notes") or "",
                            reservation=lrv or None, often_full=bool(lot.get("often_full")), party=party)
+            if lot.get("free_source") == "osm" and out["cost"] == 0:   # free only per an OSM fee=no tag
+                out["cost_text"] = UNVERIFIED_FREE_TEXT
+                out["unverified"] = True
+                out["_unverified_free"] = "plain"
+            if (lot.get("price_confidence") or p.get("price_confidence")) == "low":   # no fee published
+                out["_low_price_conf"] = True
             if out["basis"].startswith("closed off season"):
                 rules.append("%s: %s is %s" % (p.get("name"), out["name"], out["basis"].replace("closed off season", "closed for the season")))
                 continue
@@ -2724,9 +2732,18 @@ def dedupe(lots, within_m=60.0):
     return out
 
 
+def _unverified_price(lot):
+    """Whether the lot's price is old or unverified: osm, stale or low confidence, a Green P 2019 price, a past
+    rate year, or a place or lot whose price_confidence is low."""
+    gp = lot.get("_greenp")
+    return bool(lot.get("confidence") in ("osm", "stale", "low") or (gp and not gp.get("current"))
+                or lot.get("_old_rate") or lot.get("_low_price_conf"))
+
+
 def rank_key(lot):
     """Fitting lots first, walkable before far, then by tier: 0 priced (an unverified free OSM lot sorts as if it
-    cost just over $5, so a verified option up to $5 comes first), 1 priced but may have closed (a Green P 2019
+    cost just over $5, so a verified option up to $5 comes first; an old or unverified price sorts as if it cost
+    UNVERIFIED_PRICE_RANK_PCT more, so a verified price up to 25% dearer comes first), 1 priced but may have closed (a Green P 2019
     carpark missing from the occupancy feed: absence is a weak signal, so it stays ahead of the tiers below), 2 an
     unverified free lot that looks like a facility lot, 3 unknown price, 4 unknown price and may have closed;
     within a tier by cost, then confidence and walk."""
@@ -2741,6 +2758,8 @@ def rank_key(lot):
     cost = lot["cost"] if priced else 0.0
     if uv == "plain":
         cost = UNVERIFIED_FREE_RANK_COST + 0.005
+    elif priced and _unverified_price(lot):
+        cost = cost * (1.0 + UNVERIFIED_PRICE_RANK_PCT)
     return (0 if lot["fits_stay"] else 1, 1 if lot.get("_far") else 0, tier,
             cost, CONF_RANK.get(lot["confidence"], 9), lot["walk_m"])
 
@@ -2821,7 +2840,8 @@ def greenp_search(gp):
 def check_hint(lot):
     """What to verify before driving to a lot, or None when its price is official or curated and current:
     {"why": "may have closed" | "2019 price" | "price unknown" | "price unknown, opened after 2019" |
-    "free per OpenStreetMap, unverified" | "price per OpenStreetMap, unverified" | "old price (...)", with
+    "free per OpenStreetMap, unverified" | "price per OpenStreetMap, unverified" | "old price (...)" |
+    "price not confirmed" (low confidence, or a curated price_confidence of low), with
     "; opening hours not read" added when the lot's OSM opening_hours could not be read,
     "url": the operator's own page or None, "search": a web search string or None}. Green P: the url is the
     carpark's page from the 2019 data (43, 283 and the toronto.open pages are live; some 2019 addresses are a 404
@@ -2845,6 +2865,8 @@ def check_hint(lot):
         why = lot["_old_rate"]
     elif lot.get("confidence") == "osm":
         why = "price per OpenStreetMap, unverified"
+    elif lot.get("confidence") == "low" or lot.get("_low_price_conf"):
+        why = "price not confirmed"
     else:
         return None
     if lot.get("_hours_unread"):
@@ -2998,7 +3020,7 @@ def find_parking(lat, lon, arrive, stay_min, opts, warnings):
             extra = []
             for x in sorted(all_lots, key=lambda y: y["walk_m"]):
                 if id(x) in have or not x["source"].endswith("(curated)") or x["cost"] != 0 or not x["fits_stay"] \
-                        or not (max_walk < x["walk_m"] <= wide):
+                        or x.get("_unverified_free") or not (max_walk < x["walk_m"] <= wide):
                     continue
                 x["_far"] = True
                 pool.append(x)

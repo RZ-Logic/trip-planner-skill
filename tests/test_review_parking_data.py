@@ -92,6 +92,49 @@ class CuratedData(unittest.TestCase):
         self.assertIsNone(curated_lot("spencer-gorge", "Tew Falls / Dundas Peak lot (590 Harvest Rd)",
                                       dt.datetime(2027, 7, 10, 10), 120)["cost"])
 
+    def test_osm_only_free_curated_lot_unverified(self):   # data-integrity-7
+        # a curated lot that only an OSM fee=no tag calls free is unverified, as the same lot from Overpass would be
+        lot = curated_lot("gananoque", "Free public lot near the waterfront", dt.datetime(2026, 7, 15, 10), 180)
+        self.assertTrue(lot["unverified"])
+        self.assertEqual(lot["cost_text"], pk.UNVERIFIED_FREE_TEXT)
+        check = pk._public(lot)["check"]
+        self.assertIsNotNone(check)
+        self.assertEqual(check["why"], "free per OpenStreetMap, unverified")
+        # a free lot a town page vouches for stays verified
+        self.assertFalse(curated_lot("orillia-waterfront", "Couchiching Beach Park lot", dt.datetime(2026, 7, 15, 10),
+                                     180)["unverified"])
+
+    def test_low_price_confidence_place_gets_check(self):   # data-integrity-7
+        # price_confidence 'low' (no fee published) on the place or the lot asks for a check on its priced lots
+        town = {"id": "t", "name": "Test town", "match": {"lat": DEST[0], "lon": DEST[1], "radius_km": 1},
+                "confidence": "curated", "price_confidence": "low",
+                "lots": [{"name": "Town lot", "lat": DEST[0], "lon": DEST[1], "rule": {"hourly": 2.0}},
+                         {"name": "Other lot", "lat": DEST[0], "lon": DEST[1], "rule": {"hourly": 2.0},
+                          "price_confidence": "high"}]}
+        with mock.patch.object(pk, "load_places", return_value=[town]):
+            lots = pk.curated(DEST[0], DEST[1], dt.datetime(2026, 7, 15, 10), 180, set(), 1000, [])[0]
+        checks = {x["name"]: pk._public(x)["check"] for x in lots}
+        self.assertIsNotNone(checks["Town lot"])
+        self.assertEqual(checks["Town lot"]["why"], "price not confirmed")
+        self.assertIsNone(checks["Other lot"])
+
+    def test_osm_only_free_lot_not_offered_as_saving(self):   # data-integrity-7
+        # the "free parking a longer walk away" warning names only free lots a source vouches for
+        town = {"id": "t", "name": "Test town", "match": {"lat": DEST[0], "lon": DEST[1], "radius_km": 2},
+                "confidence": "curated",
+                "lots": [{"name": "Door garage", "lat": DEST[0], "lon": DEST[1], "rule": {"flat": 20.0}},
+                         {"name": "Far OSM lot", "lat": DEST[0] + 0.0080, "lon": DEST[1], "rule": {"free": True},
+                          "free_source": "osm"},
+                         {"name": "Far town lot", "lat": DEST[0] - 0.0080, "lon": DEST[1], "rule": {"free": True}}]}
+        w = []
+        with mock.patch.object(pk, "load_places", return_value=[town]),                 mock.patch.object(dc, "fetch", side_effect=AssertionError("network")):
+            res = pk.find_parking(DEST[0], DEST[1], dt.datetime(2026, 7, 15, 10), 240, {"offline": True}, w)
+        saving = [x for x in w if x.startswith("free parking a longer walk away")]
+        self.assertEqual(len(saving), 1, w)
+        self.assertIn("Far town lot", saving[0])
+        self.assertNotIn("Far OSM lot", saving[0])
+        self.assertNotIn("Far OSM lot", [o["name"] for o in res["options"]])
+
 
 class PriceRule(unittest.TestCase):
     def test_off_season_rule(self):   # data-integrity-1
@@ -108,6 +151,38 @@ class PriceRule(unittest.TestCase):
         self.assertEqual(pk.price_rule(rule, dt.datetime(2026, 7, 10, 10), 300)[0::2], (None, True))
         self.assertEqual(pk.price_rule(rule, dt.datetime(2026, 10, 10, 10), 120)[0::2], (21.0, True))
         self.assertIn("price not published off season", pk.describe_rule(rule, 2026))
+
+class Verification(unittest.TestCase):
+    def test_low_confidence_gets_check(self):   # ext-11
+        lot = curated_lot("canadas-wonderland", "Canada's Wonderland general parking", dt.datetime(2026, 7, 15, 10), 480)
+        self.assertEqual(lot["confidence"], "low")
+        check = pk._public(lot)["check"]
+        self.assertIsNotNone(check)
+        self.assertEqual(check["why"], "price not confirmed")
+
+    def mk(self, name, cost, conf, walk_dlat):
+        return pk.make_lot(name, DEST[0] + walk_dlat, DEST[1], "garage", {"flat": cost}, "src", "", conf, DEST,
+                           dt.datetime(2026, 10, 14, 9), 480, set())
+
+    def test_verified_price_ranks_before_old_price(self):   # parking-4, docs-contract-2
+        # a 2019 Green P price no longer beats a closer garage verified at $18
+        stale = self.mk("Green P 2019", 15.0, "stale", 0.0030)
+        stale["_greenp"] = {"id": "1", "address": "1 Test St"}
+        cur = self.mk("Curated garage", 18.0, "curated", 0.0020)
+        self.assertEqual([x["name"] for x in pk.rank([stale, cur])], ["Curated garage", "Green P 2019"])
+        # an OSM-priced lot $1 cheaper no longer beats an official lot
+        osm = self.mk("OSM lot", 5.0, "osm", 0.0010)
+        off = self.mk("City lot", 6.0, "official", 0.0015)
+        self.assertEqual([x["name"] for x in pk.rank([osm, off])], ["City lot", "OSM lot"])
+        # but an unverified price at least 25% cheaper still comes first, and the real price is kept
+        cheap = self.mk("OSM cheap", 3.0, "osm", 0.0010)
+        ranked = pk.rank([cheap, off])
+        self.assertEqual([x["name"] for x in ranked], ["OSM cheap", "City lot"])
+        self.assertEqual(ranked[0]["cost"], 3.0)
+        # a past rate year counts as an old price too
+        old = self.mk("Old rate lot", 17.0, "curated", 0.0010)
+        old["_old_rate"] = "2025 price"
+        self.assertEqual([x["name"] for x in pk.rank([old, cur])], ["Curated garage", "Old rate lot"])
 
 
 if __name__ == "__main__":

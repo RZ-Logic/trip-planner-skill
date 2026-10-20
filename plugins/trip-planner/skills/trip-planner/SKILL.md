@@ -1,6 +1,6 @@
 ---
 name: trip-planner
-description: Plans trips combining an Uber or Lyft ride with transit by checking every hub in ride range. Use when ride-hail is too pricey, transit alone too slow, or for park and ride, GO or late-night trips. Compares ride-only, ride plus transit and transit-only on arrival time and cost, with fares, backups and the latest time to book, in any city with public timetable data. Also use for day trips and getaways to small towns, beaches and parks, and for drives in your own car. For drives it compares the fastest and the toll-free route (407 ETR toll against minutes saved), gives a leave-by time for a deadline, prices parking near the door for the stay (best-verified lots first), plans EV charging stops, and checks parking at a station and taking transit.
+description: Plans trips combining an Uber or Lyft ride with transit by checking every hub in ride range. Use when ride-hail is too pricey, transit alone too slow, or for park and ride, GO or late-night trips. Compares ride-only, ride plus transit and transit-only on arrival time and cost, with fares, backups and the latest time to book, in any city with public timetable data. Also use for day trips and getaways to small towns, beaches and parks, and for drives in your own car. For drives it compares the fastest and the toll-free route (407 ETR toll against minutes saved), gives a leave-by time for a deadline, prices parking near the door for the stay (verified prices ahead of similar unverified ones), plans EV charging stops, and checks parking at a station and taking transit.
 license: MIT
 compatibility: Python 3.8+ standard library only. Live mode needs network access to download GTFS timetables, plus OSRM or Valhalla driving routes, Nominatim geocoding and the Transitous router (all free, no keys). The driving mode also reads open parking, fuel-price, weather and charger data (free); TOMTOM_API_KEY, ON511_API_KEY, NLR_API_KEY and GOOGLE_PLACES_API_KEY are optional. Without network or code execution, follow the manual method in this file.
 metadata:
@@ -177,8 +177,8 @@ data for that area was missing.
 
 For trips in the user's own car; Google Maps or Waze still navigates. It covers what map apps do not
 show: the toll against the minutes it saves, a leave-by time for a deadline, parking priced for the
-stay (best-verified lots first), EV charging stops, and parking at a station then transit. Details and
-the manual method: `references/driving.md`.
+stay (verified prices ahead of similar unverified ones), EV charging stops, and parking at a station
+then transit. Details and the manual method: `references/driving.md`.
 
 ```bash
 python3 ${CLAUDE_SKILL_DIR}/scripts/drive_plan.py --origin "ORIGIN" --dest "DESTINATION" --depart "YYYY-MM-DD HH:MM" --stay-hours 3
@@ -210,9 +210,10 @@ python3 ${CLAUDE_SKILL_DIR}/scripts/drive_plan.py --origin "ORIGIN" --dest "DEST
   measured on-time rate), finding parking, the walk, charging stops and 5 minutes spare.
 - **`PARKING`** lists up to five lots (eight in `--json`): fits the stay, then within the walk limit,
   then verification tier (priced; priced but may have closed; facility-like free; unknown price), then
-  price. The first lot is the best supported, not proof of the lowest price. Pass on each lot's source
-  tag (official, curated, osm: "free" unverified, stale: Green P 2019 prices), season and reservation
-  rules, and that posted signs win. Compare closing or no-parking hours with the parked window. For
+  price, where an old or unverified price (osm, stale, low, a past rate year) counts 25% more. The first
+  lot can still be osm or stale; it is not proof of the lowest price. Pass on each lot's source tag
+  (official, curated, osm: "free" unverified, stale: Green P 2019 prices, low: price not confirmed),
+  season and reservation rules, and that posted signs win. Compare closing or no-parking hours with the parked window. For
   cheap parking also read the place notes under the list and lots beyond the walk limit
   (`--max-walk-m`).
 - **Verify the parking before you recommend it** when that lot, or a cheaper one above it, has a check

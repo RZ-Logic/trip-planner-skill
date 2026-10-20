@@ -1,5 +1,5 @@
 {"verified": "2026-10-10",
- "note": "Curated parking for Niagara, Toronto attractions, Lake Ontario east, Ottawa and Halton/Hamilton parks. Lot coordinates from OpenStreetMap (Overpass, way/relation centre; osm id in notes) or Nominatim, (c) OpenStreetMap contributors. Prices in CAD including tax unless the notes say otherwise. A rule prices the vehicle; per-person fees are noted.",
+ "note": "Curated parking for Niagara, Toronto attractions, Lake Ontario east, Ottawa and Halton/Hamilton parks. Lot coordinates from OpenStreetMap (Overpass, way/relation centre; osm id in notes) or Nominatim, (c) OpenStreetMap contributors. Prices in CAD including tax unless the notes say otherwise. A rule prices the vehicle; per-person fees are noted. free_source: osm marks a free lot whose only evidence of being free is an OSM fee=no tag; it is shown as unverified.",
  "places": [
  {"id": "niagara-falls", "name": "Niagara Falls (Niagara Parks, Clifton Hill, Fallsview)",
   "match": {"lat": 43.088, "lon": -79.072, "radius_km": 4.5},
@@ -125,7 +125,7 @@
     "rule": {"flat": 20.0},
     "capacity": null, "notes": "$20 per vehicle. OSM w/14262820 (zoo visitor lot; more zoo lots to the north, w/14262731, w/14262625).", "source": "https://www.torontozoo.com/hostyourevent/admission"},
    {"name": "Finch Meander trail lot (Rouge National Urban Park)", "lat": 43.82478, "lon": -79.196507, "kind": "lot",
-    "rule": {"free": true},
+    "rule": {"free": true}, "free_source": "osm",
     "capacity": null, "notes": "Free (OSM fee=no); trail parking, not a zoo lot; long walk along Meadowvale Rd. OSM r/8823430.", "source": "https://www.openstreetmap.org/relation/8823430"}]},
 
  {"id": "canadas-wonderland", "name": "Canada's Wonderland (Vaughan)",
@@ -275,7 +275,7 @@
   "reservation": {"required": false, "text": "", "url": "", "lead_days": 0},
   "lots": [
    {"name": "Free public lot near the waterfront", "lat": 44.323558, "lon": -76.16185, "kind": "lot",
-    "rule": {"free": true},
+    "rule": {"free": true}, "free_source": "osm",
     "capacity": null, "notes": "OSM tags only (access=yes, fee=no); not named on the Town page; check signs. About 120 m from the cruise dock. OSM w/264456146.", "source": "https://www.openstreetmap.org/way/264456146"}]},
 
  {"id": "brockville", "name": "Brockville (Blockhouse Island, Railway Tunnel, Aquatarium, downtown)",

@@ -5,7 +5,7 @@ hub within ride range, then comparing ride-only, ride plus transit and transit-o
 and cost. It also plans drives in your own car (`drive_plan.py`):
 - fastest against toll-free with the 407 ETR toll priced;
 - a leave-by time;
-- parking near the door priced for the stay, best-verified lots first;
+- parking near the door priced for the stay, verified prices ahead of similar unverified ones;
 - EV charging stops;
 - parking at a station to take transit instead.
 

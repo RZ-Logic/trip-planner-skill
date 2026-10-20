@@ -5,7 +5,8 @@ Waze or Apple Maps still do the turn-by-turn navigation. It answers what a map a
 
 - what the 407 ETR saves against what it costs;
 - when to leave for a deadline, with parking and the walk counted;
-- parking near the door priced for the length of the stay, best-verified lots first;
+- parking near the door priced for the length of the stay, verified prices ahead of similar unverified
+  ones;
 - where an EV should charge;
 - whether to park at a station and take transit instead.
 
@@ -265,7 +266,9 @@ priced.
   verification tier:
   1. Priced lots, cheapest first, free verified lots on top. OpenStreetMap lots tagged free are
      unverified, so they count as costing $5 for the stay; lots named after a facility say "may be for
-     facility users".
+     facility users". An old or unverified price (osm, stale, low, Green P 2019, a past rate year)
+     ranks as if it cost 25% more, so a verified lot up to 25% dearer comes first. Totals and the
+     arrival target's price stay the real price.
   2. Priced lots that may have closed.
   3. Facility lots tagged free.
   4. Unknown price.
@@ -295,10 +298,10 @@ priced.
     carpark ranks below unflagged priced lots within the same stay-fit and walking group; it can still
     outrank a lot with an unknown price (see Ranking above).
   - Saturday specials ($1 an hour for the first 2 hours at some garages) are priced.
-- **Check lines:** every option whose price is old, unverified or unknown, or that may have closed,
-  gets a `check` field in `--json`. The text output lists the first three of these among the top
-  five (always including #1 and the first may-have-closed lot) under the lots as "check before you
-  go", each with:
+- **Check lines:** every option whose price is old, unverified, not confirmed or unknown, or that may
+  have closed, gets a `check` field in `--json`. The text output lists the first three of these among
+  the top five (always including #1 and the first may-have-closed lot) under the lots as "check before
+  you go", each with:
   - the operator's page when known (Green P's pages are rendered with JavaScript, so open them in a
     browser tool);
   - a ready web search string (lot name, street, city).

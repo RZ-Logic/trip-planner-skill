@@ -559,5 +559,57 @@ class DstClock(unittest.TestCase):
         self.assertEqual(dc.elapsed_s(dt.datetime(2026, 10, 14, 7, 0), dt.datetime(2026, 10, 14, 9, 0), tz, None), 7200)
 
 
+class TomTomPointTimes(unittest.TestCase):
+    """drive-core-8: a TomTom route times its pieces from TomTom's guidance instructions (cumulative seconds at a
+    point), so a slow approach puts the 407 entry, and its toll band, at the right clock time; without usable
+    instructions the time is spread evenly by distance as before."""
+    D0645 = dt.datetime(2026, 10, 14, 6, 45)
+
+    def _reply(self, instructions=None):
+        rt = tdr.tomtom_reply(True)["routes"][0]
+        toll = [x for x in rt["sections"] if x["sectionType"] == "TOLL"][0]
+        a, z, n = toll["startPointIndex"], toll["endPointIndex"], len(rt["legs"][0]["points"])
+        if instructions is not None:
+            rt["guidance"] = {"instructions": instructions(a, z, n)}
+        return rt, a, z
+
+    def _finish(self, rt):
+        return drt._finish(*drt._tomtom_route(rt), engine="tomtom", depart=self.D0645, opts=dict(tdr.OPTS))
+
+    def test_407_entry_from_instruction_times(self):
+        rt, a, z = self._reply(lambda a, z, n: [
+            {"pointIndex": 0, "travelTimeInSeconds": 0, "routeOffsetInMeters": 0},
+            {"pointIndex": a, "travelTimeInSeconds": 1200}, {"pointIndex": z, "travelTimeInSeconds": 4100},
+            {"pointIndex": n - 1, "travelTimeInSeconds": 4380}])
+        r = self._finish(rt)
+        sg = r["etr"][0]
+        self.assertAlmostEqual(sg["offset_base_s"], 1200.0, delta=1)   # even spread: 733.6
+        self.assertEqual(sg["entry_time"], dt.datetime(2026, 10, 14, 7, 5))
+        self.assertEqual(sg["band_start"], "07:00")
+        self.assertEqual(sg["toll_transponder"], 50.62)
+        self.assertAlmostEqual(r["base_s"], 4380.0, delta=1)
+
+    def _even_offset(self, rt, a):
+        pts = [(p["latitude"], p["longitude"]) for p in rt["legs"][0]["points"]]
+        cum = dc.cum_dist(pts)
+        return cum[a] / cum[-1] * rt["summary"]["travelTimeInSeconds"]
+
+    def test_no_guidance_keeps_even_spread(self):
+        rt, a, _z = self._reply()
+        self.assertAlmostEqual(self._finish(rt)["etr"][0]["offset_base_s"], self._even_offset(rt, a), delta=1)
+
+    def test_bad_guidance_falls_back(self):
+        rt, a, _z = self._reply(lambda a, z, n: [{"pointIndex": a, "travelTimeInSeconds": 3000},
+                                                 {"pointIndex": z, "travelTimeInSeconds": 2000}])   # time going back
+        self.assertAlmostEqual(self._finish(rt)["etr"][0]["offset_base_s"], self._even_offset(rt, a), delta=1)
+
+    def test_url_asks_for_instructions(self):
+        now = (dt.datetime(2026, 10, 10, 12, 0), "zoneinfo")
+        with mock.patch.object(drt.th, "local_now", return_value=now):
+            url, key = drt.tomtom_url(tdr.MILTON, tdr.MARKHAM, tdr.WED_0730, dict(tdr.OPTS, tomtom_key="K"))
+        self.assertIn("instructionsType=coded", url)
+        self.assertIn("instructionsType=coded", key)   # a new cache key: replies cached without guidance are not reused
+
+
 if __name__ == "__main__":
     unittest.main()

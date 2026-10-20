@@ -493,6 +493,9 @@ def tomtom_url(o, d, depart, opts, arrive_at=None, avoid_tolls=False):
     params += [("routeType", "fastest"), ("travelMode", "car"), ("computeTravelTimeFor", "all"),
                ("sectionType", "toll"), ("sectionType", "traffic"), ("sectionType", "motorway"),
                ("sectionType", "importantRoadStretch"),
+               # guidance instructions carry pointIndex and the cumulative travelTimeInSeconds (calculateRoute docs:
+               # https://docs.tomtom.com/routing-api/documentation/tomtom-maps/calculate-route), see _point_times
+               ("instructionsType", "coded"),
                ("routeRepresentation", "polyline"), ("maxAlternatives", "1")]
     if avoid_tolls:
         params.append(("avoid", "tollRoads"))
@@ -510,6 +513,30 @@ def _near_407(pts):
     sample = west[::max(1, len(west) // 20)]
     near = sum(1 for p in sample if tolls.chain_km(p[0], p[1])[1] < 1500)
     return near >= 0.6 * len(sample)
+
+
+def _point_times(rt, cum, total_s):
+    """Seconds from the start at every route point, interpolated by distance between TomTom's guidance
+    instructions (pointIndex, cumulative travelTimeInSeconds); None without usable instructions (the caller then
+    spreads the time evenly by distance)."""
+    if len(rt.get("legs") or []) != 1:
+        return None   # pointIndex counts the reply's points; multi-leg replies are de-duplicated in _tomtom_route
+    n = len(cum)
+    anchors = {0: 0.0, n - 1: float(total_s)}
+    for ins in ((rt.get("guidance") or {}).get("instructions") or []):
+        k, s = ins.get("pointIndex"), ins.get("travelTimeInSeconds")
+        if isinstance(k, int) and 0 < k < n - 1 and isinstance(s, (int, float)):
+            anchors[k] = float(s)
+    ks = sorted(anchors)
+    if len(ks) < 3 or any(anchors[y] < anchors[x] for x, y in zip(ks, ks[1:])):
+        return None
+    out = [0.0] * n
+    for x, y in zip(ks, ks[1:]):
+        span = cum[y] - cum[x]
+        for j in range(x, y + 1):
+            f = (cum[j] - cum[x]) / span if span > 0 else (j - x) / float(y - x)
+            out[j] = anchors[x] + (anchors[y] - anchors[x]) * f
+    return out
 
 
 def _tomtom_route(rt):
@@ -535,10 +562,13 @@ def _tomtom_route(rt):
     # Pieces between every section boundary, so 407 and motorway flags are exact per piece.
     cuts = sorted(set([0, max(0, len(pts) - 1)] + [i for ab in etr_ix + mway_ix for i in ab]))
     share = (total_s / cum[-1]) if cum[-1] > 0 else 0.0
+    # piece times from TomTom's turn-by-turn times when the reply has them (a slow approach puts the 407 entry
+    # later), else spread evenly by distance
+    times = _point_times(rt, cum, total_s) if len(pts) >= 2 else None
     for a, z in zip(cuts, cuts[1:]):
         piece = pts[a:z + 1]
         m = (cum[z] - cum[a]) * scale
-        s = (cum[z] - cum[a]) * share
+        s = (times[z] - times[a]) if times else (cum[z] - cum[a]) * share
         in_etr = any(x <= a and z <= y for x, y in etr_ix)
         in_mway = any(x <= a and z <= y for x, y in mway_ix)
         b.piece(piece, s, m, "", in_etr, hwy=in_mway)

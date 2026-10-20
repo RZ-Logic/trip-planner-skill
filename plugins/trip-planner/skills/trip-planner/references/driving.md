@@ -153,8 +153,9 @@ with the Ontario region files; elsewhere every drive uses the congested rows. Pa
   A crossing missing from `tolls.json` has no known position, so its allowance is only added to the
   arrival.
 - **TomTom:** with a key, times come from TomTom's traffic (live for now, historic for later dates),
-  and "allow" adds 8 to 30%. A round trip's drive back is asked from TomTom at its own departure time
-  (one more call per route); if that fails, the return line says the time is reused from the drive there.
+  and "allow" adds 8 to 30%. The 407 entry time comes from TomTom's turn-by-turn times along the
+  route. A round trip's drive back is asked from TomTom at its own departure time (one more call per
+  route); if that fails, the return line says the time is reused from the drive there.
 - **Daylight saving:** clock times follow the trip's time zone across a daylight-saving change: the
   drive's elapsed time is kept and the clock jumps, so an overnight drive on the change night arrives,
   enters the 407 and gets its leave-by at the real wall-clock time.

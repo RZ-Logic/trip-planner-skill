@@ -2460,6 +2460,46 @@ def journey_fare(net, legs, flat=None, payment="card", card_discount=None, rules
     return (round(total, 2) if total or complete else None), cur, parts, complete
 
 
+# --------------------------------------------------------------------------- holidays
+
+def _easter(year):
+    """Gregorian Easter Sunday (anonymous Gregorian algorithm)."""
+    a, b, c = year % 19, year // 100, year % 100
+    d, e = b // 4, b % 4
+    f = (b + 8) // 25
+    g = (b - f + 1) // 3
+    h = (19 * a + b - d - g + 15) % 30
+    i, k = c // 4, c % 4
+    l = (32 + 2 * e + 2 * i - h - k) % 7
+    m = (a + 11 * h + 22 * l) // 451
+    month = (h + l - 7 * m + 114) // 31
+    day = (h + l - 7 * m + 114) % 31 + 1
+    return dt.date(year, month, day)
+
+
+def _nth_monday(year, month, n):
+    first = dt.date(year, month, 1)
+    return first + dt.timedelta(days=(7 - first.weekday()) % 7 + 7 * (n - 1))
+
+
+def esa_holidays(year):
+    """Ontario ESA public holidays for any year (the rule behind holidays_priced_as_weekend)."""
+    may24 = dt.date(year, 5, 24)
+    days = [dt.date(year, 1, 1), _nth_monday(year, 2, 3), _easter(year) - dt.timedelta(days=2),
+            may24 - dt.timedelta(days=may24.weekday()), dt.date(year, 7, 1), _nth_monday(year, 9, 1),
+            _nth_monday(year, 10, 2), dt.date(year, 12, 25), dt.date(year, 12, 26)]
+    return set(d.isoformat() for d in days)
+
+
+def stat_holidays(regions, years=()):
+    """Statutory holiday dates ('YYYY-MM-DD') from the region files (entries with "stat": false are operator-only
+    service days and are left out), plus the Ontario ESA public holidays computed for each of `years`."""
+    out = {h["date"] for r in regions for h in r.get("holidays") or [] if isinstance(h, dict) and h.get("stat", True)}
+    for y in years:
+        out |= esa_holidays(y)
+    return out
+
+
 # --------------------------------------------------------------------------- ride model
 
 def traffic_factor_for(when, holidays=()):
@@ -3379,15 +3419,16 @@ def plan(args):
     # the reference factor (shown in the car cost model); each drive below is priced at its own start time
     ride_time = deadline - dt.timedelta(minutes=60) if arrive_by else depart
     tf_basis = None
-    hol = {h["date"] for r in regions for h in r.get("holidays") or [] if isinstance(h, dict) and h.get("stat", True)}
+    # traffic.json's areas are drawn for Ontario: elsewhere every drive stays on the congested rows
+    area_model = any((r or {}).get("id") in TRAFFIC_AREA_REGIONS for r in ([home] + list(extra) if home else []))
+    # the region lists stop at the end of next year: an Ontario trip also gets the ESA holidays for its year
+    hol = stat_holidays(regions, range(day.year - 1, day.year + 2) if area_model else ())
     if args.traffic_factor:
         tf = args.traffic_factor
     elif car:   # leave-by on the planning allowance, like drive_plan.py, not the typical time
         tf, tf_basis = plan_traffic_factor(ride_time, hol)
     else:
         tf = traffic_factor_for(ride_time, hol)
-    # traffic.json's areas are drawn for Ontario: elsewhere every drive stays on the congested rows
-    area_model = any((r or {}).get("id") in TRAFFIC_AREA_REGIONS for r in ([home] + list(extra) if home else []))
     cpk = float(getattr(args, "car_cost_per_km", 0.17) or 0.0)
     stay_min = float(getattr(args, "stay_hours", 4.0) or 0.0) * 60.0
     first_wait_s, board_s = ((0, int(float(getattr(args, "park_min", 4.0)) * 60)) if car
@@ -3547,9 +3588,7 @@ def plan(args):
             elements = overpass_parking(box, warnings)
             lots = None if elements is None else osm_lots(elements)
             overpass_used = elements is not None
-        holidays = {h["date"] for r in regions for h in r.get("holidays") or []
-                    if isinstance(h, dict) and h.get("stat", True)}
-        clusters, parking_summary = hub_parking(net, clusters, blocks, lots, stay_min, day, holidays)
+        clusters, parking_summary = hub_parking(net, clusters, blocks, lots, stay_min, day, hol)
         parking_summary["region_rules"] = bool(blocks)
         log("park and ride: %d of %d hubs have parking" % (parking_summary["with_parking"],
                                                             parking_summary["hubs_in_range"]))

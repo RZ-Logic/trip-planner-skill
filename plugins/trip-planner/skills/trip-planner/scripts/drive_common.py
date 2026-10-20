@@ -327,17 +327,10 @@ def in_any(lat, lon, boxes):
 def holidays_for(regions=None):
     """Statutory holiday dates ('YYYY-MM-DD') from the region files (entries with "stat": false are
     operator-only service days and are left out), plus the Ontario ESA public holidays computed for last
-    year through ten years ahead: the region lists stop at the end of next year."""
-    import tolls   # imported here: tolls imports this module
-    out = set()
-    for r in regions if regions is not None else th.load_regions():
-        for h in r.get("holidays") or []:
-            if h.get("stat", True):
-                out.add(h["date"])
+    year through ten years ahead: the region lists stop at the end of next year. One rule with trip_hubs
+    (trip_hubs.stat_holidays)."""
     this = dt.date.today().year
-    for y in range(this - 1, this + 11):
-        out |= tolls.esa_holidays(y)
-    return out
+    return th.stat_holidays(regions if regions is not None else th.load_regions(), range(this - 1, this + 11))
 
 
 def is_weekend_or_holiday(day, holidays):

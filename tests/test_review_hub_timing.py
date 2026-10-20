@@ -344,5 +344,57 @@ class TimeMarginsPinned(unittest.TestCase):
         self.assertIn("ARRIVE 00:40 (+1d)", out)
 
 
+# ------------------------------------------------------------------------------------- tests-ci-eng-6 (batch 6)
+GTHA_TEST = {"id": "gtha", "name": "GTHA (test)", "timezone": "America/Toronto", "feeds": [],
+             "bbox": {"min_lat": 43.0, "max_lat": 44.4, "min_lon": -80.3, "max_lon": -78.5}}
+
+
+class OneHolidaySource(unittest.TestCase):
+    def arrive_by(self, when, regions):
+        p = train_at("08:30:00", "08:50:00", calendar=ALL_YEARS)
+        return option(run(HUB_ARGS + ["--arrive-by", when, "--feed", "t=" + p, "--no-discover", "--routing",
+                                      "estimate"], regions=regions), "Hub H")
+
+    def test_ride_mode_on_a_computed_holiday_after_the_region_list_ends(self):
+        o = self.arrive_by("2028-02-21 11:30", [GTHA_TEST])                    # Family Day 2028
+        self.assertAlmostEqual(o["ride_min"], round(FREE_S * row("congested", "daytime")["typical"] / 60.0, 1),
+                               places=1)
+        o = self.arrive_by("2028-02-22 11:30", [GTHA_TEST])                    # the Tuesday after: peak
+        self.assertAlmostEqual(o["ride_min"], round(FREE_S * row("congested", "weekday peak")["typical"] / 60.0, 1),
+                               places=1)
+
+    def test_car_mode_ttc_lot_is_free_on_family_day_2028(self):
+        p = train_at("08:30:00", "08:50:00", calendar=ALL_YEARS)
+        seen = []
+        real = th.hub_parking
+
+        def spy(*a, **k):
+            seen.append(set(a[6]))
+            return real(*a, **k)
+        with mock.patch.object(th, "hub_parking", side_effect=spy), \
+                mock.patch.object(th, "http_get", return_value=json.dumps({"elements": []}).encode()):
+            run(HUB_ARGS + ["--arrive-by", "2028-02-21 11:30", "--feed", "t=" + p, "--access", "car",
+                            "--no-discover", "--routing", "estimate"], regions=[GTHA_TEST])
+        self.assertIn("2028-02-21", seen[0])
+        gtha = next(r for r in th.load_regions() if r["id"] == "gtha")
+        ttc = next(e for e in gtha["park_and_ride"]["agencies"] if e.get("label") == "TTC rule")
+        self.assertEqual(th.agency_price(ttc, dt.date(2028, 2, 21), seen[0])[0], 0.0)   # was $7
+
+    def test_drive_common_uses_the_same_rule(self):
+        import drive_common as dc
+        import tolls
+        self.assertIs(tolls.esa_holidays, th.esa_holidays)
+        regions = th.load_regions()
+        this = dt.date.today().year
+        self.assertEqual(dc.holidays_for(regions), th.stat_holidays(regions, range(this - 1, this + 11)))
+
+    def test_no_ontario_holidays_without_an_ontario_region(self):
+        p = train_at("08:30:00", "08:50:00", calendar=ALL_YEARS)
+        o = option(run(HUB_ARGS + ["--arrive-by", "2028-02-21 11:30", "--feed", "t=" + p] + BASE, regions=[]),
+                   "Hub H")
+        self.assertAlmostEqual(o["ride_min"], round(FREE_S * row("congested", "weekday peak")["typical"] / 60.0, 1),
+                               places=1)
+
+
 if __name__ == "__main__":
     unittest.main()

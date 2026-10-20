@@ -63,11 +63,13 @@ is more than six months old.
 
 ## 4. Holidays
 
-Statutory holidays to 2027-12 are listed in `ontario.json` (`holidays`). Feeds that do not mark them are
-corrected per feed (`holiday_service`): London Transit runs a Sunday-like schedule; Sarnia, Stratford,
-Orillia and Simcoe County LINX run nothing. GO, Barrie, Owen Sound, Kingston, Belleville, Quinte, Niagara,
-Midland and North Bay files already mark holidays. VIA and Ontario Northland run their normal timetables.
-Rural services in the hand-entered timetables list their own holiday dates (`except`).
+Statutory holidays to 2027-12 are listed in `ontario.json` (`holidays`); later years use the Ontario ESA rule
+(`trip_hubs.esa_holidays`) for ride and drive traffic and station parking prices, not for the feed corrections
+below. Feeds that do not mark them are corrected per feed (`holiday_service`): London Transit runs a
+Sunday-like schedule; Sarnia, Stratford, Orillia and Simcoe County LINX run nothing. GO, Barrie, Owen Sound,
+Kingston, Belleville, Quinte, Niagara, Midland and North Bay files already mark holidays. VIA and Ontario
+Northland run their normal timetables. Rural services in the hand-entered timetables list their own holiday
+dates (`except`).
 
 
 ## 5. Destinations: West (Lake Huron, London, Stratford)

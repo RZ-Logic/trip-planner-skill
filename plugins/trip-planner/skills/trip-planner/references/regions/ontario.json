@@ -10550,6 +10550,7 @@
       "contactless": null,
       "cash": 12.0,
       "currency": "CAD",
+      "approx": "distance-based: $6 local, $12 to or from Grand Bend, $20 Sarnia or London to Goderich",
       "note": "Distance-based: $6 local, $12 long distance (Sarnia or London to Grand Bend; also Beach Bus London-Grand Bend), $20 Sarnia/London to Goderich; children 12 and under free; cash (bring exact) or HSAT Smart Card; Beach Bus is online pre-paid only. $12 used as the common long-distance fare."
     },
     "PC Connect": {
@@ -10557,6 +10558,7 @@
       "contactless": null,
       "cash": 12.0,
       "currency": "CAD",
+      "approx": "distance-based: $6 or $12",
       "note": "Two adult fare rows, $6 and $12 (St. Marys-Stratford $6; longer trips such as London or Kitchener to Stratford likely $12); seniors/students $5/$10; exact cash (no change) or credit/debit through the Blaise Transit app. $12 used as the common long-distance fare."
     },
     "Middlesex County Connect": {
@@ -10606,6 +10608,7 @@
       "contactless": null,
       "cash": 20.0,
       "currency": "CAD",
+      "approx": "zone fare: $5 to $20 by distance",
       "note": "Zone fares $5-$20, exact cash only; $20 is Guelph or Elora/Fergus to Owen Sound (the common long trip); shorter hops cost less."
     },
     "Simcoe County Linx": {
@@ -10613,7 +10616,15 @@
       "contactless": null,
       "cash": 6.0,
       "currency": "CAD",
-      "note": "Zone fares $2/$4/$6 exact cash, LINX card 10% off; $6 is Barrie Allandale GO to Wasaga (Route 2). Route 4 Collingwood-Wasaga is only $2, so this overstates it."
+      "approx": "zone fare: $2, $4 or $6 cash, 10% less by LINX card",
+      "note": "Zone fares $2/$4/$6 exact cash, LINX card 10% off; $6 is Barrie Allandale GO to Wasaga (Route 2). Route 4 has its own entry ($2)."
+    },
+    "Simcoe County Linx 4": {
+      "card": 1.8,
+      "contactless": null,
+      "cash": 2.0,
+      "currency": "CAD",
+      "note": "Route 4 Collingwood-Wasaga: $2 exact cash (one zone); LINX card 10% off, from the Simcoe County Linx entry."
     },
     "Owen Sound Transit": {
       "card": null,
@@ -10634,6 +10645,7 @@
       "contactless": null,
       "cash": 15.0,
       "currency": "CAD",
+      "approx": "distance-based: $5 to $20 by town pair",
       "note": "Distance-based cash fare; 15 is Bracebridge-Orillia or Huntsville-Gravenhurst/Kilworthy/Washago. Others: within a town or adjacent towns 5 (Gravenhurst-Bracebridge, Washago-Orillia, Huntsville-Port Sydney), Huntsville-Bracebridge or Gravenhurst-Orillia 10, Huntsville-Orillia 20. Pre-booked round trips are cheaper (Huntsville-Orillia 30). Cash to driver or prepay by card in Blaise."
     },
     "Bracebridge Transit": {
@@ -10732,6 +10744,7 @@
       "contactless": null,
       "cash": 20.0,
       "currency": "CAD",
+      "approx": "distance-based: $5 to $20",
       "note": "Route 4 fares depend on distance, $5 to $20, exact cash only (card and app payment are planned for 2026 but not live). Official table: Sarnia (Bayside or Lambton Mall) to London (Woodward/Oxford, YMCA Waterloo St, Fanshawe College) $20; Sarnia-Komoka $15; Sarnia to Adelaide-Metcalfe, Strathroy or Mount Brydges $10; Bayside-Lambton Mall $5; Adelaide-Metcalfe, Strathroy or Mount Brydges to London $10; those three with each other or to Komoka $5; Komoka-London $5; within London $5. $20 is the full Sarnia-London run, so short hops are overstated."
     },
     "Megabus (Badder Bus)": {

@@ -126,7 +126,8 @@ is the current minute, lead with its backup (depart) or the option with the most
 - **Fares.** Where the region file has transfer rules (the GTHA does), transfers are already applied
   and each free leg says why; check the conditions it names (same card or wallet, a paper transfer for
   cash, time windows). A fare ending `(before transfer discounts)` has not had them applied: check the
-  region notes or the agency's transfer page before quoting a total.
+  region notes or the agency's transfer page before quoting a total. A fare shown as `about X (...)` is
+  one point on a distance or zone scale: quote the range.
 - **Live disruptions:** the operator's service alerts for the chosen route.
 - **Rural and seasonal service:** read the destination's section in `ontario.md` (seasons, days,
   holidays, booking, the last bus back). Confirm hand-entered timetables on the operator's site and call

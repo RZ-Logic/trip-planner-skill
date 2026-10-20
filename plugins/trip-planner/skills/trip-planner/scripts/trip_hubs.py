@@ -2290,7 +2290,7 @@ def journey_fare(net, legs, flat=None, payment="card", card_discount=None, rules
             groups.append((lg["feed"], [lg], routed))
     total, cur, parts, complete, mixed = 0.0, None, [], True, False
     for feed, glegs, _routed in groups:
-        price, source, understood = None, None, True
+        price, source, understood, approx = None, None, True, None
         by_route = [(flat or {}).get("%s %s" % (lg["agency"], lg["route"])) for lg in glegs]
         # a route-level price ("Niagara Region Transit 602") wins when every leg of the group has one
         f = by_route[0] if all(by_route) else ((flat or {}).get(feed) or (flat or {}).get(glegs[0]["agency"]))
@@ -2303,6 +2303,7 @@ def journey_fare(net, legs, flat=None, payment="card", card_discount=None, rules
             amount = next((f[k] for k in tries if f.get(k) is not None), None)
             if amount is not None:
                 price, source = (float(amount), f.get("currency", ""), ""), "region table, %s" % payment
+                approx = f.get("approx")   # one common price on a distance or zone scale (rural operators)
         model = net.fares.get(feed)
         if price is None and model:
             price, understood = gtfs_group_fare(model, glegs, net.stop_zone)
@@ -2318,11 +2319,14 @@ def journey_fare(net, legs, flat=None, payment="card", card_discount=None, rules
                       "routes": {lg["route"] for lg in glegs}})
         if not understood:
             parts[-1]["transfers_unknown"] = True   # fare_text adds "(before transfer discounts)"
+        if approx:
+            parts[-1]["approx"] = approx   # fare_text prints "about X (approx)"
     if rules:
         apply_transfers(parts, rules, payment, day)
     for p in parts:
         full = p.pop("fare")
         charged = p.pop("charged", full)
+        approx = p.pop("approx", None)
         for k in ("depart", "first_stop", "last_stop", "routes", "window_from", "issuer", "issuer_agency", "paper",
                   "refunded"):
             p.pop(k, None)
@@ -2342,6 +2346,8 @@ def journey_fare(net, legs, flat=None, payment="card", card_discount=None, rules
             p.pop("currency", None)
         if full is not None and charged != full:
             p["full_fare"] = round(full, 2)
+        if approx and p["fare"]:   # a free leg has no scale to show
+            p["approx"] = approx
         if p.get("note") is None:
             p.pop("note", None)
     if not parts:
@@ -4146,18 +4152,21 @@ def fare_text(o, cur_ride, has_region, rules_on=False):
         for p in known:
             if p.get("note") and not p["fare"]:
                 each.append("%s %s" % (p["agency"], p["note"]))
+            elif p.get("approx"):   # one point on a distance or zone scale
+                each.append("%s about %.2f (%s)" % (p["agency"], p["fare"], p["approx"]))
             else:
                 each.append("%s %.2f" % (p["agency"], p["fare"]))
+        about = "about " if any(p.get("approx") for p in known) else ""
         curs = []   # free transfer legs carry no currency
         for p in known:
             if p.get("currency") and p["currency"] not in curs:
                 curs.append(p["currency"])
         if len(curs) > 1:   # no exchange rate: one subtotal per currency, no total
             sums = " + ".join("%.2f %s" % (sum(p["fare"] for p in known if p.get("currency") == c), c) for c in curs)
-            bits.append("transit fare %s (%s; not added up: different currencies)" % (sums, "; ".join(each)))
+            bits.append("transit fare %s%s (%s; not added up: different currencies)" % (about, sums, "; ".join(each)))
         else:
-            bits.append("transit fare %.2f %s (%s)" % (sum(p["fare"] for p in known), o.get("fare_currency") or "",
-                                                        "; ".join(each)))
+            bits.append("transit fare %s%.2f %s (%s)" % (about, sum(p["fare"] for p in known),
+                                                          o.get("fare_currency") or "", "; ".join(each)))
     for p in missing:
         where = p.get("fare_url") or ("see region notes" if has_region else "check the agency's website")
         bits.append("%s fare not in the data (%s)" % (p["agency"], where))

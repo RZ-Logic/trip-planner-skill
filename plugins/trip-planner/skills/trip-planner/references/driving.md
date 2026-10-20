@@ -97,8 +97,9 @@ Addresses work like `trip_hubs.py` (the same `ADDRESS NOT PRECISE` rule). Pass `
 9. `LINKS`: navigation to the chosen parking lot, not the door: Google Maps (fastest, and with
    `avoid=tolls` for the toll-free route; a route that is not the router's own pick, such as an
    alternative, the "without 407" route on a border trip, the forced 407 option or a toll-free route
-   that keeps a toll bridge, gets a via point so Google follows it), Waze, Apple Maps (these two pick
-   their own way). Also a Google Maps link with the departure or arrival time (desktop only,
+   that keeps a toll bridge, gets a via point so Google follows it; the second Google link is the other
+   way: with tolls when the toll-free route is recommended, else with tolls avoided), Waze, Apple Maps
+   (these two pick their own way). Also a Google Maps link with the departure or arrival time (desktop only,
    undocumented URL form), and the walk from the lot.
 10. `WARNINGS`: every source that failed or was estimated. Disclose them.
 11. `SOURCES`: data dates and credits. Quote the fuel survey week and the parking sources, and keep the

@@ -2780,8 +2780,9 @@ def _plan(args):
                    or (toll_free and not avoid))
     via = alt_waypoint(rec_r, routes) if not_default else None
     links = {"google": google_link(o, target, avoid, via),
-             "google_alt": google_link(o, target, not avoid) if any_tolls else None,
-             "google_alt_text": ("with tolls" if avoid else "avoid tolls") if any_tolls else None,
+             # the other way: the route with tolls when the first link is the toll-free one (via or avoid=tolls)
+             "google_alt": google_link(o, target, not toll_free) if any_tolls else None,
+             "google_alt_text": ("with tolls" if toll_free else "avoid tolls") if any_tolls else None,
              "google_avoid_tolls": google_link(o, target, True) if any_tolls else None,
              "via": via, "waze": waze_link(target, avoid), "apple": apple_link(o, target, avoid),
              "walk": walk_link(target, d) if best else None, "target": target,

@@ -436,15 +436,19 @@ class LinksFollowRecommendedRoute(unittest.TestCase):
                 r["bridges"] = [{"name": "Ambassador Bridge", "cad": 0.0, "text": "free this way"}]
             a["toll_unpriced"] = True
             b["poly"] = _bent(o, d, -0.08)
-        res, _text = _run_links(_router(tdp.fake_drive_route(), edit), "--dest", WINDSOR,
-                                "--depart", "2026-10-17 10:00", "--value-of-time", "0")
+        res, text = _run_links(_router(tdp.fake_drive_route(), edit), "--dest", WINDSOR,
+                               "--depart", "2026-10-17 10:00", "--value-of-time", "0")
         self.assertEqual(res["recommended"], "B")
         ln = res["links"]
         self.assertNotIn("avoid=tolls", ln["google"])
         self.assertIn("waypoints=", ln["google"])
         self.assertNotIn("avoid_tolls=t", ln["waze"])
         self.assertNotIn("avoid=tolls", ln["apple"])
-        self.assertIn("avoid=tolls", ln["google_alt"])   # the second link still offers the toll-free way
+        # the first link already is the toll-free way (via its point); the second is the route with tolls, since
+        # avoid=tolls would also send Google off the crossing
+        self.assertNotIn("avoid=tolls", ln["google_alt"])
+        self.assertEqual(ln["google_alt_text"], "with tolls")
+        self.assertIn("| with tolls https://", text)
 
 
 class WeatherPlanTime(unittest.TestCase):

@@ -21,6 +21,7 @@ import socket
 import ssl
 import sys
 import tempfile
+import time
 import unittest
 import urllib.error
 from contextlib import redirect_stdout
@@ -201,7 +202,79 @@ class FeedHostsBlocked(unittest.TestCase):
         self.assertNotIn("['", code)
         self.assertNotIn("Warnings: [", code)
 
+HSAT = {"id": "hsat", "name": "Huron Shores", "manual": {   # as test_getaways.HandEnteredTimetables.FEED
+    "agency": "Huron Shores Area Transit", "url": "https://example.org", "timezone": "America/Toronto",
+    "services": {"daily": {"days": "1111111", "start": "2026-01-01", "end": "2026-12-31", "except": ["2026-12-25"]}},
+    "routes": [{"route": "2", "name": "London - Grand Bend", "trips": [
+        {"service": "daily", "headsign": "Grand Bend", "stops": [
+            ["London #705", 43.02824, -81.27757, "10:41"], ["Exeter", 43.34748, -81.48149, "11:20"],
+            ["Grand Bend Sobeys", 43.31306, -81.75406, "11:48"]]}]}]}}
+HSAT_BOX = {"min_lat": 42.8, "max_lat": 43.6, "min_lon": -82.0, "max_lon": -81.0}
+NET_URL = "https://feeds.example.org/net.zip"
+OFFLINE_ARGV = ["--origin", "43.0290,-81.2780", "--dest", "43.3125,-81.7569", "--depart", "2026-10-21 10:00",
+                "--routing", "estimate"]
 
+
+def blocked_network(hosts, timeout=6):
+    return {h: "blocked: connection refused (x)" for h in hosts}
+
+
+class OfflinePlan(unittest.TestCase):
+    """docs-contract-4: with every probe host blocked, a trip whose timetables are all hand-entered or cached still
+    plans (labelled OFFLINE) when both ends are 'lat,lon' and ride times are estimated; anything that needs a
+    download still stops with NETWORK BLOCKED, and that message never asks to allow an empty list."""
+
+    def setUp(self):
+        fresh_cache(self)
+        refused = urllib.error.URLError(ConnectionRefusedError())
+        for p in (mock.patch.object(th, "check_network", side_effect=blocked_network),
+                  mock.patch.object(th, "http_get", side_effect=refused),
+                  mock.patch.object(th.urllib.request, "urlopen", side_effect=refused)):
+            p.start()
+            self.addCleanup(p.stop)
+
+    def run_with(self, argv, extra_feeds=()):
+        reg = {"id": "t", "timezone": "America/Toronto", "bbox": HSAT_BOX,
+               "feeds": [dict(HSAT, bbox=HSAT_BOX)] + list(extra_feeds)}
+        with mock.patch.object(th, "load_regions", return_value=[reg]):
+            return run_main(argv)
+
+    def test_bundled_trip_plans_offline_with_a_warning(self):
+        rc, out = self.run_with(OFFLINE_ARGV)
+        self.assertEqual(rc, 0, rc)
+        self.assertIn("BASELINE transit only", out)
+        self.assertIn("London #705 -> Grand Bend Sobeys (10:41-11:48", out)
+        self.assertTrue(any(ln.startswith("WARNING") and "OFFLINE" in ln for ln in out.splitlines()), out)
+
+    def test_routing_auto_still_stops_and_names_the_router(self):
+        code, _out = self.run_with(OFFLINE_ARGV[:-1] + ["auto"])
+        self.assertTrue(code.startswith("NETWORK BLOCKED"), code)
+        self.assertIn("router.project-osrm.org", code)
+
+    def test_uncached_network_feed_still_stops(self):
+        code, _out = self.run_with(OFFLINE_ARGV, [{"id": "net", "bbox": HSAT_BOX, "urls": [NET_URL]}])
+        self.assertTrue(code.startswith("NETWORK BLOCKED"), code)
+        self.assertIn("feeds.example.org", code)
+
+    def test_cached_network_feed_counts_as_available(self):
+        path = th._feed_cache_path("net", NET_URL)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        make_feed(path, [("A", "Stop A", 43.03, -81.28), ("C", "Stop C", 43.31, -81.75)],
+                  [("R1", "WK", "T1", "C")],
+                  [("T1", "18:00:00", "18:00:00", "A", 1, 0, 0), ("T1", "18:30:00", "18:30:00", "C", 2, 0, 0)])
+        old = time.time() - 10 * 86400
+        os.utime(path, (old, old))
+        rc, out = self.run_with(OFFLINE_ARGV, [{"id": "net", "bbox": HSAT_BOX, "urls": [NET_URL]}])
+        self.assertEqual(rc, 0, rc)
+        lines = [ln for ln in out.splitlines() if ln.startswith("WARNING")]
+        self.assertTrue(any("OFFLINE" in ln for ln in lines), out)
+        self.assertTrue(any("could not be refreshed" in ln for ln in lines), out)
+
+    def test_blocked_message_never_prints_an_empty_list(self):
+        msg = th.network_blocked_message(["a"], [])
+        self.assertNotIn(":\n  \n", msg)
+        self.assertNotIn("allow these domains", msg)
+        self.assertIn(":\n  b\n", th.network_blocked_message(["a"], ["b"]))
 
 
 if __name__ == "__main__":

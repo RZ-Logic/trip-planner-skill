@@ -60,7 +60,7 @@ The skill is the folder [`plugins/trip-planner/skills/trip-planner/`](plugins/tr
 | Claude Code (copy) | `cp -r plugins/trip-planner/skills/trip-planner ~/.claude/skills/` |
 | Codex, Gemini CLI, Cursor, Copilot (copy) | `cp -r plugins/trip-planner/skills/trip-planner ~/.agents/skills/` |
 | claude.ai | `python tools/build_zip.py`, then Customize > Skills > + > Upload `dist/trip-planner.zip`. Turn on code execution and network access. |
-| Claude API | Upload the zip with `POST /v1/skills` and attach it to a container with the code execution tool. The API sandbox has no network, so the agent uses the bundled data and the manual method. |
+| Claude API | Upload the zip with `POST /v1/skills` and attach it to a container with the code execution tool. The API sandbox has no network, so the agent uses the bundled data and the manual method. With `lat,lon` and `--routing estimate`, a trip whose timetables are all hand-entered or cached still plans offline, with an `OFFLINE` WARNING. |
 
 ### Try it
 

@@ -80,7 +80,8 @@ python3 ${CLAUDE_SKILL_DIR}/scripts/trip_hubs.py --origin "ORIGIN" --dest "DESTI
   every hub with service. Feeds are cached for 3 days.
 - **`NETWORK BLOCKED`**: the sandbox cannot reach the timetable hosts, the routing hosts or both (not an
   address problem). Ask the user to allow the listed domains (`--check-network` re-checks) and meanwhile
-  use the manual method (end of Step 3).
+  use the manual method (end of Step 3). With `lat,lon` and `--routing estimate`, a trip whose timetables
+  are all hand-entered or cached still plans offline, with an `OFFLINE` WARNING.
 - **`TLS FAILED`**: this computer's Python cannot verify HTTPS certificates. Pass on the fix the message
   gives; it is not an allow-list or address problem.
 

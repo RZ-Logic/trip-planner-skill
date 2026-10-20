@@ -683,6 +683,39 @@ SHARED_HOSTS = {"www.arcgis.com", "drive.google.com", "drive.usercontent.google.
                 "raw.githubusercontent.com", "dropbox.com", "www.dropbox.com"}
 
 
+def _trip_feeds(args, regions):
+    """(region, feeds) for a trip with 'lat,lon' at both ends: the merged region file (None when no region file
+    holds it) and the feeds of it that plan() would load (not skipped, near the trip)."""
+    o_lat, o_lon = (float(x) for x in LATLON_RE.match(args.origin).groups())
+    d_lat, d_lon = (float(x) for x in LATLON_RE.match(args.dest).groups())
+    od, _r, _z, box, near = trip_geometry(o_lat, o_lon, d_lat, d_lon, args)
+    home, extra = regions_for_trip(regions, args.region, (o_lat, o_lon), (d_lat, d_lon), od)
+    region = merge_regions(home, extra, d_lat, d_lon, pricing_regions(regions, o_lat, o_lon))
+    feeds = [f for f in (region or {}).get("feeds", [])
+             if not (f.get("skip") or (f.get("bbox") and not bbox_overlap(f["bbox"], box)))
+             and not (f.get("coverage") and not coverage_near(f["coverage"], near))]
+    return region, feeds
+
+
+def offline_ready(args, regions):
+    """True when this trip can be planned with no network: 'lat,lon' at both ends, estimated ride times, no
+    Transitous, and every feed it needs hand-entered, local or already in the cache."""
+    if not (LATLON_RE.match(args.origin or "") and LATLON_RE.match(args.dest or "")):
+        return False
+    if args.routing != "estimate" or args.crosscheck:
+        return False
+    for spec in args.feed or []:
+        fid, src = parse_feed_spec(spec, set())
+        if not (os.path.exists(src) or os.path.exists(_feed_cache_path(fid, src))):
+            return False
+    region, feeds = _trip_feeds(args, regions)
+    if not region:   # no region file: only --feed, and no catalog search
+        return bool(args.feed) and args.no_discover
+    return bool(feeds) and all(
+        f.get("manual") or any(os.path.exists(u) or os.path.exists(_feed_cache_path(f["id"], u))
+                               for u in f.get("urls", [])) for f in feeds)
+
+
 def trip_domains(args, regions):
     """The hosts this particular trip needs, and a note when the list cannot be complete yet."""
     coords = LATLON_RE.match(args.origin or "") and LATLON_RE.match(args.dest or "")
@@ -704,15 +737,9 @@ def trip_domains(args, regions):
     else:
         o_lat, o_lon = (float(x) for x in LATLON_RE.match(args.origin).groups())
         d_lat, d_lon = (float(x) for x in LATLON_RE.match(args.dest).groups())
-        od, _r, _z, box, near = trip_geometry(o_lat, o_lon, d_lat, d_lon, args)
-        home, extra = regions_for_trip(regions, args.region, (o_lat, o_lon), (d_lat, d_lon), od)
-        region = merge_regions(home, extra, d_lat, d_lon, pricing_regions(regions, o_lat, o_lon))
+        region, trip_feeds = _trip_feeds(args, regions)
         if region:
-            for f in region.get("feeds", []):
-                if f.get("skip") or (f.get("bbox") and not bbox_overlap(f["bbox"], box)):
-                    continue
-                if f.get("coverage") and not coverage_near(f["coverage"], near):
-                    continue
+            for f in trip_feeds:
                 fh = [urllib.parse.urlsplit(u).netloc for u in f.get("urls", [])]
 
                 def shared(h):   # shared platforms and bare IP addresses: allowlists work by domain
@@ -742,15 +769,21 @@ def trip_domains(args, regions):
 
 
 def network_blocked_message(blocked, hosts, note="", causes=None):
-    """causes: what the failed requests saw (_net_cause), named in the message."""
+    """causes: what the failed requests saw (_net_cause), named in the message. hosts: the trip's own list
+    (trip_domains); when it is empty there is nothing to allow, so the message says how to plan offline."""
+    if hosts:
+        allow = ("Either allow these domains in this environment's network settings (on claude.ai, the code "
+                 "execution network access setting):\n  %s\n" % "\n  ".join(hosts))
+    else:
+        allow = ("No domain on this trip's own list needs allowing: with 'lat,lon' at both ends and --routing "
+                 "estimate, a trip whose timetables are all hand-entered or cached plans offline.\n")
     return ("NETWORK BLOCKED: this environment cannot reach %s (%s), so the live "
-            "planner cannot run here. This is not an address problem. Either allow these domains in this "
-            "environment's network settings (on claude.ai, the code execution network access setting):\n  %s\n%s"
-            "or follow the manual method in SKILL.md: use a tool or connector that can request any URL (an "
+            "planner cannot run here. This is not an address problem. %s%s"
+            "%s the manual method in SKILL.md: use a tool or connector that can request any URL (an "
             "HTTP, fetch or scraping connector; built-in web-fetch tools often refuse URLs you build), and "
             "plan from the region notes and the hand-entered timetables in the region files meanwhile."
-            % (", ".join(blocked), "; ".join(causes) if causes else "no connection", "\n  ".join(hosts),
-               (note + "\n") if note else ""))
+            % (", ".join(blocked), "; ".join(causes) if causes else "no connection", allow,
+               (note + "\n") if note else "", "Or follow" if not hosts else "or follow"))
 
 
 def check_network(hosts, timeout=6):
@@ -789,8 +822,14 @@ def preflight(args, regions, warnings):
     if len(blocked) == len(status):
         if tls:   # certificates, not the allow-list: allowing the hosts again would not help
             raise SystemExit(tls_failed_message(tls))
-        hosts, note = trip_domains(args, regions)
         causes = sorted({s[len("blocked: "):].split(" (", 1)[0] for s in status.values() if s.startswith("blocked: ")})
+        if offline_ready(args, regions):   # everything this trip needs is stored here: plan it, labelled
+            warnings.append("OFFLINE: this environment cannot reach %s (%s), so this plan uses only the hand-entered "
+                            "timetables and cached feeds stored here, with estimated ride times; anything that "
+                            "needs a download is missing. Allow those hosts to run the live planner."
+                            % (", ".join(blocked), "; ".join(causes) or "no connection"))
+            return status
+        hosts, note = trip_domains(args, regions)
         raise SystemExit(network_blocked_message(blocked, hosts, note, causes=causes))
     if tls:
         warnings.append("the certificate check failed for %s. %s" % (", ".join(tls), TLS_HELP))
@@ -1091,12 +1130,17 @@ def parse_feed_spec(spec, used_ids):
     return unique, src
 
 
+def _feed_cache_path(fid, url):
+    """The cache file of a downloaded feed (one per feed id and URL)."""
+    digest = hashlib.sha1(url.encode("utf-8")).hexdigest()[:10]
+    return os.path.join(cache_dir(), "%s-%s.zip" % (re.sub(r"[^A-Za-z0-9_.-]", "_", fid), digest))
+
+
 def fetch_url(fid, url, max_age_h, refresh, warnings=None):
     """Download a feed (or use a local path) with a per-URL cache file."""
     if os.path.exists(url):
         return url
-    digest = hashlib.sha1(url.encode("utf-8")).hexdigest()[:10]
-    path = os.path.join(cache_dir(), "%s-%s.zip" % (re.sub(r"[^A-Za-z0-9_.-]", "_", fid), digest))
+    path = _feed_cache_path(fid, url)
     if os.path.exists(path) and not refresh and time.time() - os.path.getmtime(path) < max_age_h * 3600:
         return path
     tmp = "%s.%d.part" % (path, os.getpid())

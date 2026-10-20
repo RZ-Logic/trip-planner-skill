@@ -1202,6 +1202,7 @@ def route_samples(route, o, d, depart):
     out = []
     for f in fracs:
         p = poly[int(round(f * (len(poly) - 1)))]
+        # naive addition: across a daylight-saving change the forecast hour is one off, which does not matter here
         out.append((p[0], p[1], depart + dt.timedelta(seconds=dur * f)))
     return out
 
@@ -1222,21 +1223,24 @@ def mid_point(route, o, d):
 
 def plan_backwards(dr, route, deadline, extra_s, opts):
     """Arrive-by: the latest whole-minute departure with depart + plan time + extra_s <= deadline. Two passes,
-    then step back while late and forward while it still holds (a traffic band edge moves the plan time)."""
+    then step back while late and forward while it still holds (a traffic band edge moves the plan time).
+    Clock sums follow opts["tz"] across a daylight-saving change."""
+    tz, reg = opts.get("tz"), opts.get("region")
+
     def late(dep):
-        return (dep + dt.timedelta(seconds=(route.get("plan_s") or 0) + extra_s) - deadline).total_seconds()
+        return dc.elapsed_s(deadline, dc.add_s(dep, (route.get("plan_s") or 0) + extra_s, tz, reg), tz, reg)
     dep = route.get("depart") or deadline
     for _ in range(2):
-        dep = floor_min(deadline - dt.timedelta(seconds=(route.get("plan_s") or 0) + extra_s))
+        dep = floor_min(dc.add_s(deadline, -((route.get("plan_s") or 0) + extra_s), tz, reg))
         dr.retime(route, dep, opts)
     for _ in range(8):
         lt = late(dep)
         if lt <= 0:
             break
-        dep = floor_min(dep - dt.timedelta(seconds=lt))
+        dep = floor_min(dc.add_s(dep, -lt, tz, reg))
         dr.retime(route, dep, opts)
     for _ in range(30):   # early at a band edge: move later one minute at a time while still on time
-        cand = dep + dt.timedelta(minutes=1)
+        cand = dc.add_s(dep, 60, tz, reg)
         dr.retime(route, cand, opts)
         if late(cand) <= 0:
             dep = cand
@@ -2280,14 +2284,15 @@ def _plan(args):
 
     def lot_arrival(r):
         a = r.get("arrive") or r.get("depart") or depart
-        return a + dt.timedelta(seconds=energy[id(r)]["extra_s"] + border_s(r))
+        return dc.add_s(a, energy[id(r)]["extra_s"] + border_s(r), tzname, region)
 
     # ---- when you leave the destination, and the first parking search (search and walk minutes)
-    door_est = deadline if arrive_by else lot_arrival(fast) + dt.timedelta(minutes=a_cfg["default_search_min"])
+    door_est = deadline if arrive_by else dc.add_s(lot_arrival(fast), a_cfg["default_search_min"] * 60.0, tzname,
+                                                   region)
     leave_at = parse_leave_at(args.leave_at, day, door_est, tzname, region, warnings) if args.leave_at else None
     stay_min = (args.stay_hours if args.stay_hours is not None else 2.0) * 60.0
     if leave_at:
-        stay_min = (leave_at - door_est).total_seconds() / 60.0
+        stay_min = dc.elapsed_s(door_est, leave_at, tzname, region) / 60.0
     pk = _mod("parking")
     park_arrive = (deadline - dt.timedelta(minutes=10)) if arrive_by else lot_arrival(fast)
     park_minutes = stay_min
@@ -2324,23 +2329,24 @@ def _plan(args):
         """(lot arrival, lot departure, cap text or None, slot (start, end) or None)."""
         arr = lot_arrival(r)
         if leave_at:
-            end = leave_at + dt.timedelta(minutes=walk_min)
+            end = dc.add_s(leave_at, walk_min * 60.0, tzname, region)
         elif arrive_by:
-            end = deadline + dt.timedelta(minutes=stay_min + walk_min)
+            end = dc.add_s(deadline, (stay_min + walk_min) * 60.0, tzname, region)
         else:
-            end = arr + dt.timedelta(minutes=search_min + 2 * walk_min + stay_min)
+            end = dc.add_s(arr, (search_min + 2 * walk_min + stay_min) * 60.0, tzname, region)
         cap, slot = None, None
-        park_start = arr + dt.timedelta(minutes=search_min)
+        park_start = dc.add_s(arr, search_min * 60.0, tzname, region)
         if best and best.get("reservation") and "slot" in str(best.get("reservation")).lower():
             slot = pick_slot(parse_slots((parking or {}).get("place_rules")), park_start)
             if slot and end > slot[1]:
                 end, cap = slot[1], "slot ends %s" % dc.fmt_clock(slot[1])
         if best and best.get("max_stay_min"):
-            lim = max(park_start, slot[0] if slot else park_start) + dt.timedelta(minutes=best["max_stay_min"])
+            lim = dc.add_s(max(park_start, slot[0] if slot else park_start), best["max_stay_min"] * 60.0, tzname,
+                           region)
             fits = None
             if end > lim and pk is not None and hasattr(pk, "stay_fits"):
                 # a limit tied to the paid hours (Burlington "Mon-Fri 9-6, 3 hr limit") does not bind on a free day
-                fits = pk.stay_fits(best, park_start, (end - park_start).total_seconds() / 60.0, holidays)
+                fits = pk.stay_fits(best, park_start, dc.elapsed_s(park_start, end, tzname, region) / 60.0, holidays)
             if end > lim and not fits:
                 end, cap = lim, "max stay %s" % fmt_stay(best["max_stay_min"])
         return arr, end, cap, slot
@@ -2405,7 +2411,7 @@ def _plan(args):
         if back["charge_s"] or back["border_s"]:
             for k in ("arrive", "arrive_plan"):
                 if back.get(k):
-                    back[k] = back[k] + dt.timedelta(seconds=back["charge_s"] + back["border_s"])
+                    back[k] = dc.add_s(back[k], back["charge_s"] + back["border_s"], tzname, region)
         return back
 
     returns = {}
@@ -2424,7 +2430,7 @@ def _plan(args):
         en = energy[id(r)]
         money = en["cost"] + route_tolls(r, args.transponder)
         if arrive_by and r.get("leave_by"):
-            time_s = (deadline - r["leave_by"]).total_seconds()   # what you commit to: leave-by to the door
+            time_s = dc.elapsed_s(r["leave_by"], deadline, tzname, region)   # what you commit to: leave-by to the door
         else:
             time_s = (r.get("typical_s") or 0.0) + en["extra_s"] + border_s(r)
         back = returns.get(id(r))
@@ -2591,9 +2597,9 @@ def _plan(args):
     lot_plan = rec_r.get("arrive_plan")
     rch = energy[id(rec_r)]["extra_s"] + border_s(rec_r)
     if rch:
-        lot_typ = lot_typ + dt.timedelta(seconds=rch) if lot_typ else lot_typ
-        lot_plan = lot_plan + dt.timedelta(seconds=rch) if lot_plan else lot_plan
-    at_door = lot_typ + dt.timedelta(minutes=search_min + walk_min) if lot_typ else None
+        lot_typ = dc.add_s(lot_typ, rch, tzname, region) if lot_typ else lot_typ
+        lot_plan = dc.add_s(lot_plan, rch, tzname, region) if lot_plan else lot_plan
+    at_door = dc.add_s(lot_typ, (search_min + walk_min) * 60.0, tzname, region) if lot_typ else None
     res["arrival"] = {"leave": rdep, "at_lot": lot_typ, "at_lot_plan": lot_plan, "lot": best["name"] if best else None,
                       "search_min": search_min, "walk_min": walk_min, "slack_min": slack_min,
                       "charge_min": round(energy[id(rec_r)]["extra_s"] / 60.0), "at_door": at_door,
@@ -2610,7 +2616,7 @@ def _plan(args):
             best.get("name") or "the parking lot",
             " (%s)" % (best.get("check") or {}).get("url") if (best.get("check") or {}).get("url") else ""))
     if arrive_by and rdep:
-        res["arrival"]["leave_in_min"] = round((rdep - now).total_seconds() / 60.0)
+        res["arrival"]["leave_in_min"] = round(dc.elapsed_s(now, rdep, tzname, region) / 60.0)
     if slot:
         res["arrival"]["slot"] = {"start": slot[0], "end": slot[1]}
     if leave_at and at_door and leave_at <= at_door:
@@ -2670,7 +2676,7 @@ def _plan(args):
                 drive_rt = (rec["money"] - rec["fee"]) + en_r["cost"] + route_tolls(pr_back, args.transponder) + fee
         drive_rt += best_cost or 0.0
         ratio = (rec_r.get("plan_s") or 0) / float(rec_r.get("typical_s") or 1) if rec_r.get("typical_s") else 1.0
-        ride_time = deadline - dt.timedelta(minutes=60) if arrive_by else rdep
+        ride_time = dc.add_s(deadline, -3600.0, tzname, region) if arrive_by else rdep
         if hasattr(th, "plan_traffic_factor"):   # the same planning-allowance rows as this drive, times the weather
             tf = th.plan_traffic_factor(ride_time, holidays)[0] * (opts.get("weather") or 1.0)
         else:
@@ -2721,7 +2727,7 @@ def _plan(args):
              "walk": walk_link(target, d) if best else None, "target": target,
              "target_name": best["name"] if best else "the destination", "follows": rec["letter"]}
     if arrive_by:
-        lot_by = deadline - dt.timedelta(minutes=search_min + walk_min)
+        lot_by = dc.add_s(deadline, -(search_min + walk_min) * 60.0, tzname, region)
         links["google_timed"] = google_time_link(o, target, lot_by, True, avoid)
         links["timed_text"] = "Google Maps arrive by %s (desktop%s)" % (
             dc.fmt_clock(lot_by), "; Google picks its own route" if via else "")
@@ -2805,7 +2811,7 @@ def route_lines(row, res):
     cs = row.get("charge_s") or 0
     bs = row.get("border_s") or 0
     if arr and (cs or bs):
-        arr = arr + dt.timedelta(seconds=cs + bs)
+        arr = dc.add_s(arr, cs + bs, res.get("timezone"), None)
     when = ("leave by %s, arrive %s" % (dc.fmt_clock(row["leave_by"], ref), dc.fmt_clock(arr, ref))
             if res["mode"] == "arrive_by" and row.get("leave_by") else "arrive %s" % dc.fmt_clock(arr, ref)
             if arr else "")

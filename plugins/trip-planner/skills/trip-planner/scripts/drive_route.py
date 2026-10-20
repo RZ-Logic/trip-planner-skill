@@ -899,6 +899,16 @@ def set_stops(route, stops):
     return route
 
 
+def _clock(depart, opts):
+    """seconds after `depart` -> wall clock in the trip's time zone (it jumps at a daylight-saving change). Plain
+    addition when the UTC offset is the same a day later, which is every night but two a year."""
+    tz, reg = opts.get("tz") or "America/Toronto", opts.get("region")
+    off0 = th.offset_at_local(depart, tz, reg)[0]
+    if th.offset_at_utc(depart - off0 + dt.timedelta(days=1), tz, reg)[0] == off0:
+        return lambda s: depart + dt.timedelta(seconds=s)
+    return lambda s: dc.add_s(depart, s, tz, reg)
+
+
 def retime(route, depart, opts):
     """Recompute typical and plan times, arrivals, 407 entry times and toll prices for `depart`. Stops from
     set_stops move the clock (later chunks and 407 entries) but not typical_s, plan_s or arrive."""
@@ -911,6 +921,7 @@ def retime(route, depart, opts):
                 and abs((depart - q).total_seconds()) <= 600)
     wt = 1.0 if live else w
     getaway = None if tomtom else _getaway_dir(route)
+    clock = _clock(depart, opts)
     t = p = base = 0.0
     marks = [(0.0, 0.0)]   # (base seconds, clock seconds: driving plus the stops passed)
     stats = {}   # (class, label) -> [base seconds, typical factor x base seconds, plan factor x base seconds]
@@ -922,7 +933,7 @@ def retime(route, depart, opts):
             waited += stops[si][1]
             si += 1
             marks.append((base, t + waited))
-        when = depart + dt.timedelta(seconds=t + waited)
+        when = clock(t + waited)
         if tomtom:
             ft = 1.0
             fp, lab = tomtom_plan_factor(c, when, hol)
@@ -949,8 +960,8 @@ def retime(route, depart, opts):
     route["typical_s"] = round(t, 1)
     route["plan_s"] = round(max(p, t), 1)
     route["depart"] = depart
-    route["arrive"] = depart + dt.timedelta(seconds=route["typical_s"])
-    route["arrive_plan"] = depart + dt.timedelta(seconds=route["plan_s"])
+    route["arrive"] = clock(route["typical_s"])
+    route["arrive_plan"] = clock(route["plan_s"])
 
     def to_typ(b):
         # a stop at b adds a mark at the same base position: the time after the stop is the one returned
@@ -965,7 +976,7 @@ def retime(route, depart, opts):
     tot_tp = tot_cam = 0.0
     for sg in route["etr"]:
         sg["offset_s"] = round(to_typ(sg["offset_base_s"]), 1)
-        entry = (depart + dt.timedelta(seconds=sg["offset_s"])).replace(second=0, microsecond=0)
+        entry = clock(sg["offset_s"]).replace(second=0, microsecond=0)
         pt = tolls.price_407(sg, entry, True)
         pc = tolls.price_407(sg, entry, False)
         sg.update({"entry_time": entry, "band_start": pt["band_start"], "day_type": pt["day_type"],

@@ -503,5 +503,61 @@ class WeatherPlanTime(unittest.TestCase):
         self.assertAlmostEqual(seen["traffic_factor"], want, places=6)
 
 
+def _night_route(etr=None):
+    """One 3 h 06 TomTom chunk (no calibration, typical factor 1.0) for the DST clock tests."""
+    return {"engine": "tomtom", "chunks": [{"s": 11160.0, "m": 300000.0, "lat": 43.6, "lon": -79.4, "urban": False,
+                                             "area": None, "etr": False, "hwy": True}],
+            "etr": list(etr or []), "poly": [(43.6, -79.4), (45.4, -75.7)], "_queried_depart": None,
+            "_live_now": False, "_return": False}
+
+
+def _via_utc(local, seconds, tz="America/Toronto"):
+    """Wall clock `local` plus `seconds` of elapsed time, worked out through UTC (the reference for DstClock)."""
+    utc = local - th.offset_at_local(local, tz, None)[0] + dt.timedelta(seconds=seconds)
+    return utc + th.offset_at_utc(utc, tz, None)[0]
+
+
+class DstClock(unittest.TestCase):
+    """drive-core-7: arrivals, 407 entry times and leave-by times follow the wall clock across a daylight-saving
+    change; the elapsed driving time is kept and the clock jumps."""
+
+    def test_arrival_across_fall_back(self):
+        r = _night_route()
+        drt.retime(r, dt.datetime(2026, 11, 1, 0, 30), dict(tdr.OPTS))
+        self.assertEqual(r["typical_s"], 11160.0)
+        self.assertEqual(r["arrive"], dt.datetime(2026, 11, 1, 2, 36))   # 03:36 EDT does not happen: 02:36 EST
+        self.assertEqual(r["arrive_plan"], _via_utc(dt.datetime(2026, 11, 1, 0, 30), r["plan_s"]))
+
+    def test_407_entry_across_spring_forward(self):
+        sg = {"entry": "Hwy 401", "entry_no": 1, "entry_km": 34.8, "exit": "Hwy 404", "exit_no": 2, "exit_km": 84.4,
+              "km": 49.6, "direction": "E", "offset_base_s": 2700.0, "end_base_s": 4500.0, "offset_s": 2700.0}
+        r = _night_route([sg])
+        drt.retime(r, dt.datetime(2027, 3, 14, 1, 30), dict(tdr.OPTS))
+        self.assertEqual(r["etr"][0]["entry_time"], dt.datetime(2027, 3, 14, 3, 15))   # 02:15 does not exist
+
+    def test_leave_by_across_spring_forward(self):
+        r = _night_route()
+        deadline = dt.datetime(2027, 3, 14, 4, 30)
+        dep = dp.plan_backwards(drt, r, deadline, 0, dict(tdr.OPTS))
+        self.assertEqual(dep, dp.floor_min(_via_utc(deadline, -r["plan_s"])))
+        self.assertLessEqual(_via_utc(dep, r["plan_s"]), deadline)
+        self.assertGreater(_via_utc(dep + dt.timedelta(minutes=1), r["plan_s"]), deadline)   # the latest minute
+
+    def test_route_line_border_wait_across_spring_forward(self):
+        row = {"letter": "A", "label": "fastest", "arrive": dt.datetime(2027, 3, 14, 1, 30), "border_s": 2700.0,
+               "typical_s": 3600.0, "plan_s": 3900.0, "km": 60.0, "energy": {"text": "fuel $6.00"}, "money": 6.0}
+        res = {"transponder": True, "mode": "depart", "depart": dt.datetime(2027, 3, 14, 0, 30), "round_trip": False,
+               "timezone": "America/Toronto"}
+        self.assertIn("arrive 03:15 with 45 min at the border", dp.route_lines(row, res)[0])   # not 02:15
+
+    def test_clock_helpers(self):
+        tz = "America/Toronto"
+        self.assertEqual(dc.add_s(dt.datetime(2026, 11, 1, 0, 30), 11160, tz, None), dt.datetime(2026, 11, 1, 2, 36))
+        self.assertEqual(dc.add_s(dt.datetime(2027, 3, 14, 3, 15), -2700, tz, None), dt.datetime(2027, 3, 14, 1, 30))
+        self.assertEqual(dc.add_s(dt.datetime(2026, 11, 1, 0, 30), 11160), dt.datetime(2026, 11, 1, 3, 36))   # no tz
+        self.assertEqual(dc.elapsed_s(dt.datetime(2027, 3, 14, 1, 30), dt.datetime(2027, 3, 14, 3, 15), tz, None), 2700)
+        self.assertEqual(dc.elapsed_s(dt.datetime(2026, 10, 14, 7, 0), dt.datetime(2026, 10, 14, 9, 0), tz, None), 7200)
+
+
 if __name__ == "__main__":
     unittest.main()

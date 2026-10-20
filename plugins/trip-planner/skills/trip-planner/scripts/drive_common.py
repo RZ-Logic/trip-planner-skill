@@ -367,5 +367,18 @@ def minutes_between(a, b):
     return (b - a).total_seconds() / 60.0
 
 
-def add_s(when, seconds):
-    return when + dt.timedelta(seconds=seconds)
+def add_s(when, seconds, tz=None, region=None):
+    """Naive local wall clock `when` plus `seconds` of elapsed time (negative goes back). With a time zone the
+    sum is worked out in UTC, so the clock jumps at a daylight-saving change. A wall time inside the repeated
+    hour of the fall-back night is read as its first occurrence."""
+    if not tz:
+        return when + dt.timedelta(seconds=seconds)
+    utc = when - th.offset_at_local(when, tz, region)[0] + dt.timedelta(seconds=seconds)
+    return utc + th.offset_at_utc(utc, tz, region)[0]
+
+
+def elapsed_s(a, b, tz=None, region=None):
+    """Seconds of elapsed time from wall clock a to wall clock b (across a daylight-saving change with a tz)."""
+    if not tz:
+        return (b - a).total_seconds()
+    return ((b - th.offset_at_local(b, tz, region)[0]) - (a - th.offset_at_local(a, tz, region)[0])).total_seconds()

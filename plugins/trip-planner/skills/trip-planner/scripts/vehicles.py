@@ -77,12 +77,16 @@ DESIGNATOR = re.compile(r"^\d{2,3}[a-z]{1,2}$")
 DRIVE_WORDS = {"awd", "4wd", "4x4", "quattro", "4motion", "xdrive", "4matic", "4matic+", "all4", "e4orce",
                "shawd", "awdi", "allwheel", "4x4i"}
 TWO_WD_WORDS = {"2wd", "fwd", "rwd", "4x2", "sdrive"}
+# electric trims that are dual or tri motor (all-wheel drive) without saying so ('Model 3 Performance',
+# 'Mustang Mach-E GT Performance Edition')
+EV_AWD_WORDS = {"performance", "gt", "rally", "plaid"}
 KIND_WORDS = {"hybrid": "hybrid", "hev": "hybrid", "hybride": "hybrid",
               "plugin": "phev", "phev": "phev", "prime": "phev", "energi": "phev", "4xe": "phev",
               "ehybrid": "phev",
               "electric": "ev", "ev": "ev", "bev": "ev", "electrique": "ev",
               "diesel": "diesel", "tdi": "diesel", "duramax": "diesel", "ecodiesel": "diesel",
               "powerstroke": "diesel", "bluetec": "diesel", "crd": "diesel",
+              "powerboost": "hybrid", "iforcemax": "hybrid",
               "gas": "gas", "gasoline": "gas", "petrol": "gas"}
 # Words that end a model's family name: drive, powertrain, body and trim words. "Corolla Hybrid AWD" and
 # "Corolla Hatchback" belong to the Corolla family; "Corolla Cross" does not.
@@ -417,7 +421,9 @@ class _Row(object):
         self.fam = family_tokens(self.model)
         self.famkey = "".join(self.fam)
         t = set(self.toks)
-        self.drive = "awd" if t & DRIVE_WORDS else "2wd"
+        # None: the name gives no drive ('Model 3 RWD' is 2wd, 'Model 3 Performance' awd, 'Civic' None)
+        self.drive = "awd" if t & DRIVE_WORDS or (self.kind == "e" and t & EV_AWD_WORDS) else \
+            "2wd" if t & TWO_WD_WORDS else None
 
 
 def _search():
@@ -470,6 +476,8 @@ def parse_query(text):
     t = re.sub(r"\b(all|four)[\s-]+wheel([\s-]+drive)?\b", "awd", t)
     t = re.sub(r"\b(front|rear|two)[\s-]+wheel([\s-]+drive)?\b", "2wd", t)
     t = re.sub(r"\bpower[\s-]+stroke\b", "powerstroke", t)
+    t = re.sub(r"\bpower[\s-]+boost\b", "powerboost", t)
+    t = re.sub(r"\bi[\s-]*force[\s-]+max\b", "iforcemax", t)   # the hybrid; plain 'i-FORCE' is the gas engine
     t = re.sub(r"\b(\d)\s*(series)\b", r"\1series", t)
     raw = [w for w in re.split(r"[\s,;:()\[\]\"/]+", t) if w]
     rest = []
@@ -540,6 +548,7 @@ def parse_query(text):
         if tk in TWO_WD_WORDS:
             q["drive"] = "2wd"
             q["drive_word"] = "RWD" if tk == "rwd" else "FWD" if tk == "fwd" else "2WD"
+            q["drive_tok"] = tk
             continue
         if tk in STOP_WORDS:
             continue
@@ -1203,7 +1212,11 @@ def lookup(text, warnings, allow_download=True):
             warnings.append("ignored 'ecoboost': no %d %s variant is an EcoBoost" % (year, family_display(
                 picked[0].model)))
     if q["drive"]:
-        d = [r for r in picked if r.drive == q["drive"]]
+        if q["drive"] == "awd":
+            d = [r for r in picked if r.drive == "awd"]
+        else:   # the word typed ('RWD') in the name, else any 2WD word, else a name with no drive word
+            d = ([r for r in picked if q.get("drive_tok") in r.toks] or [r for r in picked if r.drive == "2wd"]
+                 or [r for r in picked if r.drive is None])
         if d:
             picked, drive = d, q.get("drive_word") or q["drive"].upper()
         else:
@@ -1236,6 +1249,7 @@ def lookup(text, warnings, allow_download=True):
     if ignored:
         warnings.append("ignored '%s': no %d %s variant mentions it"
                         % (" ".join(ignored), year, family_display(picked[0].model)))
+    loose = [tk for tk in ignored if tk not in GRADE_WORDS]   # a trim grade is the same car; another word may not be
 
     nvar = sum(r.n for r in picked)
     combs = [r.comb for r in picked]
@@ -1325,7 +1339,7 @@ def lookup(text, warnings, allow_download=True):
     if how == "fuzzy" or q.get("_low") or year_note == "near" and abs(year - (q["year"] or year)) >= 2 or \
             spread > (6.0 if kind == "e" else 3.0):
         out["confidence"] = "low"
-    elif year_note or not tight or how in ("contains", "series") or gen or q.get("_other_make"):
+    elif year_note or not tight or how in ("contains", "series") or gen or q.get("_other_make") or loose:
         out["confidence"] = "medium"
     return out
 

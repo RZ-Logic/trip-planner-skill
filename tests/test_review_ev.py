@@ -390,5 +390,53 @@ class ReturnTemperatureTest(unittest.TestCase):
         self.assertAlmostEqual(rec["return"]["energy_cost"], res["charging"]["kwh_used"] * home_rate * f, places=2)
 
 
+class DriveAndHybridWordTest(unittest.TestCase):
+    """ev-vehicles-4: 'RWD' keeps the variants named RWD, and electric Performance, GT and Rally trims (dual
+    motor) count as all-wheel drive. ev-vehicles-8: 'PowerBoost' and 'i-FORCE MAX' pick the hybrid, and a word
+    that matches no variant (not a trim grade) lowers the confidence. Real bundled index, no download."""
+
+    def setUp(self):
+        self.nodl = mock.patch.object(V, "_download_year", return_value=False)
+        self.nodl.start()
+
+    def tearDown(self):
+        self.nodl.stop()
+
+    def look(self, text):
+        w = []
+        return V.lookup(text, w), w
+
+    def test_rwd_drops_performance_rows(self):
+        got, w = self.look("2023 Tesla Model 3 RWD")
+        self.assertEqual(got["variant_names"], ["Model 3 RWD"])
+        self.assertEqual((got["city"], got["hwy"]), (15.2, 16.6))
+        got, w = self.look("2024 Tesla Model Y RWD")
+        self.assertTrue(all("RWD" in n for n in got["variant_names"]), got["variant_names"])
+        got, w = self.look("2023 Ford Mustang Mach-E RWD")
+        self.assertFalse(any("GT" in n or "Rally" in n for n in got["variant_names"]), got["variant_names"])
+
+    def test_two_wd_word_still_falls_back_to_unmarked_rows(self):
+        got, w = self.look("2021 Chevrolet Silverado 2WD")
+        self.assertTrue(got["variant_names"])
+        self.assertFalse(any("4WD" in n for n in got["variant_names"]), got["variant_names"])
+
+    def test_hybrid_trade_names(self):
+        for text, want in (("2025 Toyota Tacoma i-FORCE MAX", (10.5, 9.8)),
+                           ("2023 Ford F-150 PowerBoost", (10.3, 10.2)),
+                           ("2024 Toyota Tundra i-FORCE MAX", None)):
+            with self.subTest(text=text):
+                got, w = self.look(text)
+                self.assertEqual(got["kind"], "hybrid")
+                if want:
+                    self.assertEqual((got["city"], got["hwy"]), want)
+                self.assertFalse(any(x.startswith("ignored") for x in w), w)
+
+    def test_ignored_word_lowers_confidence(self):
+        got, w = self.look("2024 Toyota Tundra i-FORCE")
+        self.assertEqual(got["kind"], "gas")
+        self.assertTrue(any("ignored 'iforce'" in x for x in w), w)
+        self.assertEqual(got["confidence"], "medium")
+
+
 if __name__ == "__main__":
     unittest.main()

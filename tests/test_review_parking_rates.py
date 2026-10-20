@@ -113,5 +113,13 @@ class FreeEveningsAndWeekends(unittest.TestCase):    # parking-verifier-1
         self.assertIn("free evenings (hours not given)", notes)
 
 
+class BaseRateWithAfterPrice(unittest.TestCase):     # parking-verifier-2
+    def test_daytime_keeps_the_hourly_rate(self):
+        for text in ("$3/hr, $10 after 5pm", "$3/hr before 5pm, $10 flat after 5pm"):
+            self.assertEqual(price(text, WED10, 180), 9.0, text)            # HEAD: 0.0 "free at this time"
+            self.assertEqual(price(text, WED10.replace(hour=18), 120), 10.0, text)
+            self.assertEqual(price(text, WED10.replace(hour=16), 180), 13.0, text)   # 1 h at $3, then the $10
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -445,12 +445,12 @@ def parse_rate_text(text):
     "08:00am - 06:00pm (Mon - Sat)", "$6 Day (7am-6pm), $5 Eve (6pm-midnight)", "$2/hr;$5 max",
     "First hour FREE. $1 per 1/2 hour. $9 Daily.", "Mon-Fri, 8:30 -18:00, $0.50/7.5 min, $19 Max, ...
     // Sat,Sun,Holidays - Free", "$18 a day weekdays" (other days unknown, not free), "Weekdays $15, Weekends $8",
-    "$3/h, $12 max, free after 6pm", "$20 per day, $10 after 5pm", "$5 first hour, $2 each additional hour",
-    "$2.25/hour, max 3 hours", "$2/hr Mon-Fri 8am-6pm; $1/hr Sat 9am-5pm" (each price before its window),
-    "$12 Day Max, $5 Night Max" (a night maximum without hours is noted, not used), "$2/hr Mon-Fri, Sat-Sun free"
-    (a paid day list, then the free one), "$2/hr 8am-6pm, free evenings and weekends". Unknown parts are left
-    out; an empty dict means nothing was understood, or that the text calls every paid day free ("$2/hr, free
-    Mon-Sun")."""
+    "$3/h, $12 max, free after 6pm", "$20 per day, $10 after 5pm", "$3/hr, $10 after 5pm" ($3/h until 17:00),
+    "$5 first hour, $2 each additional hour", "$2.25/hour, max 3 hours", "$2/hr Mon-Fri 8am-6pm; $1/hr Sat
+    9am-5pm" (each price before its window), "$12 Day Max, $5 Night Max" (a night maximum without hours is
+    noted, not used), "$2/hr Mon-Fri, Sat-Sun free" (a paid day list, then the free one), "$2/hr 8am-6pm, free
+    evenings and weekends". Unknown parts are left out; an empty dict means nothing was understood, or that the
+    text calls every paid day free ("$2/hr, free Mon-Sun")."""
     if not text or not str(text).strip() or str(text).strip().lower() in ("n/a", "na", "none", "-"):
         return {}, []
     text = _strip_french(str(text))
@@ -695,6 +695,9 @@ def parse_rate_text(text):
             p0["days"] = list(after[0]["days"])
         periods.insert(periods.index(after[0]), p0)
         rule.pop("flat", None)
+    elif after and rule.get("hourly") is not None and len(after) == len(periods) \
+            and all(p.get("flat") is not None or p.get("max") is not None for p in after):
+        rule["fill"] = True      # "$3/hr, $10 after 5pm": $3/h until 17:00, then the evening price
     free_only = periods and all(p.get("free") for p in periods)
     if free_only:
         p = periods[0]

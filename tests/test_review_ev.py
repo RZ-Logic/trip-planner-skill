@@ -640,5 +640,28 @@ class SkipNextStopTest(unittest.TestCase):
         self.assertLess(mins, 48.0)
 
 
+class PriceParkingClauseTest(unittest.TestCase):
+    """Follow-up to ev-vehicles-7: a per-minute or per-hour price whose only clause mentions parking is still the
+    charging rate; a separate parking or idle fee never is."""
+
+    def test_time_rate_with_parking_in_its_clause(self):
+        for text, want in (("$0.25/min (parking included)", ("per_minute", 0.25)),
+                           ("$0.30/min plus parking", ("per_minute", 0.30)),
+                           ("$16.00/hr + parking fees", ("per_hour", 16.0)),
+                           # guards: a separate parking clause, and an idle fee alone, are not the rate
+                           ("$20.00/hr, $2/hr parking", ("per_hour", 20.0)),
+                           ("$0.30/min plus parking; $0.40/min idle fee after 10 min", ("per_minute", 0.30))):
+            with self.subTest(text=text):
+                p = ev.parse_price(text)
+                self.assertEqual((p["model"], p["rate"]), want)
+        self.assertIsNone(ev.parse_price("$0.40/min idle fee after 10 minutes"))
+        self.assertIsNone(ev.parse_price("$2.00 per hour for parking, charging free"))
+        st = {"name": "X", "network_code": "FLO", "pricing": "$0.25/min (parking included)",
+              "units": {"J1772COMBO": (100.0, 2)}, "country": "CA"}
+        cost, text, src = ev.stop_price(st, ev.car_profile("ioniq5"), 30.0, 25.0, 100.0)
+        self.assertNotEqual(src, "network estimate")
+        self.assertAlmostEqual(cost, 6.25)
+
+
 if __name__ == "__main__":
     unittest.main()

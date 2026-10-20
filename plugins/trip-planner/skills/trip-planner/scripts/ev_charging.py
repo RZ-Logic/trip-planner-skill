@@ -160,7 +160,10 @@ _NUM = r"\$\s*(\d+(?:\.\d+)?)"
 _FEE_WORDS = r"(?:connection|session|plug-?in|start(?:ing)?)\s*fee"
 _DC_RE = re.compile(r"dc\s*fast|dcfc|\bdc\b|level 3|\bl3\b|fast charg")
 _L2_RE = re.compile(r"level 2|\bl2\b")
-_IDLE_RE = re.compile(r"idle|overstay|over-stay|parking|congestion")   # never the charging rate
+_IDLE_RE = re.compile(r"idle|overstay|over-stay|congestion")   # never the charging rate
+# nor a parking fee, but a rate with parking on top or included ('$0.30/min plus parking') is the rate
+_PARKING_RE = re.compile(r"parking")
+_ON_TOP_RE = re.compile(r"(?:plus|\+|\(|with)\s*parking|parking\s+(?:included|extra)")
 _LATER_RE = re.compile(r"grace|after\s+\d+\s*min")   # a rate that starts later: not the rate when another is listed
 
 
@@ -198,7 +201,8 @@ def parse_price(text):
         out["first"] = float(first.group(1))
     elif re.search(r"free\s*(?:for\s*)?(?:the\s*)?first hour", t):
         out["first"] = 0.0
-    rates = [x for x in re.split(r"[;,\n]|\.\s", t) if not _IDLE_RE.search(x)]   # time rates: never an idle fee
+    rates = [x for x in re.split(r"[;,\n]|\.\s", t)   # time rates: never an idle or parking fee
+             if not _IDLE_RE.search(x) and (not _PARKING_RE.search(x) or _ON_TOP_RE.search(x))]
     tr = "; ".join(x for x in rates if not _LATER_RE.search(x))
     if not re.search(_NUM + r"\s*(?:per|/)\s*(?:min(?:ute)?|hour|hr|h)\b", tr):
         tr = "; ".join(rates)

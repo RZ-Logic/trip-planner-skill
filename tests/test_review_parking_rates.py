@@ -1,5 +1,5 @@
 """Offline regression tests for the parking rate-text parser and pricing findings of the 2026-10 review
-(parking-1, -2, -5, -9, parking-verifier-1, -2).
+(parking-1, -2, -5, -6, -9, parking-verifier-1, -2).
 
 Every HTTP call is mocked (Overpass through parking._overpass); nothing here touches the network.
 
@@ -17,6 +17,7 @@ _os.environ["TRIP_PLANNER_CONFIG"] = _os.path.join(_TMP, "config", "car.json")
 _os.environ["TRIP_PLANNER_CACHE"] = _os.path.join(_TMP, "cache")
 _os.environ.setdefault("TRIP_PLANNER_QUIET", "1")   # no progress lines on stderr (TRIP_PLANNER_QUIET=0 shows them)
 import datetime as dt
+import json
 import os
 import sys
 import unittest
@@ -182,6 +183,42 @@ class FirstHourForms(unittest.TestCase):             # parking-9
         self.assertEqual(price(text, WED10, 600), 12.0)                     # HEAD: 15.0
         self.assertEqual(price(text, WED10, 180), 9.0)
         self.assertEqual(price("$5 first hour, $2 each additional hour", WED10, 60), 5.0)
+
+
+class AcrossMidnight(unittest.TestCase):             # parking-6
+    def test_charge_units_do_not_restart_at_midnight(self):
+        j = dt.datetime(2026, 7, 15, 23, 30)
+        self.assertEqual(pk.price_rule({"hourly": 15.0, "paid_hours": ["00:00", "24:00"]}, j, 60)[0], 15.0)   # HEAD: 30.0
+        self.assertEqual(pk.price_rule({"hourly": 3.0}, j.replace(hour=22), 165)[0], 9.0)                   # HEAD: 12.0
+        self.assertEqual(price("$7 for 3 hours", j.replace(minute=0), 120), 7.0)                            # HEAD: 14.0
+        fill = {"hourly": 3.0, "fill": True, "periods": [{"hours": ["08:00", "18:00"], "max": 12.0}]}
+        self.assertEqual(pk.price_rule(fill, j, 60)[0], 3.0)                                                # HEAD: 6.0
+
+    def test_day_cap_still_per_calendar_day(self):
+        self.assertEqual(pk.price_rule({"hourly": 4.0, "daily_max": 20.0}, dt.datetime(2026, 7, 15, 20, 0), 600)[0], 36.0)
+
+    def test_overnight_window_keeps_one_cap_per_night(self):
+        night = {"hourly": 2.0, "periods": [{"hours": ["17:00", "07:00"], "max": 6.0}]}
+        self.assertEqual(pk.price_rule(night, dt.datetime(2026, 7, 15, 22, 0), 240)[0], 6.0)
+
+    def test_curated_lots(self):
+        # a daily-max-only rule charges one price per calendar day touched on purpose, so it is left out
+        for f in ("parking-places-west.json", "parking-places-east.json"):
+            with open(os.path.join(pk.PLACES_DIR, f), encoding="utf-8") as fh:
+                places = json.load(fh)["places"]
+            for place in places:
+                season = place.get("season") or {}
+                for lot in place.get("lots") or []:
+                    rule = dict(lot.get("rule") or {})
+                    if not rule or (rule.get("daily_max") is not None and rule.get("hourly") is None
+                                    and rule.get("flat") is None and not rule.get("periods")):
+                        continue
+                    if season.get("from") and "season" not in rule and not rule.get("free") and lot.get("kind") != "park":
+                        rule["season"] = [season["from"], season["to"]]     # as find() gives the lot the town's season
+                    late = pk.price_rule(rule, dt.datetime(2026, 7, 15, 23, 30), 60)[0]
+                    early = pk.price_rule(rule, dt.datetime(2026, 7, 15, 22, 30), 60)[0]
+                    if late and early:
+                        self.assertLessEqual(late, early + 0.005, lot["name"])   # HEAD: 17 lots double
 
 
 if __name__ == "__main__":

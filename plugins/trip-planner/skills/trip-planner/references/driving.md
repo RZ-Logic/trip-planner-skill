@@ -248,7 +248,8 @@ priced.
   first-hour prices ("$5 1st hour, $3/hr after") within the day maximum, seasons and maximum stays. Also:
   rolling maximums (Green P "any 4 hour period" or "24 hour rolling": each block of that length costs
   at most the maximum), block prices ("$7 for 3 hours": one charge per started block; next to an hourly
-  rate, "$15/24 hours" stays a cap), prices written before their window ("$2/hr Mon-Fri 8am-6pm;
+  rate, "$15/24 hours" stays a cap; a stay across midnight is charged in units counted from arrival,
+  not restarted at midnight), prices written before their window ("$2/hr Mon-Fri 8am-6pm;
   $1/hr Sat 9am-5pm"), free days and windows ("free Sat-Sun", "$2/hr Mon-Fri, Sat-Sun free", "free
   after 6pm and weekends", "free evenings and weekends"), OpenStreetMap day forms in rate text
   ("Mo-Fr"), and OpenStreetMap opening hours with day forms, several rules, "off" and public holidays

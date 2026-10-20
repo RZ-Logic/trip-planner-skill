@@ -4,7 +4,8 @@ Sources, best first: curated tourist-town places (references/driving/parking-pla
 ArcGIS parking layers, Toronto Green P 2019 carparks joined to TPA occupancy, and OpenStreetMap through
 Overpass. Every lot is priced for the actual stay with price_rule() on a normalized rule:
 
-  {"free": bool, "hourly": $, "per_min": minutes per charge unit (60), "daily_max": $ per calendar day,
+  {"free": bool, "hourly": $, "per_min": minutes per charge unit (60; units run on across midnight within one
+   period, each counting toward the day it starts on), "daily_max": $ per calendar day,
    "min_charge": $, "flat": $ per entry, "free_first_min": n, "tiers": [{"up_to_min": n, "cost": $}, {"cost": $}],
    "paid_days": [0-6], "paid_hours": ["09:00", "18:00"], "holidays_free": bool, "season": ["MM-DD", "MM-DD"],
    "off_season": "free"|"closed", "max_stay_min": n, "evening_flat": $, "evening_from": "18:00"}
@@ -1270,7 +1271,16 @@ def _price_core(rule, arrive, stay_min, holidays=None):
     fh_extra = max(0.0, float(rule["first_hour"]) - hourly) if rule.get("first_hour") is not None and hourly is not None else 0.0
     covered, done_to, entries, rolling = [], None, {}, {}
     arr_tod = arrive.hour * 60 + arrive.minute
+    # an hourly window that runs on past midnight into the same period (a 24:00 end, then a 00:00 start) is one
+    # stretch: its charge units count on from its start instead of restarting at midnight
+    stretches = []
     for p, ws, we, d in sorted(wins, key=lambda w: w[1]):
+        q = stretches[-1] if stretches else None
+        if q and q[0] is p and q[2] == ws and p.get("flat") is None and not p.get("free") and not p.get("roll_min")                 and p.get("hourly", hourly) is not None:
+            stretches[-1] = (p, q[1], we, q[3], q[4] + [(ws, we, d)])
+        else:
+            stretches.append((p, ws, we, d, [(ws, we, d)]))
+    for p, ws, we, d, parts in stretches:
         if p.get("flat") is not None and p.get("entry"):
             covered.append((max(ws, arrive), min(we, end)))
             entries.setdefault(d, []).append((p, ws, we))
@@ -1304,12 +1314,22 @@ def _price_core(rule, arrive, stay_min, holidays=None):
                     rolling.setdefault((float(cap), int(p["roll_min"]), h, per), []).append((a, b))
                     paid_min += mins
                     continue
-                c = math.ceil(mins / per - 1e-9) * h * per / 60.0
-                if fh_extra and h == hourly:   # the first hour costs more, inside the same day maximum
-                    c, fh_extra = c + fh_extra, 0.0
-                if cap is not None:
-                    c = min(c, float(cap))
+                # each charge unit belongs to the day of the window it starts in; that day's cap applies
+                units = {}
+                for k in range(int(math.ceil(mins / per - 1e-9))):
+                    t = a + dt.timedelta(minutes=k * per)
+                    dd = next((pd for ps, pe, pd in parts if ps <= t < pe), parts[-1][2])
+                    units[dd] = units.get(dd, 0) + 1
+                for dd, n_u in sorted(units.items()):
+                    c = n_u * h * per / 60.0
+                    if fh_extra and h == hourly:   # the first hour costs more, inside the same day maximum
+                        c, fh_extra = c + fh_extra, 0.0
+                    cap_d = cap if dd == d else p.get("max")
+                    if cap_d is not None:
+                        c = min(c, float(cap_d))
+                    per_day[dd] = per_day.get(dd, 0.0) + c
                 paid_min += mins
+                continue
         per_day[d] = per_day.get(d, 0.0) + c
     # rolling maximums: each block of roll_min minutes from the first charged minute costs at most the maximum
     # (14 h at $4/h with an any-4-hour $12 maximum: $12 + $12 + $12 + $8)
@@ -1342,23 +1362,20 @@ def _price_core(rule, arrive, stay_min, holidays=None):
             cur = max(cur, b)
         if cur < end:
             gap_ivs.append((cur, end))
-        by_day = {}
-        for a, b in gap_ivs:
-            while a < b:
-                nxt = dt.datetime.combine(a.date() + dt.timedelta(days=1), dt.time())
-                seg_end = min(b, nxt)
-                if not season or _in_season(a.date(), season):
-                    by_day[a.date()] = by_day.get(a.date(), 0.0) + (seg_end - a).total_seconds() / 60.0
-                a = seg_end
         per = rule.get("per_min") or 60
-        for d, mins in by_day.items():
-            if mins <= 0:
-                continue
-            c = math.ceil(mins / per - 1e-9) * hourly * per / 60.0
+        fill_day = {}
+        for a, b in gap_ivs:
+            # charge units count on across midnight; each belongs to the calendar day it starts on
+            mins = (b - a).total_seconds() / 60.0
+            for k in range(int(math.ceil(mins / per - 1e-9)) if mins > 0 else 0):
+                t = a + dt.timedelta(minutes=k * per)
+                if not season or _in_season(t.date(), season):
+                    fill_day[t.date()] = fill_day.get(t.date(), 0.0) + hourly * per / 60.0
+                    paid_min += min(per, (b - t).total_seconds() / 60.0)
+        for d, c in fill_day.items():
             if rule.get("fill_cap") is not None:
                 c = min(c, float(rule["fill_cap"]))
             per_day[d] = per_day.get(d, 0.0) + c
-            paid_min += mins
     fits = fits and limit_ok(wins, gap_ivs)
     for d, c in per_day.items():
         if rule.get("periods") and rule.get("daily_max") is not None:

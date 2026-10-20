@@ -134,6 +134,16 @@ def road_parts(pts, m, name, east):
     return [(lab, m * d / tot) for lab, d in segs]
 
 
+def _free_piece(pts, name, east):
+    """True when a toll piece the engine flags is a road tolls.json lists as toll-free now (free_roads: the
+    provincial 407 East, Hwys 412 and 418, all east of Brock Rd): by its name, with most of its points east of
+    east_end_lon. Engines can keep the old toll flag; an unnamed piece is not assumed free."""
+    free = set(road_name([fr.get("name") or ""]) for fr in tolls.data().get("free_roads") or []) - {""}
+    if not pts or name not in free:
+        return False
+    return sum(1 for p in pts if p[1] >= east) > 0.5 * len(pts)
+
+
 def _roads_summary(road_m, total_m):
     items = [(m, first, name) for name, (m, first) in road_m.items() if name]
     items.sort(key=lambda x: -x[0])
@@ -244,9 +254,10 @@ def _valhalla_trip(trip):
             s = float(mn.get("time") or 0.0)
             m = float(mn.get("length") or 0.0) * 1000.0
             on = _on_stretch(is_etr, ramp, i)
-            if mn.get("toll") and not on:
+            name = road_name(mn.get("street_names") or [])
+            if mn.get("toll") and not on and not _free_piece(pts, name, b.east):
                 b.other_tolls.append(pts)
-            b.piece(pts, s, m, road_name(mn.get("street_names") or []), on, hwy=bool(mn.get("highway")) or None)
+            b.piece(pts, s, m, name, on, hwy=bool(mn.get("highway")) or None)
         b.close_stretch()
     summ = trip.get("summary") or {}
     return b, {"engine_toll": bool(summ.get("has_toll"))}
@@ -560,8 +571,23 @@ def _tomtom_route(rt):
     mway_ix = [(s.get("startPointIndex", 0), s.get("endPointIndex", 0)) for s in secs
                if (s.get("sectionType") or "").upper() == "MOTORWAY"]
     etr_ix = [(a, z) for a, z in tolls_ix if _near_407(pts[a:z + 1])]
+    # Road names come from importantRoadStretch sections (street name and road numbers), in route order.
+    stretches = [s for s in secs if (s.get("sectionType") or "").upper() == "IMPORTANT_ROAD_STRETCH"]
+    stretches.sort(key=lambda s: (s.get("startPointIndex", 0), s.get("importantRoadStretchIndex", 0)))
+
+    def stretch_name(s):
+        names = [((s.get("streetName") or {}).get("text") or "")]
+        return road_name(names + [(rn or {}).get("text") or "" for rn in s.get("roadNumbers") or []])
+
+    def toll_name(a, z):
+        # the named stretch that overlaps the toll piece most, '' when none does
+        ov = [(min(z, s.get("endPointIndex", 0)) - max(a, s.get("startPointIndex", 0)), stretch_name(s))
+              for s in stretches]
+        best = max([x for x in ov if x[0] > 0] or [(0, "")])
+        return best[1]
     b = _Builder("tomtom")
-    b.other_tolls = [pts[a:z + 1] for a, z in tolls_ix if (a, z) not in etr_ix]
+    b.other_tolls = [pts[a:z + 1] for a, z in tolls_ix
+                     if (a, z) not in etr_ix and not _free_piece(pts[a:z + 1], toll_name(a, z), b.east)]
     # Pieces between every section boundary, so 407 and motorway flags are exact per piece.
     cuts = sorted(set([0, max(0, len(pts) - 1)] + [i for ab in etr_ix + mway_ix for i in ab]))
     share = (total_s / cum[-1]) if cum[-1] > 0 else 0.0
@@ -578,15 +604,10 @@ def _tomtom_route(rt):
     b.close_stretch()
     if len(pts) == 1:
         b.poly = list(pts)
-    # Road names come from importantRoadStretch sections (street name and road numbers), in route order.
-    stretches = [s for s in secs if (s.get("sectionType") or "").upper() == "IMPORTANT_ROAD_STRETCH"]
-    stretches.sort(key=lambda s: (s.get("startPointIndex", 0), s.get("importantRoadStretchIndex", 0)))
     for s in stretches:
         a = max(0, min(len(cum) - 1, s.get("startPointIndex", 0)))
         z = max(a, min(len(cum) - 1, s.get("endPointIndex", 0)))
-        names = [((s.get("streetName") or {}).get("text") or "")]
-        names += [(rn or {}).get("text") or "" for rn in s.get("roadNumbers") or []]
-        name = road_name(names)
+        name = stretch_name(s)
         if name:
             for nm, mm in road_parts(pts[a:z + 1], (cum[z] - cum[a]) * scale, name, b.east):
                 b.add_road(nm, mm)

@@ -184,7 +184,8 @@ westbound, 8 weekday and 4 weekend time bands, effective 2026-01-01):
   trip, plus a $5 account fee in any month with a trip.
 - **Holidays:** Ontario statutory holidays are priced as weekends.
 - **Toll-free roads:** the provincial 407 East (Brock Rd to Hwy 35/115) has been free since
-  2025-06-01, and Hwys 412 and 418 since 2022.
+  2025-06-01, and Hwys 412 and 418 since 2022. An engine's old toll flag on one of these roads (named,
+  east of Brock Rd) is ignored, not shown as an unpriced toll; an unnamed toll piece is still flagged.
 - **Entry and exit:** taken from the route's 407 geometry, snapped to the interchange list. The
   kilometre markers are good to about 1 km.
 - **Accuracy:** an estimate from the rate chart. A 1 km error at an end is about $1 at peak rates.

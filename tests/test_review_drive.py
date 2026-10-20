@@ -695,6 +695,60 @@ class TorontoClockForTheGtha(unittest.TestCase):
                              drt.wants_407_option(r, when, dict(tdr.OPTS)), when)
 
 
+WHITBY = (43.88, -78.95)
+HWY_35_115 = (44.0187, -78.6232)   # the far end used by test_drive_route's 407 East fixture
+
+
+def _tomtom_only_toll(head, toll, tail, stretch=None):
+    """One TomTom route whose only TOLL section covers the `toll` points, with an importantRoadStretch section
+    over them when `stretch` (street name, road number) is given."""
+    pts = tdr.densify(head) + tdr.densify(toll)[1:]
+    a = len(tdr.densify(head)) - 1
+    z = len(pts) - 1
+    pts += tdr.densify([pts[-1]] + tail)[1:]
+    rt = tdr.tomtom_reply(False)["routes"][0]
+    rt["legs"][0]["points"] = [{"latitude": p[0], "longitude": p[1]} for p in pts]
+    rt["summary"]["lengthInMeters"] = round(tdr.length_m(pts))
+    rt["sections"] = [{"startPointIndex": a, "endPointIndex": z, "sectionType": "TOLL"}]
+    if stretch:
+        rt["sections"].append({"startPointIndex": a, "endPointIndex": z, "sectionType": "IMPORTANT_ROAD_STRETCH",
+                               "importantRoadStretchIndex": 0, "streetName": {"text": stretch[0]},
+                               "roadNumbers": [{"text": stretch[1]}]})
+    return drt._finish(*drt._tomtom_route(rt), engine="tomtom", depart=tdr.WED_0730, opts=dict(tdr.OPTS))
+
+
+class FreeRoadTollFlags(unittest.TestCase):
+    """Follow-up to drive-core-1: an engine's toll flag on a road tolls.json lists as toll-free (free_roads: the
+    provincial 407 East, Hwys 412 and 418) is not an unpriced toll; an unnamed toll piece still is."""
+
+    def assert_free(self, r):
+        self.assertEqual(r["etr"], [])
+        self.assertIs(r["has_tolls"], False)
+        self.assertIs(r["toll_unpriced"], False)
+        self.assertFalse(any(x.startswith("unpriced toll: ") for x in r["notes"]))
+
+    def test_tomtom_toll_section_on_407_east(self):
+        r = _tomtom_only_toll([WHITBY, (43.93, -78.98)], [(43.93, -78.98), (43.95, -78.90), HWY_35_115],
+                              [(44.20, -78.60)], ("Highway 407", "407"))
+        self.assert_free(r)
+        self.assertIn("Hwy 407 East (free)", r["roads"])
+
+    def test_valhalla_toll_flag_on_412_and_418(self):
+        for names, pts in ((["Highway 412", "412"], [(43.86, -78.97), (43.93, -78.98)]),
+                           (["Highway 418", "418"], [(43.90, -78.79), (43.96, -78.80)])):
+            trip = tdr._valhalla_trip([(tdr.densify([WHITBY, pts[0]]), ["Highway 401", "401"], False, 100.0),
+                                       (tdr.densify(pts), names, True, 100.0),
+                                       (tdr.densify([pts[-1], HWY_35_115]), ["Highway 407"], False, 100.0)])["trip"]
+            self.assert_free(drt._finish(*drt._valhalla_trip(trip), engine="valhalla", depart=tdr.WED_0730,
+                                         opts=dict(tdr.OPTS)))
+
+    def test_unnamed_toll_east_of_brock_stays_unpriced(self):
+        r = _tomtom_only_toll([WHITBY, (43.93, -78.98)], [(43.93, -78.98), (43.95, -78.90), HWY_35_115],
+                              [(44.20, -78.60)])
+        self.assertIs(r["toll_unpriced"], True)   # no name to tell it from a real toll: flagged, as before
+        self.assertIs(r["has_tolls"], True)
+
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -372,5 +372,33 @@ class SkillDocs(unittest.TestCase):
         self.assertIn("--407-this-month", " ".join(lines[start:end]))
 
 
+# ---------------------------------------------------------------------- drive-core-9
+
+README_MD = os.path.join(ROOT, "README.md")
+CALIB_ROWS = {"Markham, Wed 07:30, via 407": "markham_407", "Markham, Wed 07:30, toll-free": "markham_free",
+              "Canada's Wonderland, Sat 11:00, via 407": "wonderland_407",
+              "Tobermory, Sat 07:00, toll-free": "tobermory_free", "Kingston, Fri 15:00, via 407": "kingston_407"}
+
+
+class ReadmeCalibrationTable(unittest.TestCase):
+    """drive-core-9: README's 'Before calibration' column (79/86/63/274, Kingston 'no 407 option offered') could not
+    be reproduced from the shipped model; both columns must come from today's model, with and without calibration."""
+
+    def test_before_and_after_columns_match_the_model(self):
+        import test_drive_route as tdr   # module import only
+        with open(README_MD, encoding="utf-8") as f:
+            text = f.read()
+        rows = {m.group(1): m.groups()[1:] for m in
+                re.finditer(r"^\| (.+?) \| (\d+) to (\d+) min \| (\d+) min \| (\d+) min \|$", text, re.M)}
+        self.assertEqual(set(CALIB_ROWS) - set(rows), set())
+        uncalibrated = {k: v for k, v in tdr.drt.traffic_data().items() if k != "calibration"}
+        for label, name in CALIB_ROWS.items():
+            lo, hi, off, on = (int(x) for x in rows[label])
+            self.assertEqual((lo, hi), tdr.GOOGLE[name][1:], label)
+            self.assertAlmostEqual(on, tdr.calib_route(name)["typical_s"] / 60.0, delta=0.51, msg=label)
+            with mock.patch.object(tdr.drt, "traffic_data", return_value=uncalibrated):
+                self.assertAlmostEqual(off, tdr.calib_route(name)["typical_s"] / 60.0, delta=0.51, msg=label)
+
+
 if __name__ == "__main__":
     unittest.main()

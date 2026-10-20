@@ -173,13 +173,15 @@ From a home in Milton (the address is not published), October 2026, except the E
 
 Free routing engines have no traffic data, so their times are calibrated against Google Maps' "typically X to Y min" ranges. A regression test keeps all nine reference routes within 15% of those ranges. These are the same nine routes, all from Milton, that the calibration was set on, so this is an in-sample check; a check on routes from other origins is on the roadmap. It covers typical times only; the "allow" time is a modelled allowance, not a measured on-time rate.
 
-| Trip from Milton | Google typical | Before calibration | After |
+| Trip from Milton | Google typical | Calibration off | Calibrated |
 |---|:-:|:-:|:-:|
-| Markham, Wed 07:30, via 407 | 40 to 60 min | 79 min | 58 min |
-| Markham, Wed 07:30, toll-free | 60 to 120 min | 86 min | 88 min |
-| Canada's Wonderland, Sat 11:00, via 407 | 35 to 50 min | 63 min | 54 min |
-| Tobermory, Sat 07:00, toll-free | 210 to 250 min | 274 min | 255 min |
-| Kingston, Fri 15:00, via 407 | 170 to 230 min | no 407 option offered | 201 min |
+| Markham, Wed 07:30, via 407 | 40 to 60 min | 64 min | 58 min |
+| Markham, Wed 07:30, toll-free | 60 to 120 min | 88 min | 88 min |
+| Canada's Wonderland, Sat 11:00, via 407 | 35 to 50 min | 58 min | 54 min |
+| Tobermory, Sat 07:00, toll-free | 210 to 250 min | 275 min | 255 min |
+| Kingston, Fri 15:00, via 407 | 170 to 230 min | 226 min | 201 min |
+
+Calibration off is today's model without the per-road-class calibration (the 407 and highways outside congested areas), so the toll-free Markham drive, all on congested-area roads, does not move. The 407's own traffic rows ([build decision 3](docs/build-decisions.md)) came earlier and are in both columns. Two calibrated times sit outside Google's range but inside the test's 15% band: Wonderland 54 (35 to 50) and Tobermory 255 (210 to 250).
 
 ### Review record
 

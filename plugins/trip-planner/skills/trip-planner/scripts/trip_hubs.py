@@ -1778,8 +1778,9 @@ def load_feed(net, fid, label, path, day, t0, t_end, holidays=None, local_tz=Non
     bad = [0]   # malformed rows of active trips, counted on the main pass only
 
     def stream_stop_times(only=None):
-        """Rows for active trips. Timed rows far outside the window are skipped unless the trip is
-        headway-based or listed in `only` (trips that need every timepoint for interpolation).
+        """Rows for active trips. Timed rows far outside the window (also when read across a midnight wrap) are
+        skipped unless the trip is headway-based or listed in `only` (trips that need every timepoint for
+        interpolation).
         A malformed row (cut short, or a time not written HH:MM:SS) is skipped and counted in `bad`."""
         found, untimed = {}, set()
         idx, rows = gz.table("stop_times.txt")
@@ -1812,8 +1813,9 @@ def load_feed(net, fid, label, path, day, t0, t_end, holidays=None, local_tz=Non
                 d = a
             if a is None:
                 untimed.add(tid)
-            elif only is None and tid not in freq and not any(d + o >= lo and a + o <= hi for o in offs):
-                continue
+            elif only is None and tid not in freq and not any(
+                    d + o + w >= lo and a + o + w <= hi for o in offs for w in (0, 86400 if a < 43200 else -86400)):
+                continue   # w: keep both sides of a midnight wrap (00:06 for 24:06) for fix_time_order
             pk = i_pk is None or i_pk >= len(r) or r[i_pk].strip() != "1"
             dk = i_dk is None or i_dk >= len(r) or r[i_dk].strip() != "1"
             try:

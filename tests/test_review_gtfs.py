@@ -101,6 +101,28 @@ class StopTimesOrderTests(unittest.TestCase):
         self.assertTrue(any("skipped" in w and "backwards" in w for w in net.warnings), net.warnings)
         self.assertEqual(scan.evaluate(idx["Hub A"], hms(9, 55))[0], hms(10, 30))
 
+    def test_midnight_wrap_at_the_end_of_the_service_week(self):
+        # follow-up: on a Mon-Fri feed Saturday has no run, so the 00:06 row is only in the window once wrapped
+        p = feed([("N", "WK", "n1", "C")],
+                 [("n1", "23:50:00", "23:50:00", "A", 1, 0, 0), ("n1", "23:58:00", "23:58:00", "B", 2, 0, 0),
+                  ("n1", "00:06:00", "00:06:00", "C", 3, 0, 0)])
+        net, scan, idx = scan_for(p, hms(23, 30), hms(27, 30), day=dt.date(2026, 10, 16))   # a Friday
+        self.assertIn((hms(23, 58), hms(24, 6)), [(c[0], c[1]) for c in net.conns])
+        self.assertEqual(scan.evaluate(idx["Hub A"], hms(23, 40))[0], hms(24, 6))
+        self.assertEqual(len([w for w in net.warnings if "ran backwards past midnight" in w]), 1, net.warnings)
+
+    def test_midnight_wrap_at_the_start_of_the_service_week(self):
+        # follow-up: Sunday has no run, so without the 23:50 row the wrap is missed and B 00:06 looks like a Monday bus
+        p = feed([("N", "WK", "n1", "C")],
+                 [("n1", "23:50:00", "23:50:00", "A", 1, 0, 0), ("n1", "00:06:00", "00:06:00", "B", 2, 0, 0),
+                  ("n1", "00:20:00", "00:20:00", "C", 3, 0, 0)])
+        net, scan, idx = scan_for(p, hms(0, 0), hms(4, 0), day=dt.date(2026, 10, 19))   # a Monday
+        self.assertEqual(net.conns, [])
+        self.assertEqual(len([w for w in net.warnings if "ran backwards past midnight" in w]), 1, net.warnings)
+        net, scan, idx = scan_for(p, hms(0, 0), hms(4, 0), day=dt.date(2026, 10, 20))   # Monday's run, on Tuesday
+        self.assertEqual([(c[0], c[1]) for c in net.conns], [(hms(0, 6), hms(0, 20))])
+
+
 class FeedClockTests(unittest.TestCase):
     """hubs-engine-2 and hubs-engine-8: feeds that keep another clock (FlixBus publishes UTC)."""
 

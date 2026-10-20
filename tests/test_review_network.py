@@ -321,5 +321,60 @@ class GuardProxy(unittest.TestCase):
         self.assertEqual(seen, [])
 
 
+class FakeResp(io.BytesIO):
+    """What urlopen and dc._OPENER.open return."""
+    headers = {}
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        self.close()
+
+
+NOMINATIM = "https://nominatim.openstreetmap.org"
+
+
+class SharedPacing(unittest.TestCase):
+    """tests-ci-eng-9: trip_hubs.http_get and drive_common.fetch pace each host on one clock, so a Nominatim search
+    from one module followed by a reverse lookup from the other still waits out the 1 request per second."""
+
+    def pace(self, first, second):
+        clock, slept = [1000.0], []
+        p = [mock.patch.dict(th._LAST_CALL, clear=True), mock.patch.dict(dc._LAST_CALL, clear=True),
+             mock.patch("time.time", lambda: clock[0]), mock.patch("time.sleep", slept.append),
+             mock.patch.object(th.urllib.request, "urlopen", side_effect=lambda *a, **k: FakeResp(b"[]")),
+             mock.patch.object(dc._OPENER, "open", side_effect=lambda *a, **k: FakeResp(b"{}"))]
+        for x in p:
+            x.start()
+        try:
+            first()
+            second()
+        finally:
+            for x in reversed(p):
+                x.stop()
+        return slept
+
+    def th_search(self):
+        th.http_get(NOMINATIM + "/search?q=a", min_interval=1.1)
+
+    def dc_reverse(self):
+        dc.fetch(NOMINATIM + "/reverse?lat=1", min_interval=1.1)
+
+    def test_dc_waits_after_th(self):
+        slept = self.pace(self.th_search, self.dc_reverse)
+        self.assertEqual(len(slept), 1, slept)
+        self.assertAlmostEqual(slept[0], 1.1)
+
+    def test_th_waits_after_dc(self):
+        slept = self.pace(self.dc_reverse, self.th_search)
+        self.assertEqual(len(slept), 1, slept)
+        self.assertAlmostEqual(slept[0], 1.1)
+
+    def test_other_host_not_held(self):
+        slept = self.pace(self.th_search, lambda: dc.fetch("https://photon.komoot.io/api?q=a", min_interval=1.1))
+        self.assertEqual(slept, [])
+
+
 if __name__ == "__main__":
     unittest.main()

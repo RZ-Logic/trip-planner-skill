@@ -25,7 +25,7 @@ import trip_hubs as th  # noqa: E402
 
 DATA_DIR = os.path.normpath(os.path.join(HERE, "..", "references", "driving"))
 _DATA = {}
-_LAST_CALL = {}
+_LAST_CALL = th._LAST_CALL   # one per-host pacing clock for both planners (Nominatim's 1 request/second)
 _STALE = {}          # host -> (age in hours, error name) for replies served from an old cached copy
 _CACHE_OFF = []      # set once the cache folder turned out unusable this run
 

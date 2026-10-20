@@ -178,10 +178,10 @@ NIAGARA_RULES = "fare_id,route_id,origin_id,destination_id,contains_id\n1,104,,,
 
 
 class WegoPassBesideLocalBus(unittest.TestCase):
-    def fare(self, *routes):
+    def fare(self, *routes, payment="card"):
         net = fake_net(NIAGARA, fare_model(NIAGARA_FARES, NIAGARA_RULES), [""])
         legs = [leg(NIAGARA, "Niagara Region Transit", r, 36000 + 1800 * k, 0, 0) for k, r in enumerate(routes)]
-        return th.journey_fare(net, legs, ONTARIO["flat_fares"], "card", ONTARIO.get("card_discount"),
+        return th.journey_fare(net, legs, ONTARIO["flat_fares"], payment, ONTARIO.get("card_discount"),
                                ONTARIO["transfer_rules"], DAY)
 
     def test_local_bus_then_wego_pays_both(self):
@@ -194,6 +194,15 @@ class WegoPassBesideLocalBus(unittest.TestCase):
 
     def test_two_wego_lines_are_one_pass(self):
         self.assertEqual(self.fare("602", "603")[0], 16.0)
+
+    def test_wego_pass_still_covers_wego_after_a_local_bus(self):
+        # review follow-up: one pass covers all WEGO lines for 24 h, with a local bus between them too
+        total, _cur, parts, _complete = self.fare("603", "104", "603")
+        self.assertEqual(total, 19.5)                                                       # was 35.50
+        self.assertEqual([p["fare"] for p in parts], [16.0, 3.5, 0.0])
+        self.assertEqual(self.fare("602", "104", "603")[0], 19.5)                           # was 35.50
+        self.assertEqual(self.fare("104", "603", "104")[0], 23.0)                           # the local bus pays
+        self.assertEqual(self.fare("603", "104", "603", payment="cash")[0], 19.5)           # a pass, not a transfer
 
 
 # ---------------------------------------------------------------------------------------------------- ext-12

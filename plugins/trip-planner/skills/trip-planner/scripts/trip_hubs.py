@@ -2405,7 +2405,7 @@ def apply_transfers(groups, rules, payment, day=None):
     agency, feed, depart, first_stop, last_stop, routes and fare (full price or None); this sets
     charged (None when unknown) and note. Rules: same_agency {name: {window_min, payment}} and
     pairs [{from, to, window_min, payment, action 'free' | 'refund_from', days, hours, at_stops, routes,
-    label}]. Windows run from the boarding of the fare that was paid: a leg that rides free keeps the
+    pass, label}]. Windows run from the boarding of the fare that was paid: a leg that rides free keeps the
     window of the fare that covered it, so a free transfer never restarts the clock, and a fare credited
     back, with any leg that rode free on it, gives no window to later legs. Payment
     'contactless' (a bank card tap) gets the same transfers as 'card'. Paying cash, the rider holds the
@@ -2442,8 +2442,11 @@ def apply_transfers(groups, rules, payment, day=None):
             direct = p is groups[i - 1]
             hit = None
             for r in pairs:
-                if (r.get("at_stops") or ppay == "cash") and not direct:
-                    continue   # stop rules and paper transfers cover a direct change only
+                if (r.get("at_stops") or (ppay == "cash" and not r.get("pass"))) and not direct:
+                    continue   # stop rules and paper transfers cover a direct change only (a pass is no transfer)
+                on = set(r.get("routes") or ())
+                if r.get("pass") and not (on & p["routes"] and on & g["routes"]):
+                    continue   # a pass on these routes: both fares must be on them
                 t = p["depart"] if r.get("action") == "refund_from" else g["depart"]   # the leg made free
                 if (pnames & set(r["from"]) and names & set(r["to"])
                         and _rule_applies(r, ppay, gap, day, t, boundary, p["routes"] | g["routes"])):

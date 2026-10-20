@@ -11711,6 +11711,15 @@
         "window_min": 1440,
         "payment": ["card", "cash"],
         "label": "one WEGO pass covers all WEGO lines for 24 h"
+      },
+      {
+        "from": ["Niagara Region Transit"],
+        "to": ["Niagara Region Transit"],
+        "routes": ["602", "603"],
+        "pass": true,
+        "window_min": 1440,
+        "payment": ["card", "cash"],
+        "label": "one WEGO pass covers all WEGO lines for 24 h"
       }
     ]
   }

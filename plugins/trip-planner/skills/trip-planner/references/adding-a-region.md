@@ -86,7 +86,9 @@ Rules:
   fare, and any leg that rode free on it, covers nothing later: later transfers count from the fare
   that was paid. Optional limits: `payment` (`card`, `cash`), `days` (0 = Monday), `hours`
   (`[["05:30", "10:00"], ...]`, local time of the transfer), `at_stops` (stop-name substrings at the
-  transfer point) and `routes` (route short names). `paper_only` (agency names) lists agencies with no card readers on board
+  transfer point) and `routes` (route short names, on either fare). With `"pass": true` the earlier
+  fare is a pass on `routes` (the WEGO 24-hour pass): a later fare is free only when both are on
+  those routes, with other legs between them and paying cash too. `paper_only` (agency names) lists agencies with no card readers on board
   (Milton Transit): a card rider pays them in cash, and a leg boarded on their paper transfer follows
   the cash rules at the next change. Without this block, multi-agency fares print
   `(before transfer discounts)`.

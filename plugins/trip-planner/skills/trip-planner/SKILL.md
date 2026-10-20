@@ -195,7 +195,8 @@ python3 ${CLAUDE_SKILL_DIR}/scripts/drive_plan.py --origin "ORIGIN" --dest "DEST
   minutes and dollars with their basis: leaving at a time, "the 407 saves N min" of typical driving;
   arrive-by, "the 407 lets you leave N min later" with the typical-drive difference in brackets (never
   turn a later leave-by into a claim that the drive is N minutes shorter); arrive-by round trip, the
-  combined figure the output names.
+  combined figure the output names. If a route has an "unpriced toll" note or WARNING, its total leaves
+  those tolls out: say so, and never call that route the cheapest.
 - **`ARRIVAL`** has the leave-by time: the "allow" drive (a conservative planning allowance, not a
   measured on-time rate), finding parking, the walk, charging stops and 5 minutes spare.
 - **`PARKING`** lists up to five lots (eight in `--json`): fits the stay, then within the walk limit,

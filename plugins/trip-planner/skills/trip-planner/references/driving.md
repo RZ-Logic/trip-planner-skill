@@ -52,6 +52,7 @@ Addresses work like `trip_hubs.py` (the same `ADDRESS NOT PRECISE` rule). Pass `
      rate);
    - the 407 ETR entry and exit, direction, time band and price, both with and without a transponder;
    - border bridge tolls;
+   - an "unpriced toll" note when the engine reports tolls this planner does not price;
    - fuel or energy, and the total.
 3. `TRADE-OFF`: **one recommendation** at the user's value of time, with minutes and dollars.
    Quote both, with their basis:
@@ -163,7 +164,9 @@ westbound, 8 weekday and 4 weekend time bands, effective 2026-01-01):
 **Border crossings.** Car tolls by direction are in `driving/tolls.json`: Peace, Rainbow, Whirlpool,
 Lewiston-Queenston, Ambassador, Gordie Howe, the Detroit-Windsor Tunnel, Blue Water, Thousand Islands
 and Ogdensburg-Prescott. A toll charged only in US dollars is converted at the Bank of Canada rate stored
-in `tolls.json` and counted in the total, marked as approximate.
+in `tolls.json` and counted in the total, marked as approximate. A crossing missing from the list is
+detected from the two ends' countries: the 30 minute allowance and a WARNING are added, the toll is not
+priced.
 
 **Fuel.**
 - **Price:** the Ontario weekly fuel price survey (published Mondays), at the nearest of the survey's
@@ -394,5 +397,7 @@ Meanwhile, do the rest by hand and say it is manual:
 - **Parking data:** prices change. Green P's are from 2019, and some town rates are from brochures.
   Posted signs win. OpenStreetMap "free" is unverified.
 - **Tolls:** 407 tolls are an estimate from the rate chart. Billing can differ by a little at zone
-  edges.
+  edges. Only the 407 ETR and ten listed border crossings are priced. Other tolls a routing engine
+  reports (US toll roads, crossings not in the list such as Sault Ste. Marie) print as "tolls not
+  priced", with a toll-free comparison and a WARNING; the OSRM fallback cannot see them.
 - **EV:** charger availability and prices change. Busy sites add waits that are not modelled.

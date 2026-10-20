@@ -128,9 +128,10 @@ chargers in the US and Canada (NLR, queried with `country=all`). These files mak
 
 - `references/driving/traffic.json` `areas`: boxes for the congested cities, so peak factors apply
   there and not on rural roads.
-- `references/driving/tolls.json`: toll roads with a published rate table. The 407 ETR model is
-  zone, direction and time band, priced at the entry time. Also bridges and tunnels, with a price
-  per direction and a `canada_side`/`us_side` style pair of points to tell the direction.
+- `references/driving/tolls.json`: the 407 ETR model (zone, direction and time band, priced at the
+  entry time) and border bridges and tunnels, with a price per direction and a `canada_side`/`us_side`
+  style pair of points to tell the direction. Other toll roads are not read from this file: the
+  planner flags them as unpriced, and pricing one needs code in `tolls.py`.
 - `references/driving/costs.json` `fuel`: a fuel price source and market coordinates (outside
   Ontario the user passes `--fuel-price`).
 - `references/driving/parking.json` `city_layers`: open-data parking layers that answer an ArcGIS

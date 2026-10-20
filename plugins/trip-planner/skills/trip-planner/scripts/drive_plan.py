@@ -182,6 +182,16 @@ def _province_from_text(text):
     return None
 
 
+def _country_from_text(text):
+    """'CA' or 'US' from a geocoder display name ending in the country, else None."""
+    t = (text or "").strip().lower()
+    if t.endswith(", canada"):
+        return "CA"
+    if t.endswith(", united states") or t.endswith(", united states of america"):
+        return "US"
+    return None
+
+
 def reverse_address(lat, lon):
     """One Nominatim /reverse call (cached 30 days, 1 request per second): {"label", "country", "state"} or {}."""
     g = costs().get("geocode") or {}
@@ -1195,6 +1205,7 @@ def trade_off(items, vot, transponder, round_trip=False, fee_included=False, arr
                      and it["route"].get("label") == "without 407"), None)
     has_etr = any(it["route"].get("etr") for it in items)
     what = "The 407" if fast["route"].get("etr") else "The toll route"
+    unpriced = bool(fast["route"].get("toll_unpriced"))   # money leaves out tolls the engine reported off the 407
     if not fast["route"].get("has_tolls"):
         lead = "No tolls on the fastest route."
     elif free is None:
@@ -1210,23 +1221,30 @@ def trade_off(items, vot, transponder, round_trip=False, fee_included=False, arr
             out["typical_saved_min"] = typ
         typ_txt = ("" if typ is None else " (typical drive about %d min shorter)" % typ if typ >= 1
                    else " (typical drive about the same)")
+        tail = "; its tolls are not priced here." if unpriced else ""
         if saved < 1:
             lead = ("%s does not let you leave later than %s." if leave_later else "%s saves no time over %s.") % (
                 what, free["letter"])
         elif extra <= 0:
-            lead = ("%s lets you leave %d min later%s and costs no more." % (what, saved, typ_txt) if leave_later
-                    else "%s saves %d min and costs no more." % (what, saved))
+            costs_txt = "" if unpriced else " and costs no more"
+            lead = ("%s lets you leave %d min later%s%s." % (what, saved, typ_txt, costs_txt) if leave_later
+                    else "%s saves %d min%s." % (what, saved, costs_txt))
         else:
             per_h = extra / (saved / 60.0)
             out["per_hour"] = round(per_h, 2)
+            tail = ", plus tolls not priced here." if unpriced else ""
             lead = ("%s lets you leave %d min later%s for %s ($%d/h)." % (what, saved, typ_txt, dc.money(extra),
                                                                            round(per_h)) if leave_later
                     else "%s saves %d min for %s ($%d/h of time saved)." % (what, saved, dc.money(extra), round(per_h)))
         if round_trip and saved >= 1:
             lead = lead[:-1] + (", there and back (a later leave-by plus the drive back)." if arrive_by
                                 else ", there and back.")
+        if tail:
+            lead = lead[:-1] + tail
     rec_route = rec["route"]
     tag = LABELS.get(rec_route.get("label"), rec_route.get("label", "")).lower()
+    if rec_route.get("toll_unpriced"):
+        tag += ", tolls not priced"
     out["text"] = "%s At $%g/h of your time: take %s (%s)." % (lead, vot, rec["letter"], tag)
     if has_etr and not transponder:
         out["fee_note"] = ("Without a transponder 407 ETR also bills a $5 account fee in any month you drive on it "
@@ -2009,6 +2027,23 @@ def _plan(args):
         dest_cc = reverse_country(d_lat, d_lon)
     res["destination"]["country"] = dest_cc
     res["origin"]["short"], res["destination"]["short"] = o_short, d_short
+    # a crossing missing from tolls.json: told apart by the two ends' countries (the origin's looked up only when
+    # no listed crossing explains the trip), it gets the border allowance and a warning, its toll unpriced
+    a_cfg = costs()["arrival"]
+    border_min = float(a_cfg.get("border_wait_min", 30))
+    orig_cc = (o_info or {}).get("country") or _country_from_text(o_label)
+    listed = any(r.get("bridges") for r in routes)
+    if not orig_cc and dest_cc and not listed:
+        if _home_label(o_lat, o_lon):
+            orig_cc = (region.get("country") or REGION_COUNTRY) if region else None
+        else:
+            orig_cc = reverse_country(o_lat, o_lon)
+    res["origin"]["country"] = orig_cc
+    unlisted_border = bool(orig_cc and dest_cc and orig_cc != dest_cc and not listed)
+    if unlisted_border:
+        warnings.append("this drive crosses the Canada-US border at a crossing with no data here: its toll, if any, "
+                        "is not priced; bring a passport or NEXUS card and check CBSA and CBP wait times; a %d min "
+                        "allowance is included" % round(border_min))
 
     # ---- weather along the route, at the hour each part is driven
     fast = routes[0]
@@ -2117,12 +2152,13 @@ def _plan(args):
     for r in routes[:3]:
         energy[id(r)] = energy_for(r)
 
-    a_cfg = costs()["arrival"]
-    border_min = float(a_cfg.get("border_wait_min", 30))
-
     def border_s(r):
-        """Planning allowance for each border crossing on the route (CBSA / CBP wait)."""
-        return border_min * 60.0 * len((r or {}).get("bridges") or [])
+        """Planning allowance for each border crossing on the route (CBSA / CBP wait); one for a crossing
+        missing from tolls.json."""
+        n = len((r or {}).get("bridges") or [])
+        if not n and unlisted_border:
+            n = 1
+        return border_min * 60.0 * n
 
     def lot_arrival(r):
         a = r.get("arrive") or r.get("depart") or depart
@@ -2280,6 +2316,9 @@ def _plan(args):
             for b in (it["route"].get("bridges") or []) + ((back or {}).get("bridges") or []):
                 if b.get("cad") is None:
                     notes.append("%s charges in US dollars only (%s); not in the totals" % (b["name"], b["text"]))
+            if it["route"].get("toll_unpriced") or (back or {}).get("toll_unpriced"):
+                notes.append("%s has tolls this planner does not price (only the 407 ETR and the listed border "
+                             "crossings are); its total leaves them out" % it["letter"])
         cands = its
         if arrive_by:
             late = [it for it in its if it["route"]["leave_by"] < now]

@@ -158,6 +158,7 @@ class _Builder(object):
         self.elapsed = 0.0
         self.total_m = 0.0
         self.free_407_east = False
+        self.other_tolls = []   # toll pieces off the 407 (point lists): a listed crossing, or a toll not priced here
         self._open = None   # 407 stretch being built
 
     def add(self, pts, s, m, name="", etr=False, hwy=None):
@@ -243,6 +244,8 @@ def _valhalla_trip(trip):
             s = float(mn.get("time") or 0.0)
             m = float(mn.get("length") or 0.0) * 1000.0
             on = _on_stretch(is_etr, ramp, i)
+            if mn.get("toll") and not on:
+                b.other_tolls.append(pts)
             b.piece(pts, s, m, road_name(mn.get("street_names") or []), on, hwy=bool(mn.get("highway")) or None)
         b.close_stretch()
     summ = trip.get("summary") or {}
@@ -280,7 +283,7 @@ def _valhalla(o, d, depart, opts, warnings, arrive_at=None):
     routes = [_finish(*_valhalla_trip(t), engine="valhalla", depart=depart, opts=opts) for t in trips]
     fast, others = routes[0], routes[1:]
     tollfree = None
-    if fast["etr"] or (fast["_engine_toll"] and not fast["bridges"]):
+    if fast["etr"] or fast["toll_unpriced"]:
         border = bool(fast["bridges"])
         try:
             tf = _valhalla_fetch(o, d, True, 0, avoid_tolls_soft=border)
@@ -527,6 +530,7 @@ def _tomtom_route(rt):
                if (s.get("sectionType") or "").upper() == "MOTORWAY"]
     etr_ix = [(a, z) for a, z in tolls_ix if _near_407(pts[a:z + 1])]
     b = _Builder("tomtom")
+    b.other_tolls = [pts[a:z + 1] for a, z in tolls_ix if (a, z) not in etr_ix]
     # Pieces between every section boundary, so 407 and motorway flags are exact per piece.
     cuts = sorted(set([0, max(0, len(pts) - 1)] + [i for ab in etr_ix + mway_ix for i in ab]))
     share = (total_s / cum[-1]) if cum[-1] > 0 else 0.0
@@ -604,7 +608,7 @@ def _tomtom(o, d, depart, opts, warnings, arrive_at=None):
     routes = [_tt_finish(r, when, opts, live) for r in rts]
     fast, others = routes[0], routes[1:]
     tollfree = None
-    if fast["etr"] or (fast["_engine_toll"] and not fast["bridges"]):
+    if fast["etr"] or fast["toll_unpriced"]:
         try:
             tf = _tomtom_fetch(o, d, depart, opts, arrive_at, True)
             w2 = _tt_depart(tf[0], depart) if arrive_at is not None else depart
@@ -628,6 +632,7 @@ def _finish(b, extra, engine, depart, opts):
     hwy_m = sum(c["m"] for c in b.chunks if c.get("hwy"))
     urban_s = sum(c["s"] for c in b.chunks if c["urban"])
     tt = extra.get("tomtom")
+    bridges = tolls.bridges_on(poly_full) if len(poly_full) > 1 else []
     r = {"label": "", "engine": engine, "traffic": "live" if engine == "tomtom" else "free-flow",
          "km": round(total_m / 1000.0, 1), "base_s": round(base_s, 1), "chunks": b.chunks,
          "typical_s": 0.0, "plan_s": 0.0, "depart": depart, "arrive": None, "arrive_plan": None,
@@ -635,9 +640,10 @@ def _finish(b, extra, engine, depart, opts):
          "urban_share": round(urban_s / base_s, 3) if base_s else 0.0,
          "roads": _roads_summary(b.road_m, total_m), "etr": segs,
          "toll_407_transponder": 0.0, "toll_407_camera": 0.0,
-         "bridges": tolls.bridges_on(poly_full) if len(poly_full) > 1 else [],
-         "toll_other_cad": 0.0, "has_tolls": False, "delays": extra.get("delays") or [], "notes": [],
-         "factor_note": "", "_engine_toll": extra.get("engine_toll"), "_queried_depart": depart,
+         "bridges": bridges, "toll_other_cad": 0.0, "has_tolls": False, "toll_unpriced": False,
+         "delays": extra.get("delays") or [], "notes": [], "factor_note": "", "_engine_toll": extra.get("engine_toll"),
+         "_toll_other": any(p and not _near_407(p) and not _bridge_piece(p, bridges) for p in b.other_tolls),
+         "_queried_depart": depart,
          "_return": False, "_live_now": bool(extra.get("live_now"))}
     if tt:
         r["tomtom"] = tt
@@ -653,11 +659,31 @@ def _finish(b, extra, engine, depart, opts):
 
 
 BORDER_NOTE = "border crossing: passport or NEXUS; check CBSA and CBP wait times; allow 15 to 60 min"
+UNPRICED_NOTE = ("unpriced toll: the routing engine reports tolls on this route that are not priced here (only the "
+                 "407 ETR and the listed border crossings are); check the toll operator's rates")
+BRIDGE_PLAZA_M = 3000.0   # a short toll piece within this of a listed crossing is that crossing's plaza or approach
+
+
+def _bridge_piece(pts, bridges):
+    """True when a toll piece is a listed crossing on this route: the bridge point lies within its radius_m of
+    the piece, or the piece is short and lies wholly within BRIDGE_PLAZA_M of it (the plaza)."""
+    by_name = dict((br["name"], br) for br in tolls.data()["bridges"])
+    cum = dc.cum_dist(pts) if len(pts) >= 2 else [0.0]
+    for b in bridges or []:
+        br = by_name.get(b["name"])
+        if br is None:
+            continue
+        if len(pts) >= 2 and dc.project(pts, cum, br["lat"], br["lon"])[1] <= br["radius_m"]:
+            return True
+        if cum[-1] <= BRIDGE_PLAZA_M and all(th.haversine_m(p[0], p[1], br["lat"], br["lon"]) <= BRIDGE_PLAZA_M
+                                             for p in pts):
+            return True
+    return False
 
 
 def _bridge_totals(r):
     r["toll_other_cad"] = round(sum(b["cad"] for b in r["bridges"] if b.get("cad")), 2)
-    r["notes"] = [n for n in r["notes"] if not n.startswith("border toll: ") and not n.startswith("border crossing: ")]
+    r["notes"] = [n for n in r["notes"] if not n.startswith(("border toll: ", "border crossing: ", "unpriced toll: "))]
     for b in r["bridges"]:
         if b.get("cad") is None:
             r["notes"].append("border toll: %s %s (US dollars only, not in the CAD total)" % (b["name"], b["text"]))
@@ -665,7 +691,13 @@ def _bridge_totals(r):
             r["notes"].append("border toll: %s %s (charged in US dollars)" % (b["name"], b["text"]))
     if r["bridges"]:
         r["notes"].append(BORDER_NOTE)
-    r["has_tolls"] = bool(r["etr"]) or any((b.get("cad") or 0) > 0 or b.get("cad") is None for b in r["bridges"])
+    priced = bool(r["etr"]) or any((b.get("cad") or 0) > 0 or b.get("cad") is None for b in r["bridges"])
+    # a toll the engine reports off the 407 and away from every listed crossing (a US toll road, a crossing
+    # missing from tolls.json): has_tolls, so the toll-free route is kept, but its price is not known here
+    r["toll_unpriced"] = bool(r.get("_toll_other"))
+    if r["toll_unpriced"]:
+        r["notes"].append(UNPRICED_NOTE)
+    r["has_tolls"] = priced or r["toll_unpriced"]
 
 
 def _money_toll(r):

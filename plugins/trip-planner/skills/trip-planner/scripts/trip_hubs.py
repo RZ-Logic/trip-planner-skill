@@ -399,14 +399,19 @@ def _tz_rule(tzname, region):
     return None
 
 
+_ZONES = {}   # tzname -> ZoneInfo or None; without a tz database every failed lookup searches sys.path again
+
+
 def _zoneinfo(tzname):
     if not tzname:
         return None
-    try:
-        from zoneinfo import ZoneInfo
-        return ZoneInfo(tzname)
-    except Exception:  # noqa: BLE001
-        return None
+    if tzname not in _ZONES:
+        try:
+            from zoneinfo import ZoneInfo
+            _ZONES[tzname] = ZoneInfo(tzname)
+        except Exception:  # noqa: BLE001
+            _ZONES[tzname] = None
+    return _ZONES[tzname]
 
 
 def offset_at_utc(utc, tzname, region):

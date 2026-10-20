@@ -81,7 +81,8 @@ Addresses work like `trip_hubs.py` (the same `ADDRESS NOT PRECISE` rule). Pass `
    Toronto or parking costs over $15 for the stay (`--park-and-ride on` forces it anywhere). When no
    hub beats driving it says so. It is the `trip_hubs.py --access car` search: drive to a station or park and
    ride lot, park (GO station parking is free, first come), take transit. Each option is costed there
-   and back against driving plus parking.
+   and back against driving there and back (the drive back priced at its own 407 time band and direction)
+   plus parking.
 7. `CHARGING` (EV only): the starting charge ("assumed", with a WARNING, when `--soc` is not given:
    90%), then stops with network, power, charge from and to, minutes and estimated cost. It also
    gives the arrival charge, whether the drive home needs a top-up, and chargers near the

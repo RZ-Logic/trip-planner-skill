@@ -2619,7 +2619,20 @@ def _plan(args):
         en_r = energy[id(rec_r)]
         per_km = (en_r["cost"] / rec_r["km"]) if rec_r.get("km") else 0.14
         one_way = en_r["cost"] + route_tolls(rec_r, args.transponder)
-        drive_rt = (rec["money"] if args.round_trip else 2 * (rec["money"] - rec["fee"]) + rec["fee"]) + (best_cost or 0.0)
+        if args.round_trip:
+            drive_rt = rec["money"]
+        else:   # the drive back at its own 407 band and direction (a one-way bridge toll is not doubled), the
+                # same energy again, the account fee once
+            drive_rt = 2 * (rec["money"] - rec["fee"]) + rec["fee"]
+            try:
+                pr_back = dr.reverse_for_return(rec_r, lot_leave(rec_r)[1], opts)
+            except Exception as e:  # noqa: BLE001
+                warnings.append("park and ride: the drive back could not be priced (%s), so driving there and "
+                                "back is the drive there doubled" % e)
+            else:
+                fee = rec["fee"] or (fee_amt if count_fee and pr_back.get("etr") else 0.0)
+                drive_rt = (rec["money"] - rec["fee"]) + en_r["cost"] + route_tolls(pr_back, args.transponder) + fee
+        drive_rt += best_cost or 0.0
         ratio = (rec_r.get("plan_s") or 0) / float(rec_r.get("typical_s") or 1) if rec_r.get("typical_s") else 1.0
         ride_time = deadline - dt.timedelta(minutes=60) if arrive_by else rdep
         if hasattr(th, "plan_traffic_factor"):   # the same planning-allowance rows as this drive, times the weather

@@ -112,5 +112,44 @@ class RoundTripCheapestKept(unittest.TestCase):
         self.assertEqual(pr["options"][0]["rt_total"], 12.06)
 
 
+# ---------------------------------------------------------------------- drive-core-4
+
+class ParkRideDriveBaseline(unittest.TestCase):
+    """drive-core-4: on a one-way run the park-and-ride baseline doubled the drive there, so the drive back paid
+    the outbound 407 band and direction (and any one-way border toll twice). Milton to Markham at 07:30 with the
+    407 recommended: the camera toll is $46.30 at peak, but the car leaves the lot at 10:48 (off peak), where the
+    fake router prices the 407 back at $26.30 (40 km x 0.5 + 1.00 + 5.30)."""
+
+    ARGV = tdp.BASE + ["--dest", "%f,%f" % tdp.MARKHAM, "--depart", "2026-10-14 07:30", "--value-of-time", "200"]
+
+    def test_one_way_baseline_prices_the_drive_back_at_its_own_band(self):
+        with mock.patch.object(th, "plan", return_value={"access": "car", "pareto": [], "others": []}):
+            res, _ = tdp.run(*self.ARGV, parking_cost=22.0)
+        rec = next(r for r in res["routes"] if r["letter"] == res["recommended"])
+        self.assertEqual(rec["letter"], "A")                      # the 407 route
+        self.assertAlmostEqual(rec["tolls"], 46.30, places=2)     # outbound camera toll, 07:30 peak
+        want = (rec["money"] - rec["account_fee"]) + rec["energy"]["cost"] + 26.30 + rec["account_fee"] + 22.0
+        self.assertAlmostEqual(res["park_and_ride"]["drive_rt"], round(want, 2), places=2)   # 123.44, not 143.44
+        self.assertFalse(any("drive back could not be priced" in w for w in res["warnings"]))
+
+    def test_baseline_falls_back_and_warns_when_the_return_fails(self):
+        with mock.patch.object(th, "plan", return_value={"access": "car", "pareto": [], "others": []}),                 tdp.Env(parking_cost=22.0):
+            sys.modules["drive_route"].reverse_for_return = mock.Mock(side_effect=RuntimeError("no route back"))
+            res = dp.plan(tdp.args_for(*self.ARGV))
+        rec = next(r for r in res["routes"] if r["letter"] == res["recommended"])
+        old = 2 * (rec["money"] - rec["account_fee"]) + rec["account_fee"] + 22.0
+        self.assertAlmostEqual(res["park_and_ride"]["drive_rt"], round(old, 2), places=2)   # the doubling, 143.44
+        self.assertTrue(any("park and ride: the drive back could not be priced (no route back)" in w
+                            for w in res["warnings"]), res["warnings"])
+
+    def test_round_trip_baseline_is_unchanged(self):
+        calls = []
+        with mock.patch.object(th, "plan", return_value={"access": "car", "pareto": [], "others": []}):
+            res, _ = tdp.run(*(self.ARGV + ["--round-trip"]), parking_cost=22.0, calls=calls)
+        rec = next(r for r in res["routes"] if r["letter"] == res["recommended"])
+        self.assertAlmostEqual(res["park_and_ride"]["drive_rt"], round(rec["money"] + 22.0, 2), places=2)
+        self.assertEqual(sum(1 for c in calls if c[0] == "reverse"), len(res["routes"]))   # no extra return built
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -1889,24 +1889,58 @@ def load_feed(net, fid, label, path, day, t0, t_end, holidays=None, local_tz=Non
 
 # --------------------------------------------------------------------------- discovery (any city)
 
-def load_catalog(max_age_h=168.0):
+CATALOG_COLUMNS = ("id", "data_type", "urls.latest")   # what discover_feeds cannot do without
+
+
+def _catalog_problem(data):
+    """None when `data` is the MobilityDatabase CSV (its key columns and at least one row), else why not: a login,
+    proxy or error page sent with HTTP 200 is never cached as the catalog."""
+    try:
+        text = data.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        return "not UTF-8 text"
+    rows = csv.reader(io.StringIO(text))
+    header = next(rows, [])
+    missing = [c for c in CATALOG_COLUMNS if c not in header]
+    if missing:
+        return "not the feed catalog (no %s column)" % ", ".join(missing)
+    return None if next(rows, None) is not None else "the feed catalog has no rows"
+
+
+def _read_bytes(path):
+    try:
+        with open(path, "rb") as fh:
+            return fh.read()
+    except OSError:
+        return b""
+
+
+def load_catalog(max_age_h=168.0, refresh=False):
+    """The MobilityDatabase catalog rows, cached `max_age_h` hours (`refresh` downloads it anyway). Each URL is
+    tried in turn; a reply that is not the catalog counts as a failure, and the last good copy stands in."""
     path = os.path.join(cache_dir(), "mobilitydatabase_feeds.csv")
-    if not (os.path.exists(path) and time.time() - os.path.getmtime(path) < max_age_h * 3600):
-        err = None
+    good = os.path.exists(path) and _catalog_problem(_read_bytes(path)) is None
+    if not (good and not refresh and time.time() - os.path.getmtime(path) < max_age_h * 3600):
+        errors = []
         for url in MOBILITYDB_CSV_URLS:
             try:
                 log("downloading MobilityDatabase catalog: %s" % url)
                 data = http_get(url, timeout=120)
+                why = _catalog_problem(data)
+                if why:
+                    raise ValueError(why)
                 tmp = "%s.%d.part" % (path, os.getpid())
                 with open(tmp, "wb") as fh:
                     fh.write(data)
                 os.replace(tmp, path)
+                good = True
                 break
             except Exception as e:  # noqa: BLE001
-                err = e
+                errors.append("%s: %s" % (url, e))
         else:
-            if not os.path.exists(path):
-                raise SystemExit("could not download the MobilityDatabase catalog: %s" % err)
+            if not good:
+                raise SystemExit("could not download the MobilityDatabase catalog: %s" % "; ".join(errors))
+            log("warning: could not refresh the feed catalog (%s); using the cached copy" % "; ".join(errors))
     with open(path, encoding="utf-8-sig", newline="") as fh:
         return list(csv.DictReader(fh))
 
@@ -1938,11 +1972,11 @@ def bbox_iou(a, b):
     return inter / (area(a) + area(b) - inter)
 
 
-def discover_feeds(box, rows=None, places=None, countries=None):
+def discover_feeds(box, rows=None, places=None, countries=None, refresh=False):
     """GTFS feeds whose bounding box intersects `box`, smallest area first. Feeds with no bounding box
     in the catalog are matched by town name (`places`, lowercase), and only in the trip's `countries` (ISO codes)
     when the catalog names a country. Returns (feeds, too_big, far, duplicates)."""
-    rows = rows if rows is not None else load_catalog()
+    rows = rows if rows is not None else load_catalog(refresh=refresh)
     qc = box_center(box)
     places = {p for p in (places or ()) if len(p) >= 3}
     hits, too_big, far = [], [], []
@@ -3114,7 +3148,8 @@ def plan(args):
         o_info, d_info = place_info(o_lat, o_lon), place_info(d_lat, d_lon)
         places = o_info["names"] | d_info["names"]
         countries = {c for c in (o_info["country"], d_info["country"]) if c}
-        found, too_big, far, dups = discover_feeds(query_box, places=places, countries=countries)
+        found, too_big, far, dups = discover_feeds(query_box, places=places, countries=countries,
+                                                   refresh=args.refresh)
         states = {s for s in (o_info["state"], d_info["state"]) if s}
 
         def relevance(h):   # official, same country, same state/province, same town, near, small
@@ -3148,7 +3183,7 @@ def plan(args):
             info = place_info(lat, lon)
             try:
                 found = discover_feeds(box_around(lat, lon, reach), places=info["names"],
-                                       countries={info["country"]} - {None})[0]
+                                       countries={info["country"]} - {None}, refresh=args.refresh)[0]
             except (Exception, SystemExit) as e:  # noqa: BLE001  (the catalog loader exits when offline)
                 found = []
                 warnings.append("could not search the feed catalog near the %s: %s" % (end, e))
@@ -4794,7 +4829,7 @@ def discover(args):
     places = set().union(*(i["names"] for i in infos))
     countries = {i["country"] for i in infos if i["country"]}
     states = {i["state"] for i in infos if i["state"]}
-    found, too_big, far, dups = discover_feeds(box, places=places, countries=countries)
+    found, too_big, far, dups = discover_feeds(box, places=places, countries=countries, refresh=args.refresh)
     too_big.sort(key=lambda h: (not h["official"], h.get("country") not in countries,
                                 h.get("subdivision") not in states, h.get("center_km", 0), h["area"]))
     if args.json:
@@ -4916,7 +4951,7 @@ def build_parser():
     ap.add_argument("--top", type=int, default=8, help="how many options to print in total")
     ap.add_argument("--all", action="store_true", help="also list every hub with service")
     ap.add_argument("--json", action="store_true", help="machine-readable output")
-    ap.add_argument("--refresh", action="store_true", help="re-download feeds even if cached")
+    ap.add_argument("--refresh", action="store_true", help="re-download feeds and the feed catalog even if cached")
     ap.add_argument("--max-age-hours", type=float, default=72.0, help="re-download cached feeds older than this")
     ap.add_argument("--discover", action="store_true", help="list GTFS feeds covering the trip area, then exit")
     ap.add_argument("--allow-street-match", action="store_true", help="plan even when an address with a house "

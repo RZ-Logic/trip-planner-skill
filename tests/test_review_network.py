@@ -15,7 +15,9 @@ _atexit.register(_shutil.rmtree, _TMP, True)            # even when exported: se
 _os.environ["TRIP_PLANNER_CONFIG"] = _os.path.join(_TMP, "config", "car.json")
 _os.environ["TRIP_PLANNER_CACHE"] = _os.path.join(_TMP, "cache")
 _os.environ.setdefault("TRIP_PLANNER_QUIET", "1")   # no progress lines on stderr (TRIP_PLANNER_QUIET=0 shows them)
+import datetime
 import io
+import json
 import os
 import socket
 import ssl
@@ -65,6 +67,10 @@ def run_main(argv, main=None):
 
 def ok_network(hosts, timeout=6):
     return {h: "ok" for h in hosts}
+
+
+def dt_(hour):
+    return datetime.datetime(2026, 10, 21, hour, 0)
 
 
 TRIP = ["--dest", "43.5812,-79.6475", "--depart", "2026-10-21 08:00"]
@@ -396,6 +402,153 @@ class ManualMethodPointer(unittest.TestCase):
             line = next(x for x in fh if x.startswith("compatibility:"))
         self.assertIn("references/manual-method.md", line)
         self.assertNotIn("in this file", line)
+
+
+CATALOG_CSV = ("id,data_type,status,provider,name,location.country_code,location.subdivision_name,"
+               "location.municipality,location.bounding_box.minimum_latitude,location.bounding_box.maximum_latitude,"
+               "location.bounding_box.minimum_longitude,location.bounding_box.maximum_longitude,urls.latest,"
+               "urls.direct_download,urls.authentication_type,is_official\n"
+               "mdb-1,gtfs,active,Town Bus,,CA,ontario,Town,43.4,43.6,-79.9,-79.7,https://files.example/mdb-1.zip,,0,"
+               "True\n")   # the one-row catalog of test_v098_hubs.CatalogAndDiscovery
+CATALOG_CSV2 = CATALOG_CSV + ("mdb-2,gtfs,active,City Bus,,CA,ontario,City,43.4,43.6,-79.9,-79.7,"
+                              "https://files.example/mdb-2.zip,,0,True\n")
+
+
+class CatalogValidation(unittest.TestCase):
+    """hubs-pricing-io-9: a MobilityDatabase catalog download that is not the CSV (a proxy or login page sent with
+    HTTP 200) is never cached, the fallback URL is tried, a bad cached file counts as missing, the last good copy
+    is kept, and --refresh re-downloads the catalog."""
+
+    def setUp(self):
+        fresh_cache(self)
+        self.path = os.path.join(th.cache_dir(), "mobilitydatabase_feeds.csv")
+
+    def write(self, data, age_days=0):
+        with open(self.path, "wb") as fh:
+            fh.write(data)
+        t = time.time() - age_days * 86400
+        os.utime(self.path, (t, t))
+
+    def test_html_catalog_not_cached_and_fallback_tried(self):
+        first = th.MOBILITYDB_CSV_URLS[0]
+        get = lambda url, **k: b"<html>login</html>" if url == first else CATALOG_CSV.encode()  # noqa: E731
+        with mock.patch.object(th, "http_get", side_effect=get) as hg:
+            rows = th.load_catalog()
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(hg.call_count, 2)
+        with open(self.path, "rb") as fh:
+            self.assertTrue(fh.read().startswith(b"id,"))
+
+    def test_bad_cached_catalog_is_replaced(self):
+        self.write(b"<html>portal</html>")
+        with mock.patch.object(th, "http_get", return_value=CATALOG_CSV.encode()) as hg:
+            self.assertEqual(len(th.load_catalog()), 1)
+        self.assertEqual(hg.call_count, 1)
+
+    def test_header_only_catalog_is_rejected(self):
+        header = CATALOG_CSV.split("\n")[0] + "\n"
+        with mock.patch.object(th, "http_get", return_value=header.encode()):
+            with self.assertRaises(SystemExit):
+                th.load_catalog()
+        self.assertFalse(os.path.exists(self.path))
+
+    def test_refresh_redownloads(self):
+        self.write(CATALOG_CSV.encode())
+        with mock.patch.object(th, "http_get", return_value=CATALOG_CSV2.encode()) as hg:
+            self.assertEqual(len(th.load_catalog(refresh=True)), 2)
+        self.assertEqual(hg.call_count, 1)
+
+    def test_all_bad_keeps_previous_good_copy(self):
+        self.write(CATALOG_CSV.encode(), age_days=30)
+        with mock.patch.object(th, "http_get", return_value=b"<html>proxy</html>"):
+            self.assertEqual(len(th.load_catalog()), 1)
+        os.remove(self.path)
+        with mock.patch.object(th, "http_get", return_value=b"<html>proxy</html>"):
+            with self.assertRaises(SystemExit) as cm:
+                th.load_catalog()
+        for url in th.MOBILITYDB_CSV_URLS:
+            self.assertIn(url, str(cm.exception))
+
+    def test_plan_passes_refresh_to_catalog(self):
+        box = th.box_around(43.5, -79.8, 3000)
+        with mock.patch.object(th, "load_catalog", return_value=[]) as lc:
+            th.discover_feeds(box, refresh=True)
+        self.assertEqual(lc.call_args[1].get("refresh"), True)
+
+    def test_discover_command_passes_refresh(self):
+        info = {"names": set(), "country": "CA", "state": None}
+        with mock.patch.object(th, "load_catalog", return_value=[]) as lc,                 mock.patch.object(th, "reverse_place_info", return_value=info):
+            run_main(["--discover", "--origin", "43.5000,-79.8000", "--refresh"])
+        self.assertEqual(lc.call_args[1].get("refresh"), True)
+
+
+class JsonCache(unittest.TestCase):
+    """security-tos-5: drive_common.fetch_json never caches a reply that is not JSON (a proxy or login page sent
+    with HTTP 200), a file poisoned before the fix is ignored, and the fuel CSV is checked the same way."""
+    URL = "https://api.example.org/thing?x=1"
+
+    def setUp(self):
+        fresh_cache(self)
+        for p in (mock.patch("time.sleep"), mock.patch.dict(dc._LAST_CALL, clear=True)):
+            p.start()
+            self.addCleanup(p.stop)
+
+    def opener(self, *bodies):
+        return mock.patch.object(dc._OPENER, "open", side_effect=[FakeResp(b) for b in bodies])
+
+    def test_fetch_json_never_caches_html(self):
+        with self.opener(b"<html>proxy</html>", b'{"a": 1}') as op:
+            with self.assertRaises(dc.FetchError):
+                dc.fetch_json(self.URL, max_age_h=720)
+            self.assertEqual(dc.fetch_json(self.URL, max_age_h=720), {"a": 1})
+        self.assertEqual(op.call_count, 2)
+
+    def test_poisoned_cache_file_is_ignored(self):
+        with open(dc._cache_path(self.URL, None), "wb") as fh:
+            fh.write(b"<html>")
+        with self.opener(b'{"a": 1}') as op:
+            self.assertEqual(dc.fetch_json(self.URL, max_age_h=720), {"a": 1})
+        self.assertEqual(op.call_count, 1)
+
+    def test_own_validator_still_wins(self):
+        with self.opener(b'{"remark": "runtime error"}'):
+            with self.assertRaises(dc.FetchError):
+                dc.fetch_json(self.URL, max_age_h=720, validate=lambda b: "remark" if b"remark" in b else None)
+
+    def test_reverse_country_recovers_after_proxy_page(self):
+        with self.opener(b"<html>proxy</html>", b'{"address": {"country_code": "ca"}}'):
+            self.assertIsNone(dp.reverse_country(43.5, -79.8))
+            self.assertEqual(dp.reverse_country(43.5, -79.8), "CA")
+
+    def test_fuel_csv_html_not_cached(self):
+        from test_drive_plan import FUEL_CSV
+        with self.opener(b"<html>proxy</html>", FUEL_CSV.encode()):
+            self.assertTrue(dp.fuel_price(43.65, -79.4, "regular", [])["fallback"])
+            self.assertFalse(dp.fuel_price(43.65, -79.4, "regular", [])["fallback"])
+
+    def test_toronto_feed_html_not_cached(self):
+        legs = [("out", [(43.65, -79.40), (43.66, -79.39)], dt_(8), dt_(9))]
+        good = json.dumps({"Closure": []}).encode()
+        with self.opener(b"<html>proxy</html>", good) as op:
+            w = []
+            dp.toronto_incidents(legs, "America/Toronto", None, w)
+            self.assertTrue(w)
+            w = []
+            dp.toronto_incidents(legs, "America/Toronto", None, w)
+            self.assertEqual(w, [])
+        self.assertEqual(op.call_count, 2)
+
+    def test_nlr_html_not_cached(self):
+        import ev_charging as evc
+        with self.opener(b"<html>proxy</html>", b'{"fuel_stations": []}'):
+            self.assertIsNone(evc._nlr_call("nearest.json", {"latitude": 43.5}, "DEMO_KEY", []))
+            self.assertEqual(evc._nlr_call("nearest.json", {"latitude": 43.5}, "DEMO_KEY", []), [])
+
+    def test_nrcan_package_html_not_cached(self):
+        import vehicles
+        with mock.patch.object(vehicles, "_TRIED_DOWNLOAD", set()), self.opener(b"<html>proxy</html>"):
+            self.assertFalse(vehicles._download_year(2031, []))
+        self.assertFalse(os.path.exists(dc._cache_path(vehicles.PACKAGE_API, None)))
 
 
 if __name__ == "__main__":

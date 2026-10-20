@@ -228,7 +228,20 @@ def stale_notes(reset=True):
     return out
 
 
+def json_reply(body):
+    """`validate` for JSON services: None when the body parses, else why not (a login, proxy or error page sent
+    with HTTP 200 is never cached, and a copy cached before this check is skipped)."""
+    try:
+        json.loads(body)
+    except ValueError:
+        return "not JSON (%s...)" % body[:40].decode("utf-8", "replace").strip()
+    return None
+
+
 def fetch_json(url, **kw):
+    """fetch() parsed as JSON. Without a `validate` of the caller's own, a reply that is not JSON is rejected."""
+    if kw.get("validate") is None:
+        kw["validate"] = json_reply
     return json.loads(fetch(url, **kw))
 
 

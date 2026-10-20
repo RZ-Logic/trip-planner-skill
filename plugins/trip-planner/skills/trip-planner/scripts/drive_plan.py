@@ -303,6 +303,18 @@ def nearest_market(lat, lon):
     return best, th.haversine_m(lat, lon, best["lat"], best["lon"]) / 1000.0
 
 
+FUEL_CSV_MIN_COLUMNS = 19   # parse_fuel_csv falls back to column 18 (Fuel Type) when the header is renamed
+
+
+def _fuel_csv_check(body):
+    """fetch `validate` for the fuel price file: a proxy or login page sent with HTTP 200 is never cached."""
+    text = body.decode("utf-8-sig", "replace")
+    first = next(csv.reader(io.StringIO(text)), [])
+    if text.lstrip().startswith("<") or len(first) < FUEL_CSV_MIN_COLUMNS:
+        return "not the Ontario fuel price CSV"
+    return None
+
+
 def parse_fuel_csv(text, column, fuel_type):
     """Latest weekly price (c/L) in `column` for `fuel_type`: (c_per_l, date, column used). Rows with 0.0 in the
     market column fall back to the Southern, then the Ontario average of the same week."""
@@ -365,7 +377,7 @@ def fuel_price(lat, lon, fuel, warnings, override=None, province=None):
     fb = cfg["fallback"]
     got = None
     try:
-        body = dc.fetch(cfg["csv_url"], timeout=60, max_age_h=cfg["cache_h"])
+        body = dc.fetch(cfg["csv_url"], timeout=60, max_age_h=cfg["cache_h"], validate=_fuel_csv_check)
         got = parse_fuel_csv(body.decode("utf-8", "replace"), column, cfg["fuel_types"][fuel])
         if got is None:
             warnings.append("the Ontario fuel price file had no %s price; using the %s figure" % (fuel, fb["basis"]))
@@ -1456,6 +1468,15 @@ def fix_json_escapes(text):
     return re.sub(r"(\\+)(.?)", fix, text, flags=re.S)
 
 
+def _toronto_check(body):
+    """fetch `validate` for the Toronto restrictions feed (JSON once fix_json_escapes has run)."""
+    try:
+        json.loads(fix_json_escapes(body.decode("utf-8", "replace")))
+    except ValueError:
+        return "not JSON"
+    return None
+
+
 def _sched_ok(sched, start, end):
     """scheduleEveryday like '07:00-18:30': True when the drive window overlaps it (or it is unparseable)."""
     m = re.match(r"^\s*(\d{1,2}):(\d{2})\s*-\s*(\d{1,2}):(\d{2})\s*$", sched or "")
@@ -1582,7 +1603,8 @@ def toronto_incidents(legs, tzname, region, warnings):
     if not legs:
         return []
     try:
-        text = dc.fetch(cfg["toronto_url"], timeout=60, max_age_h=1.0, stale_max_h=24.0).decode("utf-8", "replace")
+        text = dc.fetch(cfg["toronto_url"], timeout=60, max_age_h=1.0, stale_max_h=24.0,
+                        validate=_toronto_check).decode("utf-8", "replace")
         items = json.loads(fix_json_escapes(text)).get("Closure") or []
     except Exception as e:  # noqa: BLE001
         warnings.append("Toronto road restrictions feed unavailable (%s)" % e)

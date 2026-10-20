@@ -412,7 +412,7 @@ class ThirdReviewRegressions(unittest.TestCase):
         local = {"https://files.example/tdg-1.zip": xb, "https://files.example/mdb-1077.zip": nl}
         rows = [row("tdg-1", "Cross-border Rail", "FR", (48.0, 53.0, 0.0, 10.0), "https://files.example/tdg-1.zip"),
                 row("mdb-1077", "OVapi", "NL", (50.0, 54.0, -2.0, 25.0), "https://files.example/mdb-1077.zip")]
-        self.patch("load_catalog", lambda max_age_h=168.0: rows)
+        self.patch("load_catalog", lambda max_age_h=168.0, refresh=False: rows)
         self.patch("fetch_url", lambda fid, url, *a, **k: local[url])
         self.patch("check_network", lambda hosts, timeout=6: {h: "ok" for h in hosts})
         self.patch("reverse_place_info", lambda lat, lon, w: {"names": set(), "country": "NL", "state": None})

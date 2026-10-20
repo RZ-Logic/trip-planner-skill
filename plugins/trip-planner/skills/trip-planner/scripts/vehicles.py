@@ -971,7 +971,7 @@ def _download_year(year, warnings):
     hdrs = download_headers(dc)
     try:
         pkg = json.loads(dc.fetch(PACKAGE_API, headers=hdrs, timeout=30, max_age_h=CACHE_HOURS,
-                                  allowed_hosts=DOWNLOAD_HOSTS))
+                                  allowed_hosts=DOWNLOAD_HOSTS, validate=dc.json_reply))
         res = (pkg.get("result") or {}).get("resources") or []
     except Exception as e:   # noqa: BLE001
         warnings.append(_download_warning("could not reach NRCan ratings on open.canada.ca for %d" % year, e))

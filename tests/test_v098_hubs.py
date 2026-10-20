@@ -512,10 +512,11 @@ class CatalogAndDiscovery(unittest.TestCase):
                "urls.authentication_type": "0", "is_official": "True",
                "location.bounding_box.minimum_latitude": "43.75", "location.bounding_box.maximum_latitude": "43.85",
                "location.bounding_box.minimum_longitude": "-79.85", "location.bounding_box.maximum_longitude": "-79.75"}
-        res = self.destination_trip(lambda max_age_h=168.0: [row])
+        res = self.destination_trip(lambda max_age_h=168.0, refresh=False: [row])
         self.assertIn("Dest Transit", [f["name"] for f in res["feeds"]])
         self.assertTrue(any("feeds found there: Dest Transit" in w for w in res["warnings"]), res["warnings"])
-        res = self.destination_trip(lambda max_age_h=168.0: (_ for _ in ()).throw(SystemExit("catalog offline")))
+        res = self.destination_trip(lambda max_age_h=168.0, refresh=False:
+                                    (_ for _ in ()).throw(SystemExit("catalog offline")))
         self.assertTrue(any("could not search the feed catalog near the destination: catalog offline" in w
                             for w in res["warnings"]), res["warnings"])
 

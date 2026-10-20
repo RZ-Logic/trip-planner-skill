@@ -163,7 +163,7 @@ with the Ontario region files; elsewhere every drive uses the congested rows. Pa
   may stand in, and a WARNING names the service and how old the reply is. Live traffic never comes from
   an old copy; weather may be up to 6 h old, Toronto road restrictions 24 h, Ontario 511 2 h and
   OpenStreetMap parking 30 days. Error replies sent as HTTP 200 (an Overpass timeout remark, an ArcGIS
-  error) are never cached.
+  error) are never cached, nor are replies that are not the expected JSON or CSV (a proxy or login page).
 
 Without a TomTom key, when no route uses the 407 but the trip crosses the GTHA at peak or in a
 getaway window, the planner makes one extra Valhalla request that forces the 407, so the trade-off

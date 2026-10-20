@@ -353,9 +353,10 @@ def _nlr_call(path, params, key, warnings, post=False, with_total=False):
     hdr = {"X-Api-Key": key}   # header, so the key never reaches a URL or a cache file name
     try:
         if post:
-            body = dc.fetch(url, data=params, headers=hdr, timeout=60, max_age_h=CACHE_H)
+            body = dc.fetch(url, data=params, headers=hdr, timeout=60, max_age_h=CACHE_H, validate=dc.json_reply)
         else:
-            body = dc.fetch(url + "?" + urllib.parse.urlencode(params), headers=hdr, timeout=60, max_age_h=CACHE_H)
+            body = dc.fetch(url + "?" + urllib.parse.urlencode(params), headers=hdr, timeout=60, max_age_h=CACHE_H,
+                            validate=dc.json_reply)
         d = json.loads(body)
         st = d.get("fuel_stations") or []
         if with_total:

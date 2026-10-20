@@ -800,5 +800,39 @@ class PreflightTlsAndOffline(unittest.TestCase):
         self.assertIn("--discover", code)
 
 
+DETROIT = ["--origin", "42.3314,-83.0458", "--dest", "42.4765,-83.1497", "--depart", "2026-10-21 08:00",
+           "--routing", "estimate"]
+DDOT = {"id": "mdb-1", "provider": "DDOT", "name": "", "urls": ["https://feeds.example.org/ddot.zip"],
+        "official": True, "area": 0.1, "country": "US", "subdivision": "Michigan",
+        "bbox": {"min_lat": 42.2, "max_lat": 42.6, "min_lon": -83.3, "max_lon": -82.9}}
+
+
+class BlockedFeedHostsAbroad(unittest.TestCase):
+    """Follow-up to hubs-pricing-io-1 and io-5: the NETWORK BLOCKED list for a trip whose ends are known to be in
+    another country than a region file's (the Ontario boxes hold Detroit) names only the hosts that trip uses."""
+
+    def test_trip_domains_takes_the_known_countries(self):
+        ns = th.argparse.Namespace(origin=DETROIT[1], dest=DETROIT[3], region="auto", routing="estimate",
+                                   crosscheck=False, feed=None, no_discover=False, radius_km=None, dest_walk_m=1500)
+        hosts, note = th.trip_domains(ns, th.load_regions(), countries=("US", "US"))
+        for h in ("www.viarail.ca", "gtfs.gis.flix.tech", "assets.metrolinx.com"):
+            self.assertNotIn(h, hosts)
+        self.assertIn("files.mobilitydatabase.org", hosts)
+        self.assertNotIn("region boxes decide", note)
+
+    def test_us_trip_with_a_blocked_discovered_feed_lists_no_ontario_host(self):
+        fresh_cache(self)
+        us = {"country": "US", "names": {"detroit"}, "state": "Michigan"}
+        with mock.patch.object(th, "check_network", side_effect=ok_network), \
+                mock.patch.object(th, "reverse_place_info", return_value=us), \
+                mock.patch.object(th, "discover_feeds", return_value=([dict(DDOT)], [], [], [])), \
+                mock.patch.object(th, "fetch_url", side_effect=PROXY_403):
+            code, _out = run_main(DETROIT)
+        self.assertTrue(code.startswith("NETWORK BLOCKED"), code)
+        self.assertIn("feeds.example.org", code)
+        for h in ("www.viarail.ca", "gtfs.gis.flix.tech", "region boxes decide"):
+            self.assertNotIn(h, code)
+
+
 if __name__ == "__main__":
     unittest.main()

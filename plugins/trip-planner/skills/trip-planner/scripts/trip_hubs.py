@@ -755,14 +755,15 @@ SHARED_HOSTS = {"www.arcgis.com", "drive.google.com", "drive.usercontent.google.
                 "raw.githubusercontent.com", "dropbox.com", "www.dropbox.com"}
 
 
-def _trip_feeds(args, regions):
+def _trip_feeds(args, regions, countries=(None, None)):
     """(region, feeds) for a trip with 'lat,lon' at both ends: the merged region file (None when no region file
-    holds it) and the feeds of it that plan() would load (not skipped, near the trip)."""
+    holds it) and the feeds of it that plan() would load (not skipped, near the trip). `countries` as for
+    regions_for_trip (what plan() learned from Nominatim)."""
     o_lat, o_lon = (float(x) for x in LATLON_RE.match(args.origin).groups())
     d_lat, d_lon = (float(x) for x in LATLON_RE.match(args.dest).groups())
     od, _r, _z, box, near = trip_geometry(o_lat, o_lon, d_lat, d_lon, args)
-    home, extra = regions_for_trip(regions, args.region, (o_lat, o_lon), (d_lat, d_lon), od)
-    region = merge_regions(home, extra, d_lat, d_lon, pricing_regions(regions, o_lat, o_lon))
+    home, extra = regions_for_trip(regions, args.region, (o_lat, o_lon), (d_lat, d_lon), od, countries=countries)
+    region = merge_regions(home, extra, d_lat, d_lon, pricing_regions(regions, o_lat, o_lon, countries[0]))
     feeds = [f for f in (region or {}).get("feeds", [])
              if not (f.get("skip") or (f.get("bbox") and not bbox_overlap(f["bbox"], box)))
              and not (f.get("coverage") and not coverage_near(f["coverage"], near))]
@@ -803,8 +804,9 @@ def offline_blocker(args, regions):
     return ""
 
 
-def trip_domains(args, regions):
-    """The hosts this particular trip needs, and a note when the list cannot be complete yet."""
+def trip_domains(args, regions, countries=(None, None)):
+    """The hosts this particular trip needs, and a note when the list cannot be complete yet. `countries`: the
+    ends' country codes when plan() already knows them (None when unknown)."""
     coords = LATLON_RE.match(args.origin or "") and LATLON_RE.match(args.dest or "")
     hosts, note, optional, border = [], "", [], False
     if not coords:
@@ -824,7 +826,7 @@ def trip_domains(args, regions):
     else:
         o_lat, o_lon = (float(x) for x in LATLON_RE.match(args.origin).groups())
         d_lat, d_lon = (float(x) for x in LATLON_RE.match(args.dest).groups())
-        region, trip_feeds = _trip_feeds(args, regions)
+        region, trip_feeds = _trip_feeds(args, regions, countries)
         if region:
             for f in trip_feeds:
                 fh = [urllib.parse.urlsplit(u).netloc for u in f.get("urls", [])]
@@ -839,8 +841,9 @@ def trip_domains(args, regions):
             note = ("With no region file, feeds come from the MobilityDatabase mirror (files.mobilitydatabase.org); "
                     "a few agencies may also need their own host.")
         # plan() asks Nominatim which country each end is in when a region file that names one holds it
-        border = args.region == "auto" and any(r.get("country") and r.get("bbox") and in_bbox(lat, lon, r["bbox"])
-                                               for r in regions for lat, lon in ((o_lat, o_lon), (d_lat, d_lon)))
+        border = args.region == "auto" and any(
+            not cc and any(r.get("country") and r.get("bbox") and in_bbox(lat, lon, r["bbox"]) for r in regions)
+            for (lat, lon), cc in zip(((o_lat, o_lon), (d_lat, d_lon)), countries))
     out = []
     for h in hosts:
         if h and h not in out:
@@ -3508,7 +3511,7 @@ def plan(args):
             raise SystemExit(tls_failed_message(sorted(set(tls))))
         if down:
             at = argparse.Namespace(**dict(vars(args), origin="%f,%f" % (o_lat, o_lon), dest="%f,%f" % (d_lat, d_lon)))
-            hosts, note = trip_domains(at, regions)
+            hosts, note = trip_domains(at, regions, countries=(o_cc, d_cc))
             hosts += [h for h in sorted(set(down)) if h not in hosts]
             if tls:
                 note = (note + " " if note else "") + "The certificate check failed for %s. %s" % (

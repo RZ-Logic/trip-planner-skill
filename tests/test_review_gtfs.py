@@ -310,5 +310,29 @@ class MalformedRowsTests(unittest.TestCase):
                         ("t2", "11:20", "11:20", "D", 3, 0, 0), ("t2", "11:30:00", "11:30:00", "C", 4, 0, 0)]))
 
 
+class ServiceWarningTests(unittest.TestCase):
+    """hubs-engine-9: after midnight, a feed whose trips from the night before are used is not called idle."""
+
+    TRIP = [("N", "WK", "n1", "night")]
+    TIMES = [("n1", "24:30:00", "24:30:00", "A", 1, 0, 0), ("n1", "25:15:00", "25:15:00", "C", 2, 0, 0)]
+    SAT = dt.date(2026, 10, 17)   # Mon-Fri feed: Friday's 24:30 trip runs at 00:30 on Saturday
+
+    def test_previous_evening_trips_after_midnight_clear_the_warning(self):
+        net, scan, idx = scan_for(feed(self.TRIP, self.TIMES), hms(0, 15), hms(4, 15), day=self.SAT)
+        self.assertEqual([(c[0], c[1]) for c in net.conns], [(hms(0, 30), hms(1, 15))])
+        self.assertFalse([w for w in net.warnings if "NO service" in w], net.warnings)
+        self.assertNotIn("test", net.idle_stops)
+
+    def test_expired_file_still_warns_when_only_last_night_runs(self):
+        p = feed(self.TRIP, self.TIMES, calendar=[("WK", 1, 1, 1, 1, 1, 0, 0, "20260101", "20261016")])
+        net, scan, idx = scan_for(p, hms(0, 15), hms(4, 15), day=self.SAT)
+        self.assertEqual([(c[0], c[1]) for c in net.conns], [(hms(0, 30), hms(1, 15))])
+        warn = [w for w in net.warnings if "NO service on 2026-10-17" in w]
+        self.assertEqual(len(warn), 1, net.warnings)
+        self.assertIn("night before", warn[0])
+        self.assertNotIn("trips are missing", warn[0])
+        self.assertNotIn("test", net.idle_stops)
+
+
 if __name__ == "__main__":
     unittest.main()

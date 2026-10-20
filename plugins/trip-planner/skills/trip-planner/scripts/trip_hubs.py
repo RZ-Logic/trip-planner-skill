@@ -1698,9 +1698,6 @@ def load_feed(net, fid, label, path, day, t0, t_end, holidays=None, local_tz=Non
             "service_to": span[1].isoformat() if span[1] else None,
             "active_services_on_date": len(act[day]), "hand_entered": provenance is not None}
     net.feeds.append(info)
-    if not act[day] and not substituted:
-        net.warnings.append("%s has NO service on %s (file covers %s to %s). Its trips are missing from this answer."
-                            % (label, day.isoformat(), info["service_from"], info["service_to"]))
     fares = load_fares(gz)
     if fares:
         net.fares[label] = fares
@@ -1750,8 +1747,6 @@ def load_feed(net, fid, label, path, day, t0, t_end, holidays=None, local_tz=Non
             continue
         stops_raw[col(r, idx, "stop_id")] = (safe_text(col(r, idx, "stop_name")), lat, lon, col(r, idx, "zone_id"))
     net.feed_stops[label] = [(v[1], v[2]) for v in stops_raw.values()]
-    if not act[day]:
-        net.idle_stops[label] = net.feed_stops[label]
 
     lo, hi = t0 - 3600, t_end + 3 * 3600
     bad = [0]   # malformed rows of active trips, counted on the main pass only
@@ -1826,6 +1821,7 @@ def load_feed(net, fid, label, path, day, t0, t_end, holidays=None, local_tz=Non
         return g
 
     wrapped_n = bad_order = 0
+    n0 = len(net.conns)
     for tid, trows in per_trip.items():
         trows.sort(key=lambda x: x[0])
         trows, wrapped = fix_time_order(trows)   # before interpolation, or untimed stops fill in backwards
@@ -1878,6 +1874,17 @@ def load_feed(net, fid, label, path, day, t0, t_end, holidays=None, local_tz=Non
                         net.request[(ti, k)] = flag
                     board = r0[4] and dep <= t_end   # ride on past the window end, but board only inside it
                     net.conns.append((dep, r1[1] + o + shift + fx, s0, s1, ti, board, r1[5], k))
+    # no service today, but last night's trips can still run after midnight: warn only when nothing of the feed
+    # is in the window, or when the file does not cover the day at all
+    added = len(net.conns) - n0
+    covered = bool(span[0] and span[0] <= day <= span[1])
+    if not act[day] and not substituted and (not added or not covered):
+        net.warnings.append("%s has NO service on %s (file covers %s to %s). %s" % (
+            label, day.isoformat(), info["service_from"], info["service_to"],
+            "Its trips are missing from this answer." if not added
+            else "Only its trips from the night before, running after midnight, are used."))
+    if not act[day] and not added:
+        net.idle_stops[label] = net.feed_stops[label]
     if wrapped_n:
         net.warnings.append("%s: %d trips had times that ran backwards past midnight (00:06 written for 24:06) and "
                             "were read as after midnight; check them with the operator." % (label, wrapped_n))

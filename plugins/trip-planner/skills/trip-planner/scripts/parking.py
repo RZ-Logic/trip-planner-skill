@@ -8,7 +8,7 @@ Overpass. Every lot is priced for the actual stay with price_rule() on a normali
    period, each counting toward the day it starts on), "daily_max": $ per calendar day,
    "min_charge": $, "flat": $ per entry, "free_first_min": n, "tiers": [{"up_to_min": n, "cost": $}, {"cost": $}],
    "paid_days": [0-6], "paid_hours": ["09:00", "18:00"], "holidays_free": bool, "season": ["MM-DD", "MM-DD"],
-   "off_season": "free"|"closed", "max_stay_min": n, "evening_flat": $, "evening_from": "18:00"}
+   "off_season": "free"|"closed"|"unknown", "max_stay_min": n, "evening_flat": $, "evening_from": "18:00"}
 
 Extensions used by the open-data parsers (all optional):
   "periods": [{"days": [0-6], "hours": [start, end], "holidays": bool, "hourly", "per_min", "max", "flat",
@@ -24,7 +24,10 @@ Extensions used by the open-data parsers (all optional):
   "season" ends may be named anchors that move by year: "victoria_day", "fri_before_victoria_day",
   "labour_day", "thanksgiving", "civic_holiday", "easter_monday", "good_friday"; "season_year": 2026 (the
   season dates are that year's dates; other years get a warning note); "off_season_flat": $ (a different
-  price off season); "off_season_max_stay_min": n (a time limit that still applies off season);
+  price off season); "off_season_rule": {...} (a full rule priced instead when no day of the stay is in
+  season); "off_season": "unknown" (no published price off season: the lot is price unknown with a check line,
+  and the rule's max stay does not bind); "off_season_max_stay_min": n (a time limit that still applies off
+  season);
   "rate_year": 2026 (rates published for that year; later years get a note); "tax": 0.13 (published rates
   exclude HST); "per_person": {"adult", "child", "senior"} or true (admission per person: the cost is one
   adult unless the party is known); "per_passenger": $ (vehicle price covers the driver, plus $ for each
@@ -1083,6 +1086,10 @@ def describe_rule(rule, year=None):
         extra.append("paid %s" % _season_text(rule["season"], year))
         if rule.get("off_season_flat") is not None:
             extra.append("%s off season" % dc.money(rule["off_season_flat"]))
+        elif rule.get("off_season_rule"):
+            extra.append("off season %s" % describe_rule(rule["off_season_rule"], year))
+        elif rule.get("off_season") == "unknown":
+            extra.append("price not published off season")
     return s + ("; " + ", ".join(extra) if extra else "")
 
 
@@ -1195,6 +1202,12 @@ def _price_core(rule, arrive, stay_min, holidays=None):
                 lim = "; %s max off season" % dur_text(oms)
                 if stay_min > oms:
                     fits = False
+            if rule.get("off_season") == "unknown":      # no published price off season: unknown, not free
+                return None, "price not published off season (paid %s)%s" % (stext, lim), fits
+            osr = rule.get("off_season_rule")
+            if isinstance(osr, dict):                   # a different published rate off season
+                c, b, f = _price_core(osr, arrive, stay_min, holidays)
+                return c, "off season: %s%s" % (b, lim), fits and f
             if rule.get("off_season_flat") is not None:
                 return float(rule["off_season_flat"]), "%s off season (the %s rate does not apply)%s" % (
                     dc.money(rule["off_season_flat"]), stext, lim), fits

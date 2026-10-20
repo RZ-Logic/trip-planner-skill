@@ -65,6 +65,50 @@ class CuratedData(unittest.TestCase):
         self.assertEqual(lot["unfit_reason"], "no parking 00:00 to 06:00 during your stay")
         self.assertTrue(curated_lot("niagara-falls", "White Water Walk lot", dt.datetime(2026, 7, 15, 10), 120)["fits_stay"])
 
+    def test_cobourg_waterfront_low_season(self):   # data-integrity-1
+        # low season Sep 15 to May 14: first 3 h free, then $2.50/h, $20/day (2026 brochure), not free
+        n = "Division Street lot (waterfront)"
+        self.assertEqual(curated_lot("cobourg", n, dt.datetime(2026, 10, 24, 10), 480)["cost"], 12.5)
+        self.assertEqual(curated_lot("cobourg", n, dt.datetime(2026, 10, 24, 10), 180)["cost"], 0.0)
+        self.assertEqual(curated_lot("cobourg", n, dt.datetime(2027, 1, 16, 9), 720)["cost"], 20.0)
+        self.assertEqual(curated_lot("cobourg", n, dt.datetime(2026, 7, 18, 10), 480)["cost"], 40.0)   # high season
+        for n in ("Centennial Pool lot (waterfront)", "Charles Street lot (waterfront)"):
+            self.assertEqual(curated_lot("cobourg", n, dt.datetime(2026, 10, 24, 10), 480)["cost"], 12.5, n)
+
+    def test_spencer_gorge_outside_reservation(self):   # data-integrity-4, parking-8
+        # the reservation price and the 4 h block apply Sep 26 to Nov 8 only; the fee outside it is not published
+        n = "Webster's Falls lot (28 Fallsview Rd)"
+        lot = curated_lot("spencer-gorge", n, dt.datetime(2027, 7, 10, 10), 120)
+        self.assertIsNone(lot["cost"])
+        self.assertTrue(lot["fits_stay"])
+        check = pk._public(lot)["check"]
+        self.assertIsNotNone(check)
+        self.assertEqual(check["why"], "price unknown")
+        lot = curated_lot("spencer-gorge", n, dt.datetime(2027, 7, 10, 10), 300)
+        self.assertTrue(lot["fits_stay"])
+        self.assertIsNone(lot["unfit_reason"])
+        lot = curated_lot("spencer-gorge", n, dt.datetime(2026, 10, 17, 11), 240)
+        self.assertEqual((lot["cost"], lot["fits_stay"]), (32.0, True))
+        self.assertIsNone(curated_lot("spencer-gorge", "Tew Falls / Dundas Peak lot (590 Harvest Rd)",
+                                      dt.datetime(2027, 7, 10, 10), 120)["cost"])
+
+
+class PriceRule(unittest.TestCase):
+    def test_off_season_rule(self):   # data-integrity-1
+        rule = {"hourly": 5.0, "daily_max": 40.0, "season": ["05-15", "09-14"],
+                "off_season_rule": {"hourly": 2.5, "free_first_min": 180, "daily_max": 20.0}}
+        cost, basis, fits = pk.price_rule(rule, dt.datetime(2026, 10, 24, 10), 480)
+        self.assertEqual((cost, fits), (12.5, True))
+        self.assertTrue(basis.startswith("off season: "), basis)
+        self.assertIn("off season $2.50/h", pk.describe_rule(rule, 2026))
+
+    def test_off_season_unknown(self):   # data-integrity-4
+        rule = {"tiers": [{"up_to_min": 120, "cost": 21.0}], "max_stay_min": 120, "season": ["09-26", "11-08"],
+                "off_season": "unknown"}
+        self.assertEqual(pk.price_rule(rule, dt.datetime(2026, 7, 10, 10), 300)[0::2], (None, True))
+        self.assertEqual(pk.price_rule(rule, dt.datetime(2026, 10, 10, 10), 120)[0::2], (21.0, True))
+        self.assertIn("price not published off season", pk.describe_rule(rule, 2026))
+
 
 if __name__ == "__main__":
     unittest.main()

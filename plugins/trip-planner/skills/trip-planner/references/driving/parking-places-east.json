@@ -163,20 +163,20 @@
   "source": "https://media-001-ca.cdn.govstack.com/cobourg-008-ca/media/hitb4zod/municipalparkingbrochure2026_4fold_85x14_updated28jul2026.pdf", "source_date": "2026 brochure (updated 2026-07-28)", "confidence": "curated",
   "rules": [
    "Waterfront lots and streets, high season May 15 to Sep 14: $5/h or $40/day Daily Waterfront Pass; no free parking.",
-   "Waterfront low season Sep 15 to May 14: first 3 h free, then $2.50/h, $20/day (the waterfront lot rules below price only the high season).",
+   "Waterfront low season Sep 15 to May 14: first 3 h free, then $2.50/h, $20/day.",
    "Downtown lots and streets all year: first 3 h free, then $2.50/h. Downtown lots are a 3 to 6 min walk from Victoria Beach.",
    "Enforced 24/7; overnight 23:00 to 07:00 needs a $10 overnight permit (lots only). Pay by machine, meter or HONK. The McGill St lot counts as waterfront in high season."],
   "reservation": {"required": false, "text": "", "url": "https://parking.cobourg.ca", "lead_days": 0},
   "lots": [
    {"name": "Centennial Pool lot (waterfront)", "lat": 43.958504, "lon": -78.162865, "kind": "lot",
-    "rule": {"hourly": 5.0, "daily_max": 40.0, "season": ["05-15", "09-14"], "off_season": "free"},
+    "rule": {"hourly": 5.0, "daily_max": 40.0, "season": ["05-15", "09-14"], "off_season_rule": {"hourly": 2.5, "free_first_min": 180, "daily_max": 20.0}},
     "capacity": null, "notes": "Next to Victoria Park and the beach. High season priced; low season first 3 h free then $2.50/h, $20/day. OSM w/1071793560.", "source": "https://media-001-ca.cdn.govstack.com/cobourg-008-ca/media/hitb4zod/municipalparkingbrochure2026_4fold_85x14_updated28jul2026.pdf"},
    {"name": "Charles Street lot (waterfront)", "lat": 43.958308, "lon": -78.163938, "kind": "lot",
-    "rule": {"hourly": 5.0, "daily_max": 40.0, "season": ["05-15", "09-14"], "off_season": "free"},
+    "rule": {"hourly": 5.0, "daily_max": 40.0, "season": ["05-15", "09-14"], "off_season_rule": {"hourly": 2.5, "free_first_min": 180, "daily_max": 20.0}},
     "capacity": null, "notes": "High season priced; low season first 3 h free then $2.50/h. A 2025 report said Charles St was resident-only; the 2026 brochure maps it as a waterfront lot. OSM w/1459433076.", "source": "https://media-001-ca.cdn.govstack.com/cobourg-008-ca/media/hitb4zod/municipalparkingbrochure2026_4fold_85x14_updated28jul2026.pdf"},
    {"name": "Division Street lot (waterfront)", "lat": 43.957621, "lon": -78.164917, "kind": "lot",
-    "rule": {"hourly": 5.0, "daily_max": 40.0, "season": ["05-15", "09-14"], "off_season": "free"},
-    "capacity": null, "notes": "South end of Division St by the beach and harbour. High season priced. OSM w/173699953.", "source": "https://media-001-ca.cdn.govstack.com/cobourg-008-ca/media/hitb4zod/municipalparkingbrochure2026_4fold_85x14_updated28jul2026.pdf"},
+    "rule": {"hourly": 5.0, "daily_max": 40.0, "season": ["05-15", "09-14"], "off_season_rule": {"hourly": 2.5, "free_first_min": 180, "daily_max": 20.0}},
+    "capacity": null, "notes": "South end of Division St by the beach and harbour. High season priced; low season first 3 h free then $2.50/h, $20/day. OSM w/173699953.", "source": "https://media-001-ca.cdn.govstack.com/cobourg-008-ca/media/hitb4zod/municipalparkingbrochure2026_4fold_85x14_updated28jul2026.pdf"},
    {"name": "Covert Street lot (downtown)", "lat": 43.960403, "lon": -78.167124, "kind": "lot",
     "rule": {"hourly": 2.5, "free_first_min": 180},
     "capacity": null, "notes": "Downtown lot, all year: first 3 h free then $2.50/h (OSM note still says 2 h free). About 550 m to the beach. OSM w/598649345.", "source": "https://media-001-ca.cdn.govstack.com/cobourg-008-ca/media/hitb4zod/municipalparkingbrochure2026_4fold_85x14_updated28jul2026.pdf"}]},
@@ -421,9 +421,9 @@
   "reservation": {"required": true, "text": "Required Sep 26 to Nov 8, 2026: book online 1 to 9 days ahead, by midnight the day before; no same-day, walk-up or drive-up entry. Reservations are location specific.", "url": "https://conservationhamilton.ca/spencer-gorge-reservations/", "lead_days": 0, "min_lead_days": 1, "max_lead_days": 9, "window": ["09-26", "11-08"], "year": 2026},
   "lots": [
    {"name": "Tew Falls / Dundas Peak lot (590 Harvest Rd)", "lat": 43.28173, "lon": -79.979357, "kind": "park",
-    "rule": {"tiers": [{"up_to_min": 120, "cost": 21.0}, {"up_to_min": 240, "cost": 32.0}], "max_stay_min": 240, "per_passenger": 5.5},
+    "rule": {"tiers": [{"up_to_min": 120, "cost": 21.0}, {"up_to_min": 240, "cost": 32.0}], "max_stay_min": 240, "per_passenger": 5.5, "season": ["09-26", "11-08"], "season_year": 2026, "off_season": "unknown"},
     "capacity": null, "notes": "Sep 26 to Nov 8: $11 vehicle + $10 reservation (+$11 for the 4 h block), + $5.50 per passenger. Outside that period no reservation fee; likely $11 + $5.50 per passenger (not stated by HCA). OSM w/391692721.", "source": "https://conservationhamilton.ca/spencer-gorge-reservations/"},
    {"name": "Webster's Falls lot (28 Fallsview Rd)", "lat": 43.276847, "lon": -79.97991, "kind": "park",
-    "rule": {"tiers": [{"up_to_min": 120, "cost": 21.0}, {"up_to_min": 240, "cost": 32.0}], "max_stay_min": 240, "per_passenger": 5.5},
+    "rule": {"tiers": [{"up_to_min": 120, "cost": 21.0}, {"up_to_min": 240, "cost": 32.0}], "max_stay_min": 240, "per_passenger": 5.5, "season": ["09-26", "11-08"], "season_year": 2026, "off_season": "unknown"},
     "capacity": null, "notes": "Sep 26 to Nov 8: $11 vehicle + $10 reservation (+$11 for the 4 h block), + $5.50 per passenger; 2 accessible spaces. Outside that period no reservation fee; likely $11 + $5.50 per passenger (not stated by HCA). OSM w/180201523.", "source": "https://conservationhamilton.ca/spencer-gorge-reservations/"}]}
  ]}

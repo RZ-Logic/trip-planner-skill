@@ -3248,7 +3248,7 @@ def render(res):
         n_st = len(ch.get("stops") or [])
         if ch.get("needed") and ch.get("feasible") is False:
             first = ("%d stop(s) planned, but no reachable compatible fast charger was found for the rest of the trip "
-                     "(see WARNINGS): leave with more charge or plan Level 2 stops" % n_st if n_st else
+                     "(see WARNINGS): plan Level 2 stops" % n_st if n_st else
                      "charging is needed, but no reachable compatible fast charger was found (see WARNINGS): leave "
                      "with more charge or plan Level 2 stops")
         elif ch.get("needed"):

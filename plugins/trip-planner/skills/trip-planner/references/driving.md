@@ -217,8 +217,10 @@ priced.
   AAA figures).
 - **Charge time:** from the car's power curve factor.
 - **Stop choice:** charge only enough to reach the next good charger or the destination with a 15%
-  reserve (20% below 0 C), never above 80%. A charger reached within 3 points of the charge limit is
-  never a stop.
+  reserve (20% below 0 C), never above 80% when a plan exists within it. When a gap after a stop is
+  too long for 80%, stops charge up to 95% where the next leg needs it, with a note (charging above
+  80% is slower than the times shown); when even 95% cannot bridge it, the warning says to use Level 2
+  on the way. A charger reached within 3 points of the charge limit is never a stop.
 - **Prices:** a station's listed price wins. Otherwise the network table is used (Ivy $0.69/kWh,
   Tesla, Electrify Canada, FLO, Petro-Canada per minute, and others; dated, mostly medium
   confidence), marked as an estimate. US networks (Electrify America, EVgo) get the generic

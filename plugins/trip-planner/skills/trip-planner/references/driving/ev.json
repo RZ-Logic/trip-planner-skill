@@ -118,6 +118,8 @@
   "plug_in_min": 5,
   "reserve": {"default": 0.15, "below_0C": 0.20, "single_stall": 0.20},
   "max_soc": 0.80,
+  "max_soc_stretch": 0.95,
+  "max_soc_stretch_note": "policy value, not a measured figure: when no plan stays within max_soc because a gap after a stop is too long, the stops may charge up to this, each only as far as its next leg needs; charge times above 80% are understated (charge time uses the 10-80% factor, no taper)",
   "good_charger": {"min_kw": 100, "min_ports": 2},
   "default_hwy_share": 0.8,
   "default_speed_kmh": 105,

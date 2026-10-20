@@ -220,5 +220,70 @@ class ReturnRenderTest(unittest.TestCase):
         self.assertGreater(checked, 0)
 
 
+# --------------------------------------------------------------------------- Batch 3
+
+class StretchChargeTest(unittest.TestCase):
+    """ev-vehicles-5: a gap after a stop that 80% cannot bridge is planned with stops charging above 80% (up to
+    ev.json max_soc_stretch) and a note; when even that fails the advice is Level 2, since more charge at departure
+    would not help after a stop."""
+
+    def plan(self, kms, temp=15.0, soc=0.9):
+        return tev.plan_st([tev.nst(k) for k in kms], 400, ev.car_profile("generic"), soc, temp=temp, near=[])
+
+    def test_gap_after_a_stop_is_bridged_above_80(self):
+        r, w = self.plan([100, 240, 370], temp=-15)
+        self.assertTrue(r["feasible"], w)
+        self.assertGreater(r["stops"][0]["depart_soc"], 0.8)
+        self.assertLessEqual(r["stops"][0]["depart_soc"], 0.95 + 1e-9)
+        self.assertTrue(any("charge limit" in n and "slower" in n for n in r["notes"]), r["notes"])
+        self.assertFalse(any("leave with more charge" in x for x in w), w)
+
+    def test_mild_gap_needs_only_a_little_more(self):
+        r, w = self.plan([100, 280], temp=5)
+        self.assertTrue(r["feasible"], w)
+        self.assertGreater(r["stops"][0]["depart_soc"], 0.80)
+        self.assertLess(r["stops"][0]["depart_soc"], 0.85)
+
+    def test_unbridgeable_gap_after_a_stop_does_not_say_leave_with_more(self):
+        r, w = self.plan([100], temp=5)
+        self.assertFalse(r["feasible"])
+        self.assertTrue(any("Level 2" in x for x in w), w)
+        self.assertFalse(any("leave with more charge" in x for x in w), w)
+
+    def test_gap_at_the_origin_still_says_leave_with_more(self):
+        r, w = self.plan([])
+        self.assertFalse(r["feasible"])
+        self.assertTrue(any("leave with more charge" in x for x in w), w)
+
+    def test_feasible_80_plan_is_unchanged(self):
+        r, w = self.plan([100, 200, 300])
+        self.assertTrue(r["feasible"], w)
+        self.assertTrue(all(s["depart_soc"] <= 0.8 + 1e-9 for s in r["stops"]), r["stops"])
+        self.assertFalse(any("charge limit" in n for n in r["notes"]), r["notes"])
+
+    def test_charging_header_after_a_stop_says_level_2(self):
+        o, d = InfeasibleRouteTest.O, InfeasibleRouteTest.D
+
+        def get_routes(o_, d_, depart, opts, warnings, arrive_at=None):
+            return [tdp.fake_retime(tdp.make_route("fastest", o, d, 400.0, 4 * 3600), depart, opts)]
+
+        def text_for(fracs):
+            with tdp.Env(), mock.patch.dict(sys.modules, {"ev_charging": real_ev(fracs)}):
+                sys.modules["drive_route"].get_routes = get_routes
+                res = dp.plan(tdp.args_for("--origin", "%f,%f" % o, "--dest", "%f,%f" % d, "--weather", "clear",
+                                           "--incidents", "off", "--depart", "2026-10-16 08:00", "--vehicle", "ev",
+                                           "--ev-model", "generic", "--soc", "90", "--park-and-ride", "off"))
+                return res, dp.render(res)
+        res, text = text_for(lambda km: [100 / 400.])
+        head = [x for x in text.splitlines() if x.startswith("CHARGING")][0]
+        self.assertFalse(res["charging"]["feasible"])
+        self.assertIn("1 stop(s) planned", head)
+        self.assertIn("plan Level 2 stops", head)
+        self.assertNotIn("leave with more charge", head)
+        res, text = text_for(lambda km: [])   # no stop: more charge at departure is still the first remedy
+        head = [x for x in text.splitlines() if x.startswith("CHARGING")][0]
+        self.assertIn("leave with more charge", head)
+
+
 if __name__ == "__main__":
     unittest.main()

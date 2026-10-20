@@ -602,6 +602,10 @@ def plan_charging(poly, route_km, depart, car, soc_start, temp_c, warnings, opts
     stops, infeasible, source, cands = [], False, "no charger search needed", []
     est_nets = []   # ev.json network entries used for estimated prices, in stop order
     pos, soc, detour_kwh = 0.0, soc_start, 0.0
+    lw = []   # the stop loop's warnings, kept back until the retry above the charge limit is decided
+
+    def remedy():   # after a stop, more charge at departure does not help
+        return "use Level 2 on the way" if stops else "leave with more charge, or use Level 2 on the way"
     if soc_start - reserve < 0 and not inner:
         warnings.append("Starting charge %.0f%% is below the %.0f%% reserve" % (soc_start * 100, reserve * 100))
 
@@ -625,10 +629,12 @@ def plan_charging(poly, route_km, depart, car, soc_start, temp_c, warnings, opts
             notes.append("You start below the %.0f%% reserve: charge at the first fast charger you reach"
                          % (reserve * 100))
     elif direct_soc < reserve - 1e-9 and poly and len(poly) >= 2:
+        # the stops' charge limit: max_soc, or the stretch limit on the retry below when max_soc finds no plan
+        cap = opts.get("_stop_cap") or max_soc
         while len(stops) < 12:
             if soc - (route_km - pos) * per_km >= reserve - 1e-9:
                 break
-            pick = _pick(cands, pos, soc, per_km, reserve, max_soc, route_km, m)
+            pick = _pick(cands, pos, soc, per_km, reserve, cap, route_km, m)
             if pick is None and not stops and soc_start < reserve - 1e-9:
                 # already below the reserve: the nearest charger the car can still reach is the right answer
                 pick = _pick_low(cands, pos, soc, per_km, reserve, soc_start)
@@ -639,21 +645,21 @@ def plan_charging(poly, route_km, depart, car, soc_start, temp_c, warnings, opts
                 infeasible = True
                 gap_from = pos
                 nxt = [c for c in cands if c["km"] > pos + 1]
-                warnings.append("No reachable compatible fast charger after km %.0f (range about %.0f km at %.0f%% with "
-                                "%.0f%% reserve)%s; leave with more charge, or use Level 2 on the way"
-                                % (gap_from, max(0.0, (soc - reserve) / per_km), soc * 100, reserve * 100,
-                                   ", next one at km %.0f" % nxt[0]["km"] if nxt else ""))
+                lw.append("No reachable compatible fast charger after km %.0f (range about %.0f km at %.0f%% with "
+                          "%.0f%% reserve)%s; %s" % (gap_from, max(0.0, (soc - reserve) / per_km), soc * 100,
+                                                     reserve * 100, ", next one at km %.0f" % nxt[0]["km"] if nxt
+                                                     else "", remedy()))
                 break
             c = pick
             half = c["detour_km"] / 2.0
             arr = soc - (c["km"] - pos + half) * per_km
-            target = _target(c, cands, per_km, reserve, max_soc, route_km, m)
+            target = _target(c, cands, per_km, reserve, cap, route_km, m)
             if target - arr < MIN_ADD:   # a stop that adds nothing: the next leg cannot be done from here
-                target = max_soc
+                target = cap
             if target - arr < MIN_TOPUP:
                 infeasible = True
-                warnings.append("No compatible fast charger far enough ahead after km %.0f to finish the trip; "
-                                "leave with more charge, or use Level 2 on the way" % pos)
+                lw.append("No compatible fast charger far enough ahead after km %.0f to finish the trip; %s"
+                          % (pos, remedy()))
                 break
             kwh = (target - arr) * usable
             kw = min(c["max_kw"] or m["assumed_kw_when_missing"], car["max_dc_kw"])
@@ -670,6 +676,23 @@ def plan_charging(poly, route_km, depart, car, soc_start, temp_c, warnings, opts
             detour_kwh += c["detour_km"] * cons / 100.0
             soc = target - half * per_km
             pos = c["km"]
+
+    stretch = m.get("max_soc_stretch", 0.95)
+    if infeasible and stops and not data_failed and not opts.get("_stop_cap") and max_soc < stretch - 1e-9:
+        # a gap after a stop that max_soc cannot bridge: plan again letting the stops charge up to the stretch
+        # limit (each only as far as its next leg needs), on the same stations
+        w2 = []
+        r2 = plan_charging(poly, route_km, depart, car, soc_start, temp_c, w2,
+                           dict(opts, _stop_cap=stretch, stations=stations, stations_source=source))
+        if r2["feasible"]:
+            warnings.extend(x for x in w2 if x not in warnings)
+            hi = [s for s in r2["stops"] if s["depart_soc"] > max_soc + 1e-9]
+            r2["notes"].append("No plan stays within the %.0f%% charge limit: charge to %s (charging above %.0f%% is "
+                               "slower than the times shown)"
+                               % (max_soc * 100, " and ".join("%.0f%% at %s" % (s["depart_soc"] * 100, s["name"])
+                                                              for s in hi), max_soc * 100))
+            return r2
+    warnings.extend(lw)
 
     arrive_soc = soc - (route_km - pos) * per_km
     if arrive_soc < reserve - 0.005 and not infeasible:

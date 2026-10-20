@@ -25,6 +25,7 @@ from unittest import mock
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "plugins", "trip-planner", "skills", "trip-planner", "scripts"))
 import drive_common as dc  # noqa: E402
+import drive_plan as dp  # noqa: E402
 import parking as pk  # noqa: E402
 
 DEST = (43.6453, -79.3806)   # Union Station, Toronto
@@ -127,7 +128,8 @@ class CuratedData(unittest.TestCase):
                           "free_source": "osm"},
                          {"name": "Far town lot", "lat": DEST[0] - 0.0080, "lon": DEST[1], "rule": {"free": True}}]}
         w = []
-        with mock.patch.object(pk, "load_places", return_value=[town]),                 mock.patch.object(dc, "fetch", side_effect=AssertionError("network")):
+        with mock.patch.object(pk, "load_places", return_value=[town]), \
+                mock.patch.object(dc, "fetch", side_effect=AssertionError("network")):
             res = pk.find_parking(DEST[0], DEST[1], dt.datetime(2026, 7, 15, 10), 240, {"offline": True}, w)
         saving = [x for x in w if x.startswith("free parking a longer walk away")]
         self.assertEqual(len(saving), 1, w)
@@ -183,6 +185,30 @@ class Verification(unittest.TestCase):
         old = self.mk("Old rate lot", 17.0, "curated", 0.0010)
         old["_old_rate"] = "2025 price"
         self.assertEqual([x["name"] for x in pk.rank([old, cur])], ["Curated garage", "Old rate lot"])
+
+
+class Offline(unittest.TestCase):
+    def test_offline_toronto_bundled_carparks(self):   # parking-3
+        # offline, downtown Toronto still lists the bundled post-2019 Green P carparks with their 2026 rates
+        w = []
+        with mock.patch.object(dc, "fetch", side_effect=AssertionError("network")), \
+                mock.patch.object(pk, "toronto_lots", side_effect=AssertionError("network source")):
+            res = pk.find_parking(DEST[0], DEST[1], dt.datetime(2026, 10, 14, 9), 480,
+                                  {"offline": True, "holidays": set()}, w)
+        names = [o["name"] for o in res["options"]]
+        self.assertIn("Green P 92 Front Street East (St. Lawrence Market North)", names)
+        self.assertEqual(res["options"][0]["cost"], 18.0)
+        self.assertTrue(res["offline"])
+        self.assertTrue(any("opened after 2019" in x for x in res["sources"]))
+        self.assertFalse(any("failed" in x for x in w), w)
+
+    def test_offline_empty_parking_text(self):   # parking-3
+        res = {"parking": {"options": [], "offline": True, "radius_m": 1500, "place_rules": []}, "parking_stay_min": 120}
+        text = "\n".join(dp.parking_lines(res, dt.date(2026, 10, 14)))
+        self.assertIn("no curated parking for this spot in the offline data; live parking sources were blocked", text)
+        self.assertNotIn("no public parking found", text)
+        res["parking"]["offline"] = False
+        self.assertIn("no public parking found in the data", "\n".join(dp.parking_lines(res, dt.date(2026, 10, 14))))
 
 
 if __name__ == "__main__":

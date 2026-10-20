@@ -44,4 +44,4 @@ Everything else becomes a link or a search string. To check one lot, the agent m
 
 ## 8. A blocked sandbox degrades to what can still be said
 
-The first claude.ai test failed with all 25 timetable hosts blocked, and claude.ai's own fetch tool refused the URLs the manual method needed. Both planners now print `NETWORK BLOCKED` with the exact hosts to allow, plus `--check-network`. Given `lat,lon`, the driving planner still prints the curated parking it carries offline; given an address it stops at geocoding and says to pass `lat,lon`. `SKILL.md` tells the agent to use any connector that can fetch arbitrary URLs.
+The first claude.ai test failed with all 25 timetable hosts blocked, and claude.ai's own fetch tool refused the URLs the manual method needed. Both planners now print `NETWORK BLOCKED` with the exact hosts to allow, plus `--check-network`. Given `lat,lon`, the driving planner still prints the curated tourist-place parking and the post-2019 Green P carparks it carries offline; given an address it stops at geocoding and says to pass `lat,lon`. `SKILL.md` tells the agent to use any connector that can fetch arbitrary URLs.

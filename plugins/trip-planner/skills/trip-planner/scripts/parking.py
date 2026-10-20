@@ -2202,6 +2202,18 @@ def _ckan_check(body):
     return None
 
 
+def toronto_bundled_lots(lat, lon, arrive, stay_min, holidays, radius_m, height_m, warnings):
+    """The Green P carparks opened after 2019 that ship in parking.json (no network): used offline and when the
+    2019 file cannot be read."""
+    t = cfg()["toronto"]
+    if not th.in_bbox(lat, lon, t["bbox"]):
+        return [], []
+    closed = set(_cp_id(x.get("id")) for x in t.get("closed") or [])
+    new = new_carpark_lots(lat, lon, arrive, stay_min, holidays, radius_m, height_m, {}, closed, t)
+    return new, (["Green P carparks opened after 2019 (rates from each Green P page, %s)" % (
+        t.get("verified") or "curated")] if new else [])
+
+
 def toronto_lots(lat, lon, arrive, stay_min, holidays, radius_m, height_m, warnings):
     t = cfg()["toronto"]
     if not th.in_bbox(lat, lon, t["bbox"]):
@@ -2212,10 +2224,7 @@ def toronto_lots(lat, lon, arrive, stay_min, holidays, radius_m, height_m, warni
         cps = data.get("carparks") or []
     except Exception as e:  # noqa: BLE001
         warnings.append("Green P 2019 carpark data unavailable (%s)" % (e if isinstance(e, dc.FetchError) else _err(e)))
-        closed = set(_cp_id(x.get("id")) for x in t.get("closed") or [])
-        new = new_carpark_lots(lat, lon, arrive, stay_min, holidays, radius_m, height_m, {}, closed, t)
-        return new, (["Green P carparks opened after 2019 (rates from each Green P page, %s)" % (
-            t.get("verified") or "curated")] if new else [])
+        return toronto_bundled_lots(lat, lon, arrive, stay_min, holidays, radius_m, height_m, warnings)
     occ, seen, years = {}, set(), ""
     try:
         od = dc.fetch_json(t["occupancy_url"], max_age_h=t.get("occupancy_max_age_h", 168), timeout=60,
@@ -2950,10 +2959,11 @@ def find_parking(lat, lon, arrive, stay_min, opts, warnings):
     opts: "max_walk_m" (default 800; widen to 1500 when nothing free or priced is found, and say so),
     "height_m" (vehicle height or None), "holidays" (set of 'YYYY-MM-DD'), "region" (region dict or None),
     "party" ({"adults", "children", "seniors"} or None: prices per-person admission for the party),
-    "offline" (True: the curated files only, no network sources).
+    "offline" (True: the curated files and the bundled post-2019 Green P carparks only, no network sources).
     Returns {"options": [lot, ...] (at most 8, ranked), "place_rules": [str] (season, reservations, free
     fallback lots of a curated place), "reservations": [{"name", "text", "url", "lead_days"}], "sources": [str],
-    "radius_m": int, "caveat": "Posted signs override this data: time limits, rush-hour no-stopping, permit zones."}
+    "radius_m": int, "offline": bool (live sources were skipped),
+    "caveat": "Posted signs override this data: time limits, rush-hour no-stopping, permit zones."}
     A lot's "per_person" flag marks admission priced per person (one adult unless the party is given),
     "unverified" marks an OpenStreetMap fee=no lot that no official source confirms, "maybe_closed" a Green P
     2019 carpark missing from the current occupancy data and not in toronto.open (ranked after the other priced
@@ -2976,7 +2986,8 @@ def find_parking(lat, lon, arrive, stay_min, opts, warnings):
     place_rules += rules
     reservations += res
     sources += srcs
-    for fn in () if opts.get("offline") else (city_lots, toronto_lots, osm_lots):   # offline: curated files only
+    # offline: the curated files and the bundled post-2019 Green P carparks, no network sources
+    for fn in (toronto_bundled_lots,) if opts.get("offline") else (city_lots, toronto_lots, osm_lots):
         try:
             extra = {"country": opts.get("country")} if fn is osm_lots and opts.get("country") else {}
             lots, srcs = fn(lat, lon, arrive, stay_min, holidays, fetch_r, height, warnings, **extra)
@@ -3032,7 +3043,8 @@ def find_parking(lat, lon, arrive, stay_min, opts, warnings):
     seen = set()
     reservations = [r for r in reservations if not (r["name"], r["text"]) in seen and not seen.add((r["name"], r["text"]))]
     return {"options": options, "place_rules": place_rules, "reservations": reservations,
-            "sources": sources, "radius_m": radius, "caveat": c.get("caveat") or CAVEAT, "check": check_list(options)}
+            "sources": sources, "radius_m": radius, "offline": bool(opts.get("offline")),
+            "caveat": c.get("caveat") or CAVEAT, "check": check_list(options)}
 
 
 def main(argv=None):

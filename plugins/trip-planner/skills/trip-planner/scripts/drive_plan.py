@@ -65,12 +65,14 @@ def blocked_note(warnings):
         return None
     tls = [h for h in blocked if status[h].startswith("tls failed")]
     if tls:   # certificates, not the allow-list
-        return th.tls_failed_message(tls) + " Meanwhile the parking above comes from the curated files only."
+        return th.tls_failed_message(tls) + (" Meanwhile the parking above comes from the curated files and the "
+                                             "post-2019 Green P carparks in parking.json only.")
     return ("NETWORK BLOCKED: this environment cannot reach the routing hosts (%s), so there are no driving times. "
             "This is not an address problem. Allow these domains in this environment's network settings (on "
             "claude.ai, the code execution network access setting): %s. Meanwhile follow the manual method in "
             "references/driving.md (Google Maps for times, the 407 zone table in references/driving/tolls.json, "
-            "the curated parking files); the parking above comes from those files only."
+            "the curated parking files); the parking above comes from those files and the post-2019 Green P "
+            "carparks in parking.json only."
             % (", ".join(blocked), ", ".join(drive_hosts())))
 
 
@@ -3136,7 +3138,9 @@ def parking_lines(res, day):
             fmt_stay(res.get("stay_min", res["parking_stay_min"])), span, fmt_stay(res["parking_stay_min"]),
             pk.get("radius_m") or 0, est))
         lots = pk.get("options") or []
-        if not lots:
+        if not lots and pk.get("offline"):
+            L.append("  no curated parking for this spot in the offline data; live parking sources were blocked")
+        elif not lots:
             L.append("  no public parking found in the data; check signs or the venue's site")
         for i, lot_d in enumerate(lots[:SHOWN_LOTS], 1):
             L.append(lot_line(i, lot_d, pk.get("radius_m")))

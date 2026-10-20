@@ -408,7 +408,9 @@ this Python cannot verify their certificates, so there is nothing to allow; the 
 - **With addresses,** the script stops at geocoding and prints no parking. Its message says to pass
   `lat,lon` instead to still get the curated parking, and points here for the manual method.
 - **With `lat,lon`,** the warning appears in WARNINGS and the script still prints parking from the
-  curated files, priced for an estimated arrival.
+  curated tourist-place files and the post-2019 Green P carparks in `parking.json`, priced for an
+  estimated arrival. When none is near the destination it says "no curated parking for this spot in
+  the offline data", not that there is no parking.
 
 Meanwhile, do the rest by hand and say it is manual:
 

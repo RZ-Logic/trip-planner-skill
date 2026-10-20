@@ -2371,6 +2371,104 @@ def open_for_stay(window, arrive, stay_min):
     return False
 
 
+OH_DAY = {"Mo": 0, "Tu": 1, "We": 2, "Th": 3, "Fr": 4, "Sa": 5, "Su": 6}
+OH_DAYSEL = r"(?:Mo|Tu|We|Th|Fr|Sa|Su|PH)(?:\s*-\s*(?:Mo|Tu|We|Th|Fr|Sa|Su))?"
+OH_TIME = r"\d{1,2}:\d{2}\s*-\s*\d{1,2}:\d{2}"
+OH_RULE_RE = re.compile(r"^(?:(?P<days>%s(?:\s*,\s*%s)*)\s*)?(?P<times>off|closed|%s(?:\s*,\s*%s)*)?$"
+                        % (OH_DAYSEL, OH_DAYSEL, OH_TIME, OH_TIME))
+# OSM opening_hours shown to the agent only in this character set (no quotes, URLs or brackets) and length
+OH_TEXT_RE = re.compile(r"^[A-Za-z0-9 :;,\-/]{1,80}$")
+
+
+def opening_schedule(text):
+    """OSM opening_hours -> {"week": {weekday: [(start_min, end_min)]}, "ph": [...] or None}; "24/7" and
+    "Mo-Su 00:00-24:00" -> "always"; None when the value uses syntax this reader does not handle (months,
+    sunrise, comments, "+", "||"). Rules are split on ";" and on the comma before a day ("Mo-Fr 08:00-18:00,
+    Sa 09:00-12:00") and read in order: a later rule replaces the days it names, the first rule that names
+    weekdays closes the days it leaves out, a day list with no time is open all day, and an end at or before
+    its start runs past midnight."""
+    t = (text or "").strip()
+    if not t:
+        return None
+    if t == "24/7":
+        return "always"
+    week, ph = {d: [(0, 1440)] for d in range(7)}, None
+    named = False
+    for rule in re.split(r";|(?<=[\dfd])\s*,\s*(?=(?:Mo|Tu|We|Th|Fr|Sa|Su|PH)\b)", t):
+        rule = rule.strip()
+        if not rule:
+            continue
+        m = OH_RULE_RE.match(rule)
+        if not m or not (m.group("days") or m.group("times")):
+            return None
+        spans = [(0, 1440)]
+        times = m.group("times")
+        if times in ("off", "closed"):
+            spans = []
+        elif times:
+            spans = []
+            for a, b in re.findall(r"(\d{1,2}:\d{2})\s*-\s*(\d{1,2}:\d{2})", times):
+                sa, sb = hm(a), hm(b)
+                sb = 1440 if sb == 1439 else sb
+                if sa >= 1440 or sb > 48 * 60:
+                    return None
+                spans.append((sa, sb))
+        days, hol = set(), False
+        for sel in re.split(r"\s*,\s*", m.group("days") or ""):
+            if not sel:
+                continue
+            if sel == "PH":
+                hol = True
+                continue
+            ends = [OH_DAY[x] for x in re.split(r"\s*-\s*", sel)]
+            d = ends[0]
+            while True:
+                days.add(d)
+                if d == ends[-1]:
+                    break
+                d = (d + 1) % 7
+        if days and not named:
+            week = {d: [] for d in range(7)}    # "Mo-Fr 08:00-18:00": the days left out are closed
+            named = True
+        if not m.group("days"):
+            days = set(range(7))
+        for d in days:
+            week[d] = list(spans)
+        if hol:
+            ph = list(spans)
+    if all(week[d] == [(0, 1440)] for d in range(7)) and ph in (None, [(0, 1440)]):
+        return "always"
+    if not any(week.values()) and not ph:
+        return None       # "Sa,Su off" alone: never open reads as a tagging slip, not a lot that is always shut
+    return {"week": week, "ph": ph}
+
+
+def open_for_schedule(sched, arrive, stay_min, holidays=()):
+    """True when the stay [arrive, arrive + stay_min) lies inside one stretch of opening of an
+    opening_schedule() result; openings on consecutive days that touch join ("Fr-Sa 20:00-02:00" holds Saturday
+    01:00), and on a public holiday the PH rule applies when the value has one."""
+    if sched == "always":
+        return True
+    end = arrive + dt.timedelta(minutes=stay_min)
+    ivs = []
+    d = arrive.date() - dt.timedelta(days=1)
+    while d <= end.date():
+        spans = sched["ph"] if (d.isoformat() in holidays and sched.get("ph") is not None) else sched["week"][d.weekday()]
+        d0 = dt.datetime.combine(d, dt.time())
+        for a, b in spans:
+            ivs.append((d0 + dt.timedelta(minutes=a), d0 + dt.timedelta(minutes=b if b > a else b + 1440)))
+        d += dt.timedelta(days=1)
+    cur = None
+    for a, b in sorted(ivs):
+        if cur and a <= cur[1]:
+            cur = (cur[0], max(cur[1], b))
+        else:
+            if cur and cur[0] <= arrive and end <= cur[1]:
+                return True
+            cur = (a, b)
+    return bool(cur and cur[0] <= arrive and end <= cur[1])
+
+
 def facility_free(tags):
     """A fee=no OSM lot that is probably for the users of a facility (a 2017 City of Ottawa import pattern):
     access permissive rather than yes/public, or a ref or source:date with no name."""
@@ -2454,7 +2552,9 @@ def osm_lots(lat, lon, arrive, stay_min, holidays, radius_m, height_m, warnings,
                             conf, stale_yr = "stale", cd.group(1)
                             notes.append("price checked %s" % cd.group(1))
                         break
-            oh = opening_window(tags.get("opening_hours"))
+            oh_raw = (tags.get("opening_hours") or "").strip()
+            oh = opening_window(oh_raw)       # the simple daily form keeps its own wording
+            sched = opening_schedule(oh_raw) if oh_raw else None
             lot = make_lot(name, la, lo, kind, rule, "OpenStreetMap", "https://www.openstreetmap.org/%s/%s" % (el.get("type"), el.get("id")),
                            conf, (lat, lon), arrive, stay_min, holidays,
                            capacity=int(num(tags.get("capacity")) or 0) or None, notes="; ".join(notes), max_height=mh)
@@ -2472,12 +2572,21 @@ def osm_lots(lat, lon, arrive, stay_min, holidays, radius_m, height_m, warnings,
             site = tags.get("website") or tags.get("contact:website") or tags.get("url")
             if site and re.match(r"https?://", site):
                 lot["_website"] = site
-            if oh:
-                lot["notes"] = "; ".join([n for n in [lot["notes"], "open %s-%s" % oh] if n])
-                if not open_for_stay(oh, arrive, stay_min):
+            # opening hours: a lot closed during the stay does not fit; the raw value is shown only in a safe
+            # character set, and a value this reader cannot read is noted (and flagged on the check line)
+            shown = oh_raw if OH_TEXT_RE.match(oh_raw) else None
+            if sched is not None and sched != "always":
+                hours = ("%s-%s" % oh) if oh else (shown or "per OpenStreetMap")
+                lot["notes"] = "; ".join([n for n in [lot["notes"], "open %s" % hours] if n])
+                if not open_for_schedule(sched, arrive, stay_min, holidays):
                     lot["fits_stay"] = False
-                    why = "open %s to %s only" % oh
+                    why = ("open %s to %s only" % oh) if oh else ("open %s only" % shown if shown
+                                                                   else "closed during the stay (OpenStreetMap hours)")
                     lot["unfit_reason"] = "%s; %s" % (lot["unfit_reason"], why) if lot.get("unfit_reason") else why
+            elif oh_raw and sched is None:
+                lot["notes"] = "; ".join([n for n in [lot["notes"], ("hours (OSM, not read): %s" % shown) if shown
+                                                      else "opening hours in OpenStreetMap not read"] if n])
+                lot["_hours_unread"] = True
             lots.append(lot)
         except Exception as e:  # noqa: BLE001 (one unreadable lot must not drop the rest of the source)
             skipped.append(e)
@@ -2637,7 +2746,8 @@ def greenp_search(gp):
 def check_hint(lot):
     """What to verify before driving to a lot, or None when its price is official or curated and current:
     {"why": "may have closed" | "2019 price" | "price unknown" | "price unknown, opened after 2019" |
-    "free per OpenStreetMap, unverified" | "price per OpenStreetMap, unverified" | "old price (...)",
+    "free per OpenStreetMap, unverified" | "price per OpenStreetMap, unverified" | "old price (...)", with
+    "; opening hours not read" added when the lot's OSM opening_hours could not be read,
     "url": the operator's own page or None, "search": a web search string or None}. Green P: the url is the
     carpark's page from the 2019 data (43, 283 and the toronto.open pages are live; some 2019 addresses are a 404
     now, so the search is the fallback); the page is rendered with JavaScript (toronto.page_fetch_note). Other
@@ -2662,6 +2772,8 @@ def check_hint(lot):
         why = "price per OpenStreetMap, unverified"
     else:
         return None
+    if lot.get("_hours_unread"):
+        why += "; opening hours not read"
     url = lot.get("_website")
     if not url and lot.get("confidence") in ("official", "curated") and re.match(r"https?://", lot.get("source_url") or ""):
         url = lot["source_url"]

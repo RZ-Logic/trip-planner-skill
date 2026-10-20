@@ -121,5 +121,48 @@ class BaseRateWithAfterPrice(unittest.TestCase):     # parking-verifier-2
             self.assertEqual(price(text, WED10.replace(hour=16), 180), 13.0, text)   # 1 h at $3, then the $10
 
 
+class OsmOpeningHours(unittest.TestCase):            # parking-5
+    def test_day_forms_mark_the_lot_unfit(self):
+        lot = osm_lot(SAT20, 180, charge="$3/hr", opening_hours="Mo-Fr 07:00-19:00")
+        self.assertFalse(lot["fits_stay"])                                  # HEAD: True, no hours shown
+        self.assertEqual(lot["unfit_reason"], "open Mo-Fr 07:00-19:00 only")
+        self.assertIn("open Mo-Fr 07:00-19:00", lot["notes"])
+        lot = osm_lot(SAT20, 180, charge="$3/hr", opening_hours="Mo-Sa 09:00-21:00; Su 11:00-18:00")
+        self.assertFalse(lot["fits_stay"])
+        self.assertTrue(osm_lot(SAT10, 120, charge="$3/hr", opening_hours="Mo-Sa 09:00-21:00; Su 11:00-18:00")["fits_stay"])
+
+    def test_schedule_reader(self):
+        s = pk.opening_schedule("Mo-Fr 06:00-21:00; Sa 07:00-18:00; Su off")
+        self.assertTrue(pk.open_for_schedule(s, WED10, 120))
+        self.assertFalse(pk.open_for_schedule(s, SUN10, 60))                # Sunday off
+        self.assertFalse(pk.open_for_schedule(s, WED10.replace(hour=20), 120))   # past 21:00
+        self.assertFalse(pk.open_for_schedule(pk.opening_schedule("Mo-Fr 08:00-18:00; PH off"),
+                                              dt.datetime(2026, 10, 12, 10, 0), 60, {"2026-10-12"}))
+        self.assertTrue(pk.open_for_schedule(pk.opening_schedule("Mo-Fr 08:00-18:00, Sa 09:00-12:00"), SAT10, 60))
+        night = pk.opening_schedule("Fr-Sa 20:00-02:00")                    # past midnight
+        self.assertTrue(pk.open_for_schedule(night, dt.datetime(2026, 10, 17, 1, 0), 60))      # Sat 01:00, Friday's
+        self.assertFalse(pk.open_for_schedule(night, dt.datetime(2026, 10, 18, 3, 0), 60))     # Sun 03:00
+        self.assertEqual(pk.opening_schedule("24/7"), "always")
+        self.assertEqual(pk.opening_schedule("Mo-Su,PH 00:00-24:00"), "always")
+        self.assertIsNone(pk.opening_schedule("Jan-Mar Mo-Fr 08:00-17:00"))
+        self.assertIsNone(pk.opening_schedule("sunrise-sunset"))
+        self.assertIsNone(pk.opening_schedule("Sa,Su off"))                 # never open: not read, not "closed"
+        for text in ("PH off; Mo-Fr 08:00-18:00", "Mo-Fr,PH 08:00-18:00"):   # a PH rule still closes the weekend
+            self.assertFalse(pk.open_for_schedule(pk.opening_schedule(text), SAT10, 60), text)
+
+    def test_unreadable_hours_are_noted(self):
+        lot = osm_lot(SAT20, 180, charge="$3/hr", opening_hours="Jan-Mar Mo-Fr 08:00-17:00")
+        self.assertIn("hours (OSM, not read): Jan-Mar Mo-Fr 08:00-17:00", lot["notes"])
+        self.assertTrue(pk.check_hint(lot)["why"].endswith("; opening hours not read"))
+        lot = osm_lot(SAT20, 180, charge="$3/hr", opening_hours="Mo-Fr 08:00-18:00 \"call ahead\"")
+        self.assertIn("opening hours in OpenStreetMap not read", lot["notes"])
+        self.assertNotIn("call ahead", lot["notes"])                       # only the safe character set is shown
+
+    def test_simple_form_message_unchanged(self):
+        lot = osm_lot(dt.datetime(2026, 10, 19, 12, 0), 120, charge="$3/hr", opening_hours="20:00-06:00")
+        self.assertEqual(lot["unfit_reason"], "open 20:00 to 06:00 only")
+        self.assertIn("open 20:00-06:00", lot["notes"])
+
+
 if __name__ == "__main__":
     unittest.main()

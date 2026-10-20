@@ -90,7 +90,7 @@ COVERAGE  1495 stops in range grouped into 635 hubs, 610 of them reach the desti
 BASELINE ride all the way: arrive 21:35, 29.5 km, 29 min, ~40 CAD (osrm x1.00)
 BASELINE transit only: leave by 21:25, arrive 23:13, transit fare 7.75 CAD (Milton Transit 4.25; Brampton Transit free from Milton Transit (Milton route 21 paper transfer); MiWay 3.50)
 
-BEST TRADE-OFFS (no other hub is both cheaper and earlier)
+BEST TRADE-OFFS (no other hub is both cheaper, fare included, and earlier)
  1. Winston Churchill Blvd At Eglinton Ave  [MiWay]
     ride 19.1 km / 24 min (osrm x1.00), ~28 CAD  |  book by 21:00, board 21:34, ARRIVE 21:51
     transit fare 3.50 CAD (MiWay 3.50), total ~32 CAD

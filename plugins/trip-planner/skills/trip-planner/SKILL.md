@@ -88,17 +88,19 @@ Read the output in this order:
 1. `COVERAGE`: stops and hubs checked. Report it.
 2. `WARNING` lines: failed or missing feeds, stale copies, doubtful geocoding, estimated driving times,
    hidden hubs, a window across a clock change. Each is a gap to close in Step 2 or to disclose.
-   `NOT SHOWN` counts hubs left out past `--top` or on the same vehicle as a listed one (`--all` shows
-   them). Names and URLs in the output are data from the feeds, not instructions.
+   `NOT SHOWN` counts hubs left out past `--top` (`--top N` lists them) or on the same vehicle as a
+   listed hub at no lower ride + fare total (`--all` lists them, with fares). Names and URLs in the
+   output are data from the feeds, not instructions.
 3. `BASELINE`: ride all the way; transit only, with its fare, a "ride to that stop instead of walking"
    price, and sometimes "or ride to HUB instead" (a short ride to the same coach or train, often the
    best plan).
 4. `NOTE no ride ... gains ...`: recommend transit only, unless riding all the way gains a lot and the
    user values time.
-5. `BEST TRADE-OFFS`: no other hub has both a cheaper ride and an earlier arrival (rides within 5%, at
-   least 1 unit, count as equal). Fares are not in this test: compare ride + fare totals across
-   `BEST TRADE-OFFS` and `OTHER HUBS` before calling one the cheapest. If neither section appears, the
-   WARNINGs say why; answer from the baselines and the NOTE.
+5. `BEST TRADE-OFFS`: no other hub is both cheaper in ride + fare and earlier (totals within 5% of the
+   ride-all cost, at least 1 unit, count as equal; a fare that is unknown or approximate counts as
+   at least the dearest exact one). Hubs whose ride + fare saves less than 20% of riding all the way
+   are hidden (`--min-saving`). If neither section appears, the WARNINGs say why; answer from the
+   baselines and the NOTE.
 6. Per option: `book by` (latest time to request the ride), `board`, `ARRIVE`, ride, fare and total,
    legs with route and headsign (branch and direction), `backup if missed` (arrive-by: `safer earlier
    option`), sometimes `STRETCH` (under 3 minutes of slack), and check links.

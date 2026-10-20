@@ -1,6 +1,6 @@
 """Regression tests for the review's fare findings in trip_hubs.py: the GTFS fare path (card discount, cheapest
 and route-specific rules, transfers and transfer_duration), route-priced passes (WEGO), mixed currencies and
-refunded transfers.
+refunded transfers; ride-mode hub ranking on ride + fare.
 
 Offline: synthetic fare tables, no network, a fixed clock.
 Run: python -m unittest tests.test_review_fares -v
@@ -17,21 +17,27 @@ _os.environ["TRIP_PLANNER_CONFIG"] = _os.path.join(_TMP, "config", "car.json")
 _os.environ["TRIP_PLANNER_CACHE"] = _os.path.join(_TMP, "cache")
 _os.environ.setdefault("TRIP_PLANNER_QUIET", "1")   # no progress lines on stderr (TRIP_PLANNER_QUIET=0 shows them)
 import datetime as dt
+import io
+import json
 import os
 import sys
 import tempfile
 import unittest
 import zipfile
+from contextlib import redirect_stderr, redirect_stdout
+from unittest import mock
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "plugins", "trip-planner", "skills", "trip-planner", "scripts"))
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import trip_hubs as th  # noqa: E402
-from test_engine import pin_clock  # noqa: E402
+from test_engine import make_feed, pin_clock  # noqa: E402
+from test_regressions import add_files  # noqa: E402
 
 DAY = dt.date(2026, 10, 15)   # a Thursday
 REGIONS = {r["id"]: r for r in th.load_regions()}
 GTHA, ONTARIO = REGIONS["gtha"], REGIONS["ontario"]
+BASE = ["--region", "none", "--no-discover", "--routing", "estimate", "--final-ride", "off"]
 _CLOCK = pin_clock()
 
 
@@ -201,6 +207,127 @@ class RefundedFareGivesNoWindow(unittest.TestCase):
              self.group("GO Transit", "09:00", 9.05)]
         th.apply_transfers(g, GTHA["transfer_rules"], "card", dt.date(2026, 10, 13))
         self.assertEqual([x["charged"] for x in g], [0.0, 0.0, 9.05])
+
+
+# ------------------------------------------------------------------------------------- architecture-product-2
+def run(args, as_json=True):
+    out = io.StringIO()
+    ok = mock.patch.object(th, "check_network", side_effect=lambda hosts, timeout=6: {h: "ok" for h in hosts})
+    with ok, redirect_stdout(out), redirect_stderr(io.StringIO()):
+        th.main(args + (["--json"] if as_json else []))
+    return json.loads(out.getvalue()) if as_json else out.getvalue()
+
+
+def priced_rides(costs):
+    """Patch trip_hubs.ride_cost: a ride ending within 150 m of a point in `costs` costs that much."""
+    real = th.ride_cost
+
+    def fake(pricing, km, seconds, ends=None):
+        for (lat, lon), c in costs.items():
+            if ends and th.haversine_m(ends[1][0], ends[1][1], lat, lon) < 150:
+                return c
+        return real(pricing, km, seconds, ends)
+    return mock.patch.object(th, "ride_cost", side_effect=fake)
+
+
+ORIGIN, DEST = (43.4000, -79.8000), (43.6000, -79.8000)
+HUB_1, HUB_2, HUB_3 = (43.4300, -79.8000), (43.4600, -79.8000), (43.4900, -79.8000)
+FARE_HEADER = "fare_id,price,currency_type,payment_method,transfers\n"
+
+
+def plan_args(p, *extra):
+    return ["--origin", "%.4f,%.4f" % ORIGIN, "--dest", "%.4f,%.4f" % DEST, "--depart", "2026-10-15 10:00",
+            "--feed", "t=" + p, "--radius-km", "15", "--origin-walk-m", "300"] + list(extra) + BASE
+
+
+class RankingCountsTheFare(unittest.TestCase):
+    """Ride mode ranks hubs on ride + fare, as car mode ranks on car cost + fare."""
+
+    def feed(self, stops, trips, stop_times, zones=None, fares=None):
+        p = os.path.join(tempfile.mkdtemp(dir=_TMP), "f.zip")
+        make_feed(p, stops, trips, stop_times)
+        if zones:
+            add_files(p, {"stops.txt": "stop_id,stop_name,stop_lat,stop_lon,zone_id\n" + "".join(
+                "%s,%s,%s,%s,%s\n" % (s[0], s[1], s[2], s[3], zones[s[0]]) for s in stops)})
+        if fares:
+            add_files(p, fares)
+        return p
+
+    def three_routes(self, fares):
+        """Hub K (route R) arrives 11:05, Hub U (route S) 11:30, Hub Q (route T) 11:40."""
+        stops = [("K", "Hub K", HUB_1[0], HUB_1[1]), ("U", "Hub U", HUB_2[0], HUB_2[1]),
+                 ("Q", "Hub Q", HUB_3[0], HUB_3[1]), ("C", "Dest C", DEST[0], DEST[1])]
+        return self.feed(stops, [("R", "WK", "k1", "C"), ("S", "WK", "u1", "C"), ("T", "WK", "q1", "C")],
+                         [("k1", "10:40:00", "10:40:00", "K", 1, 0, 0), ("k1", "11:05:00", "11:05:00", "C", 2, 0, 0),
+                          ("u1", "10:50:00", "10:50:00", "U", 1, 0, 0), ("u1", "11:30:00", "11:30:00", "C", 2, 0, 0),
+                          ("q1", "10:55:00", "10:55:00", "Q", 1, 0, 0), ("q1", "11:40:00", "11:40:00", "C", 2, 0, 0)],
+                         fares=fares)
+
+    def test_cheaper_total_on_the_same_coach_is_listed(self):
+        # one coach: Hub Y (dearer ride, 4.00 fare) then Hub X (cheaper ride, 12.00 fare), same arrival
+        stops = [("Y", "Hub Y", HUB_1[0], HUB_1[1]), ("X", "Hub X", HUB_2[0], HUB_2[1]),
+                 ("C", "Dest C", DEST[0], DEST[1])]
+        p = self.feed(stops, [("R", "WK", "c1", "C")],
+                      [("c1", "10:40:00", "10:40:00", "Y", 1, 0, 0), ("c1", "10:50:00", "10:50:00", "X", 2, 0, 0),
+                       ("c1", "11:30:00", "11:30:00", "C", 3, 0, 0)],
+                      zones={"Y": "1", "X": "2", "C": "3"},
+                      fares={"fare_attributes.txt": FARE_HEADER + "a,4.00,CAD,0,\nb,12.00,CAD,0,\n",
+                             "fare_rules.txt": "fare_id,origin_id,destination_id\na,1,3\nb,2,3\n"})
+        with priced_rides({DEST: 60.0, HUB_1: 24.0, HUB_2: 20.0}):   # Y totals 28, X 32
+            res = run(plan_args(p, "--min-saving", "0"))
+        self.assertEqual([o["hub"] for o in res["pareto"]], ["Hub Y"])                     # was ["Hub X"]
+        self.assertEqual(res["pareto"][0]["transit_fare"], 4.0)
+
+    def test_option_that_riding_all_the_way_beats_on_cost_and_time_is_not_a_trade_off(self):
+        stops = [("H", "Hub H", HUB_1[0], HUB_1[1]), ("C", "Dest C", DEST[0], DEST[1])]
+        p = self.feed(stops, [("R", "WK", "h1", "C")],
+                      [("h1", "10:40:00", "10:40:00", "H", 1, 0, 0), ("h1", "11:30:00", "11:30:00", "C", 2, 0, 0)],
+                      fares={"fare_attributes.txt": FARE_HEADER + "a,12.00,CAD,0,\n"})
+        with priced_rides({DEST: 25.0, HUB_1: 15.0}):   # the ride saves 10 (over 20%), ride + fare costs 2 more
+            res = run(plan_args(p))
+        self.assertEqual(res["pareto"] + res["others"], [])                                # was listed
+        self.assertTrue(any("ride + fare saves less than" in w for w in res["warnings"]), res["warnings"])
+
+    def test_all_lists_the_fare(self):
+        stops = [("H", "Hub H", HUB_1[0], HUB_1[1]), ("C", "Dest C", DEST[0], DEST[1])]
+        p = self.feed(stops, [("R", "WK", "h1", "C")],
+                      [("h1", "10:40:00", "10:40:00", "H", 1, 0, 0), ("h1", "11:30:00", "11:30:00", "C", 2, 0, 0)],
+                      fares={"fare_attributes.txt": FARE_HEADER + "a,4.00,CAD,0,\n"})
+        with priced_rides({DEST: 60.0, HUB_1: 20.0}):
+            txt = run(plan_args(p, "--min-saving", "0", "--all"), as_json=False)
+        line = next(ln for ln in txt.splitlines() if ln.startswith("  Hub H  book by"))
+        self.assertIn("transit fare 4.00", line)                                           # was absent
+        self.assertIn("BEST TRADE-OFFS (no other hub is both cheaper, fare included, and earlier)", txt)
+
+    def test_unknown_fare_counts_as_the_dearest_known_fare(self):
+        # route S has no fare rule: its fare is unknown, so Hub U ranks as if it cost route T's 20.00, the dearest
+        # known fare; ranked on its ride alone (15 against Hub K's 20) it was a trade-off
+        p = self.three_routes({"fare_attributes.txt": FARE_HEADER + "a,10.00,CAD,0,\nc,20.00,CAD,0,\n",
+                               "fare_rules.txt": "fare_id,route_id\na,R\nc,T\n"})
+        with priced_rides({DEST: 60.0, HUB_1: 20.0, HUB_2: 15.0, HUB_3: 30.0}):   # K 30; U 15 + unknown; Q 50
+            res = run(plan_args(p, "--min-saving", "0"))
+        self.assertEqual([o["hub"] for o in res["pareto"]], ["Hub K"])                     # was ["Hub K", "Hub U"]
+        self.assertIsNone(next(o for o in res["others"] if o["hub"] == "Hub U")["transit_fare"])
+
+    def test_approximate_fare_is_not_ranked_as_exact(self):
+        # Hub U's 5.00 is one point on a distance scale (a region file's "approx"): it ranks at no less than the
+        # dearest exact fare (route T's 20.00), so the later Hub U is no trade-off against Hub K (exact: 15 + 5)
+        p = self.three_routes({"fare_attributes.txt": FARE_HEADER + "a,10.00,CAD,0,\nb,5.00,CAD,0,\nc,20.00,CAD,0,\n",
+                               "fare_rules.txt": "fare_id,route_id\na,R\nb,S\nc,T\n"})
+        real = th.journey_fare
+
+        def scale_fare(net, legs, *a, **k):
+            total, cur, parts, complete = real(net, legs, *a, **k)
+            if legs and legs[0]["route"] == "S":
+                for part in parts:
+                    part["approx"] = "distance-based: $5 to $20"
+            return total, cur, parts, complete
+        with priced_rides({DEST: 60.0, HUB_1: 20.0, HUB_2: 15.0, HUB_3: 30.0}), \
+                mock.patch.object(th, "journey_fare", side_effect=scale_fare):
+            res = run(plan_args(p, "--min-saving", "0"))
+        self.assertEqual([o["hub"] for o in res["pareto"]], ["Hub K"])                     # was ["Hub K", "Hub U"]
+        u = next(o for o in res["others"] if o["hub"] == "Hub U")
+        self.assertEqual((u["transit_fare"], u["fare_complete"]), (5.0, True))
 
 
 if __name__ == "__main__":

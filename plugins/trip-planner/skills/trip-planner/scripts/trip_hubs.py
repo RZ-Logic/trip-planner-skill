@@ -3597,6 +3597,15 @@ def plan(args):
                      parking_unknown=bool(c.get("parking")) and (c.get("parking") or {}).get("cost") is None)
         return o
 
+    ride_cur = pricing.get("currency", "")
+
+    def fare_exact(o):
+        """Ride mode: a fare that can be added to the ride as it is: every part known, in the ride currency, and
+        none of it one point on a distance or zone scale (approx)."""
+        return (o.get("fare_complete") and o.get("transit_fare") is not None
+                and (o.get("fare_currency") or ride_cur) == ride_cur
+                and not any(p.get("approx") for p in o.get("fare_parts") or []))
+
     def car_rank_cost(o):
         """Car mode: car cost + transit fare, for ranking. An unknown fare or hub parking price sorts after every
         known total (it is not $0)."""
@@ -3730,12 +3739,23 @@ def plan(args):
 
     # ---- ranking
     options = [make_option(c) for c in clusters if c["result"]]
-    if car:   # the fare is most of a park-and-ride trip's cost: rank on car cost + fare (car_rank_cost)
-        for o in options:
-            add_fare(o)
+    for o in options:   # every option ranks on its first leg + fare (car: car_rank_cost; ride: ride + fare)
+        add_fare(o)
+    if car:
         cost_of = car_rank_cost
     else:
-        cost_of = lambda o: o["ride_cost"]  # noqa: E731
+        exact = [o["transit_fare"] for o in options if fare_exact(o)]
+        fare_bound = max(exact) if exact else 0.0
+
+        def cost_of(o):
+            """Ride mode: ride + fare. A fare that is unknown, partly unknown, in another currency or approximate
+            counts as at least the dearest exact fare among the options (0 when none is known), not as exact."""
+            if not o.get("fare_parts"):   # no transit leg to pay for
+                return o["ride_cost"]
+            if fare_exact(o):
+                return o["ride_cost"] + o["transit_fare"]
+            part = o.get("transit_fare") if (o.get("fare_currency") or ride_cur) == ride_cur else None
+            return o["ride_cost"] + max(part or 0.0, fare_bound)
     if arrive_by:
         ride_all["book_by"] = target - int(ride_all["ride_s"]) - first_wait_s
         ride_all["arrive"] = target
@@ -3784,7 +3804,6 @@ def plan(args):
         if same:
             o = min(same, key=lambda o: (sum(1 for lg in o["legs"] if lg["type"] == "ride"), o["ride_cost"],
                                          -o["book_by"]))   # fewest vehicles, then cheapest
-            add_fare(o)
             transit_only["ride_instead"] = {
                 "hub": o["hub"], "cost": o["ride_cost"], "km": o["ride_km"], "book_by": o["book_by"],
                 "board": o["board"], "arrive": o["arrive"], "route": leg_name(o["legs"][0]) if o["legs"] else "",
@@ -3793,18 +3812,24 @@ def plan(args):
             if car:
                 transit_only["ride_instead"]["parking"] = o.get("parking")
     pre = [o for o in rankable if beats_transit(o)]
-    useful = [o for o in pre if ride_all["cost"] - o.get("drive_cost", o["ride_cost"]) >= min_save]
+    if car:
+        useful = [o for o in pre if ride_all["cost"] - o.get("drive_cost", o["ride_cost"]) >= min_save]
+    else:   # ride + fare against riding all the way; with --min-saving 0 or less, a dearer hub stays only if faster
+        faster = ((lambda o: o["book_by"] > ride_all["book_by"]) if arrive_by
+                  else (lambda o: o["arrive"] < ride_all["arrive"]))
+        useful = [o for o in pre if ride_all["cost"] - cost_of(o) >= min_save or (min_save <= 0 and faster(o))]
     hidden_gain = len(rankable) - len(pre)
     hidden_save = len(pre) - len(useful)
     if hidden_save:
         hint = " (use --min-saving 0 to show them)" if args.min_saving is None else ""
         if min_save > 0:
             warnings.append(("%d hubs hidden because driving there saves less than %.0f %s vs driving all the way%s"
-                             if car else "%d hubs hidden because their ride saves less than %.0f %s vs riding all "
-                             "the way%s") % (hidden_save, min_save, pricing.get("currency", ""), hint))
+                             if car else "%d hubs hidden because their ride + fare saves less than %.0f %s vs "
+                             "riding all the way%s") % (hidden_save, min_save, pricing.get("currency", ""), hint))
         else:
             warnings.append(("%d hubs hidden because driving there costs more than driving all the way" if car else
-                             "%d hubs hidden because their ride costs more than riding all the way") % hidden_save)
+                             "%d hubs hidden because their ride + fare costs more than riding all the way and they "
+                             "are no faster") % hidden_save)
     transit_competitive = bool(transit_only) and not pre
     if transit_only and hidden_gain and car:
         warnings.append("%d hubs hidden because transit only is as fast and costs no more (car + parking + fare)."
@@ -3813,7 +3838,7 @@ def plan(args):
         warnings.append("%d hubs hidden because they gain less than %d min over transit only (--min-gain-min)."
                         % (hidden_gain, args.min_gain_min))
 
-    # Pareto front on (ride cost, time). Costs within one bucket (about 5% of the full ride, at least
+    # Pareto front on (ride + fare, time). Costs within one bucket (about 5% of the full ride, at least
     # 1 currency unit) count as equal, so a few cents never beat a much better time. Car mode: car + fare.
     step = max(1.0, 0.05 * ride_all["cost"])
     pareto, best = [], start
@@ -3838,9 +3863,16 @@ def plan(args):
         return (rides[0]["trip_key"], rides[-1]["trip_key"]) if rides else (None, None)
 
     # runners-up: skip hubs that board the same first vehicle, or finish on the same last vehicle,
-    # as an option already listed
-    firsts = {ride_keys(o)[0] for o in pareto}
-    lasts = {ride_keys(o)[1] for o in pareto}
+    # as an option already listed, unless they cost less in total (cost_of: fare included)
+    firsts, lasts = {}, {}   # vehicle key -> lowest cost_of among the listed hubs on it
+
+    def listed(o):
+        first, last = ride_keys(o)
+        firsts[first] = min(firsts.get(first, INF), cost_of(o))
+        lasts[last] = min(lasts.get(last, INF), cost_of(o))
+
+    for o in pareto:
+        listed(o)
     runners, same_vehicle, past_top = [], 0, 0   # the last two: hubs left out without another warning
     for o in sorted(useful, key=rank):
         if id(o) in keys:
@@ -3849,17 +3881,14 @@ def plan(args):
         if id(o) == keep_rt:   # the round-trip keep: exempt from the same-vehicle rule and --top
             runners.append(o)
             continue
-        if first in firsts or last in lasts:
+        if cost_of(o) >= min(firsts.get(first, INF), lasts.get(last, INF)):
             same_vehicle += 1
             continue
         if len([r for r in runners if id(r) != keep_rt]) >= max(0, args.top - len(pareto)):
             past_top += 1
             continue
-        firsts.add(first)
-        lasts.add(last)
+        listed(o)
         runners.append(o)
-    for o in pareto + runners:
-        add_fare(o)
 
     # ---- finish with a ride: transit to a stop short of the destination, then a ride for the rest.
     # One scan per drop-off point keeps it cost-aware: a single scan would always pick the earliest
@@ -4422,18 +4451,19 @@ def render(res):
             out.append("")
 
     if by:
-        block("BEST TRADE-OFFS (arrive by %s with %d min spare; no other hub is both cheaper and lets you leave later)"
-              % (fmt_t(res["deadline"]), res["safety_min"]), res["pareto"])
+        block("BEST TRADE-OFFS (arrive by %s with %d min spare; no other hub is both cheaper, fare included, and lets "
+              "you leave later)" % (fmt_t(res["deadline"]), res["safety_min"]), res["pareto"])
         block("OTHER HUBS (latest departures, one per vehicle)", res["others"])
     else:
-        block("BEST TRADE-OFFS (no other hub is both cheaper and earlier)", res["pareto"])
+        block("BEST TRADE-OFFS (no other hub is both cheaper, fare included, and earlier)", res["pareto"])
         block("OTHER HUBS (next fastest, one per vehicle)", res["others"])
     hid = res.get("hidden_hubs") or {}
     if hid.get("same_vehicle") or hid.get("past_top"):
-        bits = ([("%d past --top %d" % (hid["past_top"], hid.get("top", 0)))] if hid.get("past_top") else []) + (
-            ["%d on the same first or last vehicle as a listed hub" % hid["same_vehicle"]] if hid.get("same_vehicle")
-            else [])
-        out.append("NOT SHOWN  %d more hubs that beat the baselines: %s (--top N or --all lists them)."
+        bits = ([("%d past --top %d (--top N lists them)" % (hid["past_top"], hid.get("top", 0)))]
+                if hid.get("past_top") else []) + (
+            ["%d on the same first or last vehicle as a listed hub, at no lower total (--all lists them)"
+             % hid["same_vehicle"]] if hid.get("same_vehicle") else [])
+        out.append("NOT SHOWN  %d more hubs that beat the baselines: %s."
                    % (hid.get("past_top", 0) + hid.get("same_vehicle", 0), ", ".join(bits)))
         out.append("")
     fin = res.get("finish_with_ride") or []
@@ -4483,14 +4513,16 @@ def render(res):
         out.append("ALL HUBS WITH SERVICE")
         for o in res["all_options"]:
             if car:
-                out.append("  %s  leave by %s  arrive %s  drive %.1f km, car ~$%.2f%s (%s)  parking: %s  first: %s"
+                out.append("  %s  leave by %s  arrive %s  drive %.1f km, car ~$%.2f%s (%s)  parking: %s  %s  first: %s"
                            % (o["hub"], fmt_t(o["book_by"]), fmt_t(o["arrive"]), o["ride_km"], o["car_cost"],
                               unknown_parking(o.get("parking")), o["ride_source"], (o.get("parking") or {}).get("text", "?"),
+                              fare_text(dict(o, ride_cost=None), cur, has_region, rules_on),
                               leg_name(o["legs"][0]) if o["legs"] else "-"))
                 continue
-            out.append("  %s  book by %s  arrive %s  ride %.1f km ~%.0f %s (%s)  first: %s"
+            out.append("  %s  book by %s  arrive %s  ride %.1f km ~%.0f %s (%s)  %s  first: %s"
                        % (o["hub"], fmt_t(o["book_by"]), fmt_t(o["arrive"]), o["ride_km"], o["ride_cost"], cur,
-                          o["ride_source"], leg_name(o["legs"][0]) if o["legs"] else "-"))
+                          o["ride_source"], fare_text(o, cur, has_region, rules_on),
+                          leg_name(o["legs"][0]) if o["legs"] else "-"))
         out.append("")
     out += second_opinion_lines(res.get("crosscheck"))
     if res.get("attribution"):
@@ -4630,8 +4662,9 @@ def build_parser():
     ap.add_argument("--osrm-url", default="https://router.project-osrm.org")
     ap.add_argument("--traffic-factor", type=float, help="multiplier on OSRM free-flow times (default by time of day: "
                     "typical traffic for a ride, the planning allowance for --access car)")
-    ap.add_argument("--min-saving", type=float, help="hide hubs whose ride saves less than this vs riding all the "
-                    "way (default 20%% of the full ride; 0 shows all)")
+    ap.add_argument("--min-saving", type=float, help="hide hubs whose ride + fare (car mode: the drive) saves less "
+                    "than this vs going all the way (default 20%% of the full ride; 0 for --access car; in ride mode "
+                    "at 0 or below, a dearer hub shows only if faster)")
     ap.add_argument("--crosscheck", action="store_true", help="also ask the Transitous router (transit only "
                     "from the origin, and from each of the top hubs) as a second opinion")
     ap.add_argument("--top", type=int, default=8, help="how many options to print in total")

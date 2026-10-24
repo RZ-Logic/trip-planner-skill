@@ -1227,5 +1227,22 @@ class CliStaleNotes(unittest.TestCase):
         self.assertEqual(dc.stale_notes(), [])
 
 
+class OneHolidaySource(unittest.TestCase):
+    """Muse item 9.a: parking.py kept its own copies of trip_hubs' Easter and nth-Monday helpers."""
+
+    def test_anchor_dates_come_from_trip_hubs(self):
+        th = dc.th
+        self.assertFalse(hasattr(pk, "_easter") or hasattr(pk, "_nth_monday"))
+        with mock.patch.object(th, "_easter", return_value=dt.date(2026, 4, 5)) as ea,                 mock.patch.object(th, "_nth_monday", return_value=dt.date(2026, 9, 7)) as nm:
+            self.assertEqual(pk.anchor_date("good_friday", 2026), dt.date(2026, 4, 3))
+            self.assertEqual(pk.anchor_date("easter_monday", 2026), dt.date(2026, 4, 6))
+            self.assertEqual(pk.anchor_date("labour_day", 2026), dt.date(2026, 9, 7))
+        ea.assert_called_with(2026)
+        nm.assert_called_with(2026, 9, 1)
+        for y in range(2000, 2100):   # the dates themselves are unchanged
+            self.assertEqual(pk.anchor_date("thanksgiving", y).weekday(), 0)
+            self.assertEqual(pk.anchor_date("good_friday", y), th._easter(y) - dt.timedelta(days=2))
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -904,29 +904,10 @@ def parse_height(v):
 
 # --------------------------------------------------------------------------- pricing
 
-def _easter(year):
-    """Easter Sunday (Gregorian, anonymous algorithm)."""
-    a, b, c = year % 19, year // 100, year % 100
-    d, e = b // 4, b % 4
-    f = (b + 8) // 25
-    g = (b - f + 1) // 3
-    h = (19 * a + b - d - g + 15) % 30
-    i, k = c // 4, c % 4
-    l = (32 + 2 * e + 2 * i - h - k) % 7
-    m = (a + 11 * h + 22 * l) // 451
-    month = (h + l - 7 * m + 114) // 31
-    return dt.date(year, month, (h + l - 7 * m + 114) % 31 + 1)
-
-
-def _nth_monday(year, month, n):
-    d = dt.date(year, month, 1)
-    d += dt.timedelta(days=(0 - d.weekday()) % 7)
-    return d + dt.timedelta(weeks=n - 1)
-
-
 def anchor_date(tok, year):
     """A season end or free day for `year`: 'MM-DD' or a named anchor (victoria_day, fri_before_victoria_day,
-    labour_day, thanksgiving, civic_holiday, family_day, good_friday, easter_monday)."""
+    labour_day, thanksgiving, civic_holiday, family_day, good_friday, easter_monday). Easter and the nth Monday
+    come from trip_hubs, the one holiday source."""
     t = str(tok).strip().lower()
     m = re.match(r"^(\d{2})-(\d{2})$", t)
     if m:
@@ -940,17 +921,17 @@ def anchor_date(tok, year):
             d -= dt.timedelta(days=1)
         return d - dt.timedelta(days=3) if t.startswith("fri") else d
     if t == "labour_day":
-        return _nth_monday(year, 9, 1)
+        return th._nth_monday(year, 9, 1)
     if t == "thanksgiving":
-        return _nth_monday(year, 10, 2)
+        return th._nth_monday(year, 10, 2)
     if t == "civic_holiday":
-        return _nth_monday(year, 8, 1)
+        return th._nth_monday(year, 8, 1)
     if t == "family_day":
-        return _nth_monday(year, 2, 3)
+        return th._nth_monday(year, 2, 3)
     if t == "good_friday":
-        return _easter(year) - dt.timedelta(days=2)
+        return th._easter(year) - dt.timedelta(days=2)
     if t == "easter_monday":
-        return _easter(year) + dt.timedelta(days=1)
+        return th._easter(year) + dt.timedelta(days=1)
     raise ValueError("unknown date anchor %r" % tok)
 
 

@@ -316,15 +316,25 @@ def price_network(station, car):
     return network_entry(station.get("network_code"), car["tesla"], station.get("name"))
 
 
-def usd_cad():
-    """(rate, date) to convert US dollar prices: the Bank of Canada rate stored in tolls.json."""
+USD_CAD_MISSING = ("no US dollar rate stored in tolls.json (usd_cad), so US charger prices are counted at par "
+                   "in CAD")
+
+
+def usd_cad(warnings=None):
+    """(rate, date) to convert US dollar prices: the Bank of Canada rate stored in tolls.json. Without a stored
+    rate, 1.0 (par) and one warning in `warnings`."""
     fx = dc.load_data("tolls").get("usd_cad") or {}
-    return float(fx.get("rate") or 1.0), fx.get("date") or ""
+    if not fx.get("rate"):
+        if warnings is not None and USD_CAD_MISSING not in warnings:
+            warnings.append(USD_CAD_MISSING)
+        return 1.0, ""
+    return float(fx["rate"]), fx.get("date") or ""
 
 
-def stop_price(station, car, kwh, minutes, kw):
+def stop_price(station, car, kwh, minutes, kw, warnings=None):
     """(cost, price_text, price_source) for one charging session. `minutes` are billed minutes (see
-    billed_minutes). price_text is short and has no parentheses: the CLI prints it inside some."""
+    billed_minutes). price_text is short and has no parentheses: the CLI prints it inside some. `warnings`
+    gets a note when a US price has no stored exchange rate."""
     tesla_site = is_tesla_site(station)
     # a price NLR lists at a Supercharger is the non-Tesla rate (trip-planner research, 2026-10-10); Tesla
     # owners pay the owner rate
@@ -335,7 +345,7 @@ def stop_price(station, car, kwh, minutes, kw):
             txt += " non-Tesla rate"
         cost = _price_cost(p, kwh, minutes, kw)
         if station.get("country") == "US":   # NLR lists US prices in US dollars
-            rate, _ = usd_cad()
+            rate, _ = usd_cad(warnings)
             txt = txt.replace("listed $", "listed US$", 1) + ", in CAD at %.2f" % rate
             cost *= rate
         return round(cost, 2), txt, "station"
@@ -376,6 +386,11 @@ def _nlr_call(path, params, key, warnings, post=False, with_total=False):
     except Exception as e:   # noqa: BLE001
         warnings.append("NLR charger API failed (%s)" % e.__class__.__name__)
     return None
+
+
+def _has_point(r):
+    """An NLR record with both coordinates (one with a latitude only would stop norm_nlr)."""
+    return r.get("latitude") is not None and r.get("longitude") is not None
 
 
 def norm_nlr(r):
@@ -490,7 +505,7 @@ def stations_along(poly, warnings, opts=None):
                                            "ev_charging_level": "dc_fast", "country": NLR_COUNTRY, "status": "E",
                                            "access": "public", "limit": "all"}, _nlr_key(opts), warnings, post=True)
     if recs is not None:
-        return ([norm_nlr(r) for r in recs if r.get("latitude") is not None],
+        return ([norm_nlr(r) for r in recs if _has_point(r)],
                 "NLR Alternative Fuel Stations API (US DOE and NRCan data), public DC fast within %d mi of the route" % ROUTE_MILES)
     pts = dc.thin(poly, 120)
     q = "[out:json][timeout:90];nwr[\"amenity\"=\"charging_station\"](around:3000,%s);out center tags;" % (
@@ -521,7 +536,7 @@ def stations_near(lat, lon, warnings, opts=None):
                              _nlr_key(opts), warnings)
             ids = set(r.get("id") for r in recs)
             recs = recs + [r for r in more or [] if r.get("id") not in ids]
-        return [norm_nlr(r) for r in recs if r.get("latitude") is not None]
+        return [norm_nlr(r) for r in recs if _has_point(r)]
     q = "[out:json][timeout:60];nwr[\"amenity\"=\"charging_station\"](around:%d,%.3f,%.3f);out center tags;" % (
         DEST_MILES * 1609, lat, lon)
     els = _overpass(q, warnings)
@@ -716,7 +731,7 @@ def plan_charging(poly, route_km, depart, car, soc_start, temp_c, warnings, opts
             kwh = (target - arr) * usable
             kw = min(c["max_kw"] or m["assumed_kw_when_missing"], car["max_dc_kw"])
             cmin = charge_minutes(car, kwh, c["max_kw"], temp_c)
-            cost, ptext, psrc = stop_price(c["st"], car, kwh, billed_minutes(cmin), kw)
+            cost, ptext, psrc = stop_price(c["st"], car, kwh, billed_minutes(cmin), kw, warnings)
             if psrc == "network estimate":
                 est_nets.append(price_network(c["st"], car))
             stops.append({"name": c["st"]["name"], "network": _display_network(c["st"], car), "lat": c["st"]["lat"],
@@ -1167,7 +1182,7 @@ def _target(c, cands, per_km, reserve, max_soc, route_km, m):
     return min(max_soc, need)
 
 
-def _l2_price_text(raw, country=""):
+def _l2_price_text(raw, country="", warnings=None):
     """Short Level 2 price text: no parentheses, at most about 60 characters of the listed text. A US price
     (NLR lists those in US dollars) says US$ and adds the rate in CAD, as stop_price does for DC."""
     raw = re.sub(r"\s+", " ", (raw or "").replace("(", "").replace(")", "")).strip()
@@ -1182,7 +1197,7 @@ def _l2_price_text(raw, country=""):
     if country == "US" and "$" in raw:
         raw = re.sub(r"(?<![A-Za-z])\$", "US$", raw)
         if p is not None and p["model"] != "free":
-            fx, _ = usd_cad()
+            fx, _ = usd_cad(warnings)
             cad = dict(p, rate=p["rate"] * fx, fee=(p.get("fee") or 0.0) * fx,
                        first=None if p.get("first") is None else p["first"] * fx,
                        pairs=[(a * fx, b) for a, b in p.get("pairs") or []])
@@ -1208,9 +1223,9 @@ def _dest_chargers(dest, car, warnings, opts):
         kw, ports, codes, note = comp
         is_dc = any(c in DC_CODES for c in codes)
         if is_dc:
-            ptxt = stop_price(st, car, 30.0, 30.0, kw or 50)[1]
+            ptxt = stop_price(st, car, 30.0, 30.0, kw or 50, warnings)[1]
         else:
-            ptxt = _l2_price_text(st.get("pricing"), st.get("country"))
+            ptxt = _l2_price_text(st.get("pricing"), st.get("country"), warnings)
         km = th.haversine_m(lat, lon, st["lat"], st["lon"]) / 1000.0
         if km > DEST_MILES * 1.609 * 1.25:
             continue

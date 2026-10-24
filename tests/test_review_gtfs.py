@@ -77,6 +77,66 @@ def run(args, as_json=True):
     return json.loads(out.getvalue()) if as_json else out.getvalue()
 
 
+class UntimedStopsByDistance(unittest.TestCase):
+    """Muse item 12.a: untimed stops were spread evenly by stop count. A (10:00) to C (10:50) through untimed D
+    and B: D is 556 m out of 5,560 m and B 2,224 m, so they are passed at 10:05 and 10:20, not 10:16 and 10:33."""
+    TIMES = [("t1", "10:00:00", "10:00:00", "A", 1, 0, 0), ("t1", "", "", "D", 2, 0, 0),
+             ("t1", "", "", "B", 3, 0, 0), ("t1", "10:50:00", "10:50:00", "C", 4, 0, 0)]
+
+    def times(self, path):
+        net, _scan, _idx = scan_for(path, hms(9, 0), hms(12, 0))
+        return {net.stop_name[c[2]]: c[0] for c in net.conns}
+
+    def test_straight_line_distance_between_stops(self):
+        got = self.times(feed([("1", "WK", "t1", "C")], self.TIMES))
+        self.assertEqual((got["Hub D"], got["Transfer B"]), (hms(10, 5), hms(10, 20)))
+
+    def test_shape_dist_traveled_when_every_stop_has_it(self):
+        st = ("trip_id,arrival_time,departure_time,stop_id,stop_sequence,pickup_type,drop_off_type,"
+              "shape_dist_traveled\n" + "".join("%s,%s,%s,%s,%d,0,0,%s\n" % (r[:5] + (sd,))
+                                                for r, sd in zip(self.TIMES, ("0", "1000", "1500", "3000"))))
+        got = self.times(feed([("1", "WK", "t1", "C")], self.TIMES, extra={"stop_times.txt": st}))
+        self.assertEqual((got["Hub D"], got["Transfer B"]), (hms(10, 16) + 40, hms(10, 25)))
+
+    def test_by_stop_count_when_distances_cannot_be_used(self):
+        rows = [[1, 0, 0, "A"], [2, None, None, "D"], [3, None, None, "B"], [4, 900, 900, "C"]]
+        self.assertEqual([r[1] for r in th.fill_missing_times([list(r) for r in rows])], [0, 300, 600, 900])
+        self.assertEqual([r[1] for r in th.fill_missing_times([list(r) for r in rows], [0, 50, 40, 90])],
+                         [0, 300, 600, 900])   # distances that run backwards are not used
+        self.assertEqual([r[1] for r in th.fill_missing_times([list(r) for r in rows], [0, 10, 80, 90])],
+                         [0, 100, 800, 900])
+
+
+class FeedLoadErrors(unittest.TestCase):
+    """Muse item 12.v: the per-feed handler turned a bug in trip_hubs.py into 'feed X failed to load: msg', the
+    same words as a broken feed."""
+    ARGS = ["--origin", "43.4990,-79.8000", "--dest", "43.5500,-79.8000", "--depart", "2026-10-15 10:00",
+            "--min-saving", "0", "--radius-km", "5", "--origin-walk-m", "300"] + BASE
+
+    def warnings_for(self, err):
+        good = feed([("X", "WK", "x1", "C")],
+                    [("x1", "10:20:00", "10:20:00", "D", 1, 0, 0), ("x1", "10:35:00", "10:35:00", "C", 2, 0, 0)])
+        real = th.load_feed
+
+        def load(net, fid, *a, **k):
+            if fid == "bad":
+                raise err
+            return real(net, fid, *a, **k)
+        with mock.patch.object(th, "load_feed", side_effect=load):
+            return run(self.ARGS + ["--feed", "good=" + good, "--feed", "bad=" + good])["warnings"]
+
+    def test_a_bug_is_named_as_one(self):
+        w = [x for x in self.warnings_for(TypeError("unsupported operand type(s)")) if "feed bad" in x]
+        self.assertEqual(len(w), 1, w)
+        self.assertIn("an error in trip_hubs.py, not in the feed (TypeError: unsupported operand type(s)", w[0])
+
+    def test_a_broken_feed_keeps_its_wording(self):
+        w = [x for x in self.warnings_for(ValueError("not a GTFS zip (missing stops/trips/stop_times)"))
+             if "feed bad" in x]
+        self.assertEqual(w, ["feed bad failed to load, so its service is missing from this answer: not a GTFS zip "
+                             "(missing stops/trips/stop_times)"])
+
+
 class StopTimesOrderTests(unittest.TestCase):
     """hubs-engine-4: times that fall along a trip never become a connection that arrives before it leaves."""
 
@@ -427,6 +487,14 @@ class ArgValidationTests(unittest.TestCase):
             with self.subTest(extra=extra), redirect_stderr(io.StringIO()):
                 self.assertRaises(SystemExit, dp.build_parser().parse_args, self.ARGS + extra)
         self.assertEqual(dp.build_parser().parse_args(self.ARGS + ["--value-of-time", "45"]).value_of_time, 45.0)
+
+    def test_drive_plan_temp_c_rejects_nan_and_inf(self):
+        # Muse item 11: --temp-c was a plain float, so nan, inf and 1e999 passed
+        import drive_plan as dp
+        for v in ("nan", "inf", "-inf", "1e999", "warm"):
+            with self.subTest(v=v), redirect_stderr(io.StringIO()):
+                self.assertRaises(SystemExit, dp.build_parser().parse_args, self.ARGS + ["--temp-c", v])
+        self.assertEqual(dp.build_parser().parse_args(self.ARGS + ["--temp-c", "-12.5"]).temp_c, -12.5)
 
     def test_footpath_zero_plans(self):
         p = feed(FootpathTests.TRIPS, FootpathTests.TIMES)

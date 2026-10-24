@@ -473,6 +473,20 @@ class ReviewDisplay(unittest.TestCase):
                          "Google reviews of P1 mention $9 weekends (Aug 2026, Jane, https://maps/r1); "
                          "Google reviews of P2 mention $20 per day (Jul 2026, Sam, https://maps/p2), unverified")
 
+    def test_review_text_counts_reviews_of_the_same_rate(self):
+        # Muse item 10.h: three reviewers quoting $15 a day read the same as one
+        def mk(who, ym):
+            return {"amount": 15.0, "unit": "day", "date": ym, "author": who, "place": "P1",
+                    "review_url": "https://maps/" + who}
+        lot = {"name": "P1", "review_place": "P1", "review_mentions": [mk("A", "2026-09"), mk("B", "2026-09"),
+                                                                       mk("C", "2026-05")]}
+        self.assertEqual(dp.review_text(pr, lot),
+                         "Google reviews mention $15 per day (Sep 2026, A and 2 more reviews, https://maps/A), unverified")
+        lot["review_mentions"] = lot["review_mentions"][:2]
+        self.assertIn("(Sep 2026, A and 1 more review, ", dp.review_text(pr, lot))
+        lot["review_mentions"] = lot["review_mentions"][:1]
+        self.assertEqual(dp.review_text(pr, lot), "Google reviews mention $15 per day (Sep 2026, A, https://maps/A), unverified")
+
 
 if __name__ == "__main__":
     unittest.main()

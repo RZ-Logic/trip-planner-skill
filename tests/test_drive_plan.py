@@ -285,6 +285,19 @@ class TradeOffTests(unittest.TestCase):
         self.assertIn("take B (toll-free)", t["text"])
         self.assertIn("$5 account fee", t["fee_note"])
 
+    def test_fee_text_follows_the_data(self):
+        # Muse item 11: the fee note and the 407 line said "$5" whatever tolls.json holds
+        tolls = dict(dp.dc.load_data("tolls"))
+        tolls["etr407"] = dict(tolls["etr407"], account_fee_monthly=6.5)
+        seg = {"direction": "E", "band_start": "07:00", "band_end": "09:30", "day_type": "weekday",
+               "toll_transponder": 7.75, "toll_camera": 13.05}
+        with mock.patch.dict(dp.dc._DATA, {"tolls": tolls}):
+            t = dp.trade_off(self.items(), 30, False)
+            line = dp.etr_lines({"etr": [seg]}, False, True)[0]
+        self.assertIn("a $6.50 account fee", t["fee_note"])
+        self.assertTrue(line.endswith("(+$6.50 account fee that month)"), line)
+        self.assertNotIn("$5", dp.build_parser().format_help().split("--407-this-month", 1)[1].split("--", 1)[0])
+
     def test_high_value_of_time_takes_407(self):
         t = dp.trade_off(self.items(), 300, True)
         self.assertEqual(t["rec"], "A")
@@ -497,26 +510,21 @@ class PlanTests(unittest.TestCase):
         self.assertTrue(any("parking.py is missing" in w for w in res["warnings"]))
         self.assertIn("Navigate to the destination", text)
 
-    def test_hub_args_fallback(self):
-        w = []
-        saved = th.__dict__.pop("build_parser", None)
-        try:
-            ns, argv = dp.hub_args(MILTON, UNION, dt.datetime(2026, 10, 14, 9), True, 0.15, 9, w)
-        finally:
-            if saved is not None:
-                th.build_parser = saved
+    def test_no_built_in_trip_hubs_defaults(self):
+        # Muse item 9.k: a copy of trip_hubs' defaults for an older trip_hubs had already drifted (safety_min 3.0
+        # against the parser's None); both ship together, so the real parser is the only source
+        self.assertFalse(hasattr(dp, "TH_DEFAULTS"))
+        ns, argv = dp.hub_args(MILTON, UNION, dt.datetime(2026, 10, 14, 9), True, 0.15, 9)
+        self.assertEqual(vars(ns), vars(th.build_parser().parse_args(argv)))
+
+    def test_hub_args_parser(self):
+        ns, argv = dp.hub_args(MILTON, UNION, dt.datetime(2026, 10, 14, 9), False, 0.15, 9)
         self.assertEqual(ns.access, "car")
+        self.assertEqual(ns.depart, "2026-10-14 09:00")
+        ns, argv = dp.hub_args(MILTON, UNION, dt.datetime(2026, 10, 14, 9), True, 0.15, 9)
         self.assertEqual(ns.arrive_by, "2026-10-14 09:00")
         self.assertAlmostEqual(ns.car_cost_per_km, 0.15)
         self.assertIn("--access", argv)
-        self.assertTrue(w)
-
-    def test_hub_args_parser(self):
-        if not hasattr(th, "build_parser"):
-            self.skipTest("trip_hubs.build_parser not added yet")
-        ns, argv = dp.hub_args(MILTON, UNION, dt.datetime(2026, 10, 14, 9), False, 0.15, 9, [])
-        self.assertEqual(ns.access, "car")
-        self.assertEqual(ns.depart, "2026-10-14 09:00")
 
 
 NOW = dt.datetime(2026, 10, 10, 12, 0)
@@ -537,6 +545,35 @@ def hub(name, km, leave, arrive, fare, car, park=None, complete=True, parts=None
 
 def H(h, m=0):
     return h * 3600 + m * 60
+
+
+class DataAgeTests(unittest.TestCase):
+    """Muse fresh-3 and docs-struct-3: region files warn after six months, but the bundled driving prices (fuel
+    and electricity costs, tolls, parking, EV charging) had no age check."""
+
+    def test_no_warning_while_fresh(self):
+        self.assertEqual(dp.data_age_notes(dt.date(2027, 4, 10)), [])   # 182 days after 2026-10-10
+
+    def test_one_warning_once_six_months_old(self):
+        w = dp.data_age_notes(dt.date(2027, 5, 1))
+        self.assertEqual(len(w), 1, w)
+        self.assertIn("costs.json", w[0])
+        self.assertIn("tolls.json", w[0])
+        self.assertIn("parking-places-east.json", w[0])
+        self.assertNotIn("ev.json", w[0])                                # a gas car does not read it
+        self.assertIn("last checked 2026-10-10, 6 months ago", w[0])
+        self.assertIn("ev.json", dp.data_age_notes(dt.date(2027, 5, 1), ev=True)[0])
+
+    def test_plan_warns(self):
+        old = dt.datetime(2027, 5, 1, 12, 0)
+        with Env(), at_now(old):
+            res = dp.plan(args_for(*BASE, "--dest", "%f,%f" % MARKHAM, "--depart", "2027-05-03 10:00",
+                                   "--park-and-ride", "off"))
+        self.assertEqual(sum("bundled driving data" in w for w in res["warnings"]), 1, res["warnings"])
+        with Env(), at_now(NOW):
+            res = dp.plan(args_for(*BASE, "--dest", "%f,%f" % MARKHAM, "--depart", "2026-10-14 10:00",
+                                   "--park-and-ride", "off"))
+        self.assertFalse([w for w in res["warnings"] if "bundled driving data" in w])
 
 
 class ParkRideSelectTests(unittest.TestCase):
@@ -797,6 +834,32 @@ class ArriveByTests(unittest.TestCase):
         route = {"plan_s": 3600}
         dep = dp.plan_backwards(DR(), route, dt.datetime(2026, 10, 14, 9, 30), 60, {})
         self.assertLessEqual(dep + dt.timedelta(seconds=route["plan_s"] + 60), dt.datetime(2026, 10, 14, 9, 30))
+        self.assertNotIn("leave_by_late_s", route)
+
+    def test_backsolve_that_does_not_settle_is_flagged(self):
+        # Muse item 11: when the step back does not converge, the leave-by can still be late; it is flagged
+        deadline = dt.datetime(2026, 10, 14, 10, 0)
+
+        class DR:   # not first-in first-out: every departure arrives 10 min after the deadline
+            def retime(self, route, dep, opts):
+                route["depart"] = dep
+                route["plan_s"] = (deadline - dep).total_seconds() + 600
+        route = {"plan_s": 3600}
+        dep = dp.plan_backwards(DR(), route, deadline, 0, {})
+        self.assertGreater(dep + dt.timedelta(seconds=route["plan_s"]), deadline)
+        self.assertEqual(route["leave_by_late_s"], 600)
+
+    def test_late_leave_by_is_a_warning(self):
+        real = dp.plan_backwards
+
+        def late(dr, route, deadline, extra_s, opts):
+            dep = real(dr, route, deadline, extra_s, opts)
+            route["leave_by_late_s"] = 300
+            return dep
+        with Env(), at_now(NOW), mock.patch.object(dp, "plan_backwards", side_effect=late):
+            res = dp.plan(args_for(*BASE, "--dest", "%f,%f" % UNION, "--arrive-by", "2026-10-14 09:00",
+                                   "--park-and-ride", "off"))
+        self.assertTrue(any("about 5 min after the deadline" in w for w in res["warnings"]), res["warnings"])
 
 
 class ParkingAgainTests(unittest.TestCase):   # F8, UX8

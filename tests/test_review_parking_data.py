@@ -390,7 +390,7 @@ class UntrustedLinks(unittest.TestCase):    # owner decision docs-contract-1 (pa
         import ev_charging as ev
         st = ev.norm_osm({"id": 1, "lat": 43.6, "lon": -79.4, "tags": {"name": long, "socket:type1_combo": "2"}})
         self.assertLessEqual(len(st["name"]), 80)
-        hub = dc.th.osm_lots([{"type": "way", "id": 5, "center": {"lat": 43.6, "lon": -79.4},
+        hub = dc.th.parse_osm_lots([{"type": "way", "id": 5, "center": {"lat": 43.6, "lon": -79.4},
                                "tags": {"amenity": "parking", "access": "yes", "name": long}}])
         self.assertLessEqual(len(hub[0]["name"]), 80)
         self.assertEqual(dc.th.osm_name_cut("Short name"), "Short name")

@@ -266,8 +266,9 @@ class OverpassRetryAndErrors(unittest.TestCase):   # item 15
             def __exit__(self, *a):
                 return False
 
-            def read(self):
-                return self.body
+            def read(self, n=-1):   # as a real reply: the body, then nothing
+                body, self.body = self.body, b""
+                return body
 
         def opener(req, timeout=None):
             return Resp(replies.pop(0))

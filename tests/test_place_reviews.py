@@ -104,6 +104,39 @@ class Extractor(unittest.TestCase):
             got = [(m["amount"], m["unit"]) for m in pr.extract_mentions(text, "2026-08", 4)]
             self.assertEqual(got, want, text)
 
+    def test_muse_item_10_skip_rules(self):
+        # Muse items 10.a to 10.e: a hotel price, add-on fees named other ways and older past-price phrasings
+        # were read as parking rates; a "$15 parking fee" was dropped as a fee on top
+        cases = [
+            ("Parking was easy, then I paid $90 for the hotel.", []),
+            ("Parking was fine but the hotel room was $90.", []),
+            ("Hotel parking was $25 a day.", [(25.0, "day")]),
+            ("Parking is $12, plus a $3 credit card processing fee.", [(12.0, "unknown")]),
+            ("Parking is $12 and $3 extra for the credit card.", [(12.0, "unknown")]),
+            ("Parking $12 plus a $4 service charge.", [(12.0, "unknown")]),
+            ("Parking: back in 2023 it was $12, now $15 a day.", [(15.0, "day")]),
+            ("I recall paying $12 back then for parking, now $15 a day.", [(15.0, "day")]),
+            ("Parking was $10 two years ago, now $14 a day.", [(14.0, "day")]),
+            ("Paid the $15 parking fee.", [(15.0, "unknown")]),
+            ("The $20 daily parking fee is steep.", [(20.0, "day")]),
+            ("Parking was $10 plus a $2 booking fee.", [(10.0, "unknown")]),
+        ]
+        for text, want in cases:
+            got = [(m["amount"], m["unit"]) for m in pr.extract_mentions(text, "2026-08", 4)]
+            self.assertEqual(got, want, text)
+
+    def test_event_word_loses_to_a_nearer_day_word(self):
+        # Muse item 10.m: an event word anywhere in the clause won the label
+        cases = [
+            ("The event staff were nice and they charge $10 on weekdays for parking.", [(10.0, "weekday")]),
+            ("Event parking aside, they charge $8 on weekends.", [(8.0, "weekend")]),
+            ("On event nights they charge $30, so plan ahead.", [(30.0, "event")]),
+            ("Leafs game night parking was $40 flat.", [(40.0, "event")]),
+        ]
+        for text, want in cases:
+            got = [(m["amount"], m["unit"]) for m in pr.extract_mentions(text, "2026-08", 4)]
+            self.assertEqual(got, want, text)
+
     def test_range_and_duration_fields(self):
         m = pr.extract_mentions("Parking is $20-25 depending on the day.", "2026-08")[0]
         self.assertEqual(m["max"], 25.0)
@@ -131,7 +164,8 @@ class Extractor(unittest.TestCase):
     def test_summary(self):
         ms = [{"amount": 20.0, "unit": "day", "date": "2026-03"}, {"amount": 15.0, "unit": "flat", "date": "2026-08"},
               {"amount": 15.0, "unit": "flat", "date": "2026-01"}]
-        self.assertEqual(pr.summary_text(ms), "reviews mention $15 flat (Aug 2026), $20 per day (Mar 2026)")
+        self.assertEqual(pr.summary_text(ms), "reviews mention $15 flat (Aug 2026, 2 reviews), $20 per day (Mar 2026)")
+        self.assertEqual(pr.summary_text(ms[:2]), "reviews mention $15 flat (Aug 2026), $20 per day (Mar 2026)")
         self.assertEqual(pr.summary_text([]), "")
 
 
@@ -169,7 +203,8 @@ class Api(unittest.TestCase):
         self.assertIn("places.reviews", mask)
         self.assertIn("places.googleMapsUri", mask)
         sent = json.loads(kw["data"])
-        self.assertEqual(sent["includedTypes"], ["parking", "parking_garage", "parking_lot"])
+        # Muse item 10.j: every Table A parking type the module header lists, park_and_ride included
+        self.assertEqual(sent["includedTypes"], ["parking", "parking_garage", "parking_lot", "park_and_ride"])
         self.assertEqual(sent["maxResultCount"], 20)
         self.assertEqual(sent["locationRestriction"]["circle"]["radius"], 800.0)
         self.assertEqual(sent["locationRestriction"]["circle"]["center"], {"latitude": 43.6406, "longitude": -79.3756})
@@ -239,6 +274,18 @@ class Api(unittest.TestCase):
             res = pr.review_prices(43.64, -79.37, 800, [], key=KEY, today=TODAY)
         ms = res["places"][0]["mentions"]
         self.assertEqual([(m["amount"], m["date"]) for m in ms], [(10.0, "2026-07"), (11.0, "2026-06")])
+
+    def test_reviewers_of_the_same_rate_are_counted(self):
+        # Muse item 10.h: two reviewers quoting the same rate in the same month were kept as one, and the summary
+        # read the same for one report as for three
+        revs = [review("Parking $15 per day.", when="2026-09-02T10:00:00Z", author="A"),
+                review("Parking $15 per day, fine.", when="2026-09-20T10:00:00Z", author="B"),
+                review("Parking was $15 per day.", when="2026-05-03T10:00:00Z", author="C")]
+        with mock.patch.object(dc, "fetch", return_value=reply(place("Lot C", 43.641, -79.376, revs))):
+            res = pr.review_prices(43.64, -79.37, 800, [], key=KEY, today=TODAY)
+        p = res["places"][0]
+        self.assertEqual(sorted(m["author"] for m in p["mentions"]), ["A", "B", "C"])
+        self.assertEqual(p["summary"], "reviews mention $15 per day (Sep 2026, 3 reviews)")
 
     def test_places_without_reviews_kept_last(self):
         body = reply(place("Near no reviews", 43.6407, -79.3757),

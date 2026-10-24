@@ -24,10 +24,11 @@ Extensions used by the open-data parsers (all optional):
   "season" ends may be named anchors that move by year: "victoria_day", "fri_before_victoria_day",
   "labour_day", "thanksgiving", "civic_holiday", "easter_monday", "good_friday"; "season_year": 2026 (the
   season dates are that year's dates; other years get a warning note); "off_season_flat": $ (a different
-  price off season); "off_season_rule": {...} (a full rule priced instead when no day of the stay is in
-  season); "off_season": "unknown" (no published price off season: the lot is price unknown with a check line,
-  and the rule's max stay does not bind); "off_season_max_stay_min": n (a time limit that still applies off
-  season);
+  price off season); "off_season_rule": {...} (a full rule priced instead off season); "off_season": "unknown"
+  (no published price off season: the lot is price unknown with a check line, and the rule's max stay does
+  not bind); with any of these three, a stay partly in season prices each part under its own season's price
+  (a flat price per entry is the arrival day's); "off_season_max_stay_min": n (a time limit that still
+  applies off season);
   "rate_year": 2026 (rates published for that year; later years get a note; a place-level rate_year applies
   to every priced lot of the place); "tax": 0.13 (published rates
   exclude HST); "per_person": {"adult", "child", "senior"} or true (admission per person: the cost is one
@@ -903,29 +904,10 @@ def parse_height(v):
 
 # --------------------------------------------------------------------------- pricing
 
-def _easter(year):
-    """Easter Sunday (Gregorian, anonymous algorithm)."""
-    a, b, c = year % 19, year // 100, year % 100
-    d, e = b // 4, b % 4
-    f = (b + 8) // 25
-    g = (b - f + 1) // 3
-    h = (19 * a + b - d - g + 15) % 30
-    i, k = c // 4, c % 4
-    l = (32 + 2 * e + 2 * i - h - k) % 7
-    m = (a + 11 * h + 22 * l) // 451
-    month = (h + l - 7 * m + 114) // 31
-    return dt.date(year, month, (h + l - 7 * m + 114) % 31 + 1)
-
-
-def _nth_monday(year, month, n):
-    d = dt.date(year, month, 1)
-    d += dt.timedelta(days=(0 - d.weekday()) % 7)
-    return d + dt.timedelta(weeks=n - 1)
-
-
 def anchor_date(tok, year):
     """A season end or free day for `year`: 'MM-DD' or a named anchor (victoria_day, fri_before_victoria_day,
-    labour_day, thanksgiving, civic_holiday, family_day, good_friday, easter_monday)."""
+    labour_day, thanksgiving, civic_holiday, family_day, good_friday, easter_monday). Easter and the nth Monday
+    come from trip_hubs, the one holiday source."""
     t = str(tok).strip().lower()
     m = re.match(r"^(\d{2})-(\d{2})$", t)
     if m:
@@ -939,17 +921,17 @@ def anchor_date(tok, year):
             d -= dt.timedelta(days=1)
         return d - dt.timedelta(days=3) if t.startswith("fri") else d
     if t == "labour_day":
-        return _nth_monday(year, 9, 1)
+        return th._nth_monday(year, 9, 1)
     if t == "thanksgiving":
-        return _nth_monday(year, 10, 2)
+        return th._nth_monday(year, 10, 2)
     if t == "civic_holiday":
-        return _nth_monday(year, 8, 1)
+        return th._nth_monday(year, 8, 1)
     if t == "family_day":
-        return _nth_monday(year, 2, 3)
+        return th._nth_monday(year, 2, 3)
     if t == "good_friday":
-        return _easter(year) - dt.timedelta(days=2)
+        return th._easter(year) - dt.timedelta(days=2)
     if t == "easter_monday":
-        return _easter(year) + dt.timedelta(days=1)
+        return th._easter(year) + dt.timedelta(days=1)
     raise ValueError("unknown date anchor %r" % tok)
 
 
@@ -987,6 +969,20 @@ def _periods(rule):
         return rule["periods"]
     return [{"days": rule.get("paid_days") if rule.get("paid_days") is not None else list(range(7)),
              "hours": rule.get("paid_hours") or ["00:00", "24:00"], "max": rule.get("daily_max")}]
+
+
+def _season_parts(start, end, season):
+    """[(part start, minutes, in season)]: [start, end) cut where the stay crosses into or out of the season."""
+    parts, s = [], start
+    while s < end:
+        ins = _in_season(s.date(), season)
+        e = dt.datetime.combine(s.date(), dt.time()) + dt.timedelta(days=1)
+        while e < end and _in_season(e.date(), season) == ins:
+            e += dt.timedelta(days=1)
+        e = min(e, end)
+        parts.append((s, (e - s).total_seconds() / 60.0, ins))
+        s = e
+    return parts
 
 
 def _windows(rule, start, end, holidays):
@@ -1215,7 +1211,24 @@ def _price_core(rule, arrive, stay_min, holidays=None):
         stext = _season_text(season, arrive.year)
         if rule.get("off_season", "free") == "closed" and len(inside) < len(stay_days):
             return None, "closed off season (open %s)" % stext, False
-        if not inside:
+        off_priced = (rule.get("off_season") == "unknown" or isinstance(rule.get("off_season_rule"), dict)
+                      or rule.get("off_season_flat") is not None)
+        entry = (rule.get("flat") is not None and rule.get("hourly") is None and not rule.get("periods")
+                 and not rule.get("tiers"))
+        if off_priced and inside and len(inside) < len(stay_days) and not entry:
+            # a stay partly off season: each part is priced under its own season's price (a flat price per
+            # entry is the arrival day's, below)
+            if rule.get("off_season") == "unknown":
+                return None, "price not published off season (paid %s), and part of the stay is off season" % stext, fits
+            total, bits = 0.0, []
+            for s, mins, ins in _season_parts(arrive, end, season):
+                c, b, f = _price_core(dict(rule, season=None) if ins else rule, s, mins, holidays)
+                if c is None:
+                    return None, b, fits and f
+                total, fits = total + c, fits and f
+                bits.append("then %s" % b if bits else b)
+            return round(total + 1e-9, 2), "; ".join(bits), fits
+        if not inside or (off_priced and entry and not _in_season(arrive.date(), season)):
             oms = rule.get("off_season_max_stay_min")
             lim = ""
             if oms:
@@ -1273,6 +1286,13 @@ def _price_core(rule, arrive, stay_min, holidays=None):
             rule = dict(rule, paid_hours=["00:00", ef])
         elif hm(ph[0]) < hm(ph[1]) and hm(ph[1]) > hm(ef) and hm(ph[0]) < hm(ef):
             rule = dict(rule, paid_hours=[ph[0], ef])
+    elif rule.get("evening_flat") is not None and rule.get("periods"):
+        # the same for an hourly period that runs past the evening start
+        ef = rule.get("evening_from") or "18:00"
+        rule = dict(rule, periods=[dict(p, hours=[p["hours"][0], ef])
+                                   if p.get("flat") is None and not p.get("free")
+                                   and hm(p["hours"][0]) < hm(ef) < hm(p["hours"][1]) else p
+                                   for p in rule["periods"]])
     if rule.get("tiers"):
         if not has_window and all_hol:
             return 0.0, "free on holidays (%s)" % desc, fits
@@ -1511,6 +1531,10 @@ def make_lot(name, lat, lon, kind, rule, source, source_url, confidence, dest, a
     cost, basis, fits = price_rule(rule, arrive, stay_min, holidays)
     r = rule or {}
     per_person = bool(r.get("per_person"))
+
+    def taxed(v):
+        """A per-person or per-passenger price with the rule's tax, as price_rule adds it to the vehicle price."""
+        return round(float(v) * (1.0 + float(r.get("tax") or 0)) + 1e-9, 2)
     if cost is None:
         text = "price unknown, check signs"
         if basis.startswith("closed off season"):
@@ -1522,19 +1546,19 @@ def make_lot(name, lat, lon, kind, rule, source, source_url, confidence, dest, a
     elif per_person:
         pp = r["per_person"] if isinstance(r["per_person"], dict) else {"adult": cost}
         if party:
-            cost = round(cost * (party.get("adults") or 0) + float(pp.get("child") or 0) * (party.get("children") or 0)
-                         + float(pp.get("senior") or cost) * (party.get("seniors") or 0) + 1e-9, 2)
+            cost = round(cost * (party.get("adults") or 0) + taxed(pp.get("child") or 0) * (party.get("children") or 0)
+                         + (taxed(pp["senior"]) if pp.get("senior") else cost) * (party.get("seniors") or 0) + 1e-9, 2)
             text = "%s admission for your party (per person)" % dc.money(cost)
         else:
-            others = ", ".join("%s %s" % (k, dc.money(pp[k])) for k in ("child", "senior") if pp.get(k) is not None)
+            others = ", ".join("%s %s" % (k, dc.money(taxed(pp[k]))) for k in ("child", "senior") if pp.get(k) is not None)
             text = "%s per adult (admission, per person%s)" % (dc.money(cost), "; " + others if others else "")
     elif r.get("per_passenger"):
         n = sum(int((party or {}).get(k) or 0) for k in ("adults", "children", "seniors"))
         if party and n:
-            cost = round(cost + float(r["per_passenger"]) * max(0, n - 1) + 1e-9, 2)
+            cost = round(cost + taxed(r["per_passenger"]) * max(0, n - 1) + 1e-9, 2)
             text = "%s for your party (%s)" % (dc.money(cost), dur_text(stay_min))
         else:
-            text = "%s for the driver + %s per passenger (%s)" % (dc.money(cost), dc.money(r["per_passenger"]), dur_text(stay_min))
+            text = "%s for the driver + %s per passenger (%s)" % (dc.money(cost), dc.money(taxed(r["per_passenger"])), dur_text(stay_min))
     else:
         text = "%s for %s" % (dc.money(cost), dur_text(stay_min))
     note_bits = [n.rstrip(". ") for n in [notes, r.get("hours_note"), r.get("note")] if n]
@@ -3106,14 +3130,23 @@ def find_parking(lat, lon, arrive, stay_min, opts, warnings):
 
 def main(argv=None):
     """Smoke test: parking.py LAT LON "YYYY-MM-DD HH:MM" STAY_H [MAX_WALK_M]."""
+    try:
+        return _main(argv)
+    except th.DataFileError as e:   # a broken install: one line, not a traceback
+        raise SystemExit(str(e))
+
+
+def _main(argv=None):
     import sys
     a = argv if argv is not None else sys.argv[1:]
     if len(a) < 4:
         raise SystemExit('usage: parking.py LAT LON "YYYY-MM-DD HH:MM" STAY_HOURS [MAX_WALK_M]')
     warnings = []
     arrive = dt.datetime.strptime(a[2], "%Y-%m-%d %H:%M")
+    dc.stale_notes()   # forget stand-ins from an earlier search in the same process
     res = find_parking(float(a[0]), float(a[1]), arrive, float(a[3]) * 60, {
         "max_walk_m": int(a[4]) if len(a) > 4 else 800, "holidays": dc.holidays_for()}, warnings)
+    warnings.extend(w for w in dc.stale_notes() if w not in warnings)   # old cached replies that stood in
     print("PARKING    %s stay from %s, radius %d m" % (dur_text(float(a[3]) * 60), arrive.strftime("%a %Y-%m-%d %H:%M"), res["radius_m"]))
     for r in res["place_rules"]:
         print("  rule: %s" % r)

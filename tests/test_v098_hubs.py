@@ -231,7 +231,7 @@ class ClosedStationLists(unittest.TestCase):
         net.trips.append(("TTC", "TTC", "2", "Line 2", 1, "Kennedy", "t1", "2"))
         net.conns.append((hms(8, 0), hms(8, 2), s0, s1, 0, True, True, 0))
         clusters = [{"lat": lat, "lon": lon, "stops": [s0], "straight_m": 10000.0}]
-        lots = th.osm_lots([{"type": "way", "id": 1, "center": {"lat": lot_lat, "lon": lon},
+        lots = th.parse_osm_lots([{"type": "way", "id": 1, "center": {"lat": lot_lat, "lon": lon},
                              "tags": {"amenity": "parking", "fee": "no"}}])
         return th.hub_parking(net, clusters, [GTHA["park_and_ride"]], lots, 240.0, DAY, set())
 

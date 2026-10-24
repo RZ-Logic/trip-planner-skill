@@ -1144,5 +1144,105 @@ class CuratedDataFixes(unittest.TestCase):
         self.assertIn("2026 rates", by_name(res)["Exhibition Place Lot 852"]["notes"])
 
 
+class MuseItem4(unittest.TestCase):
+    """Muse item 4: evening_flat on a periods rule, off-season prices on a stay that crosses the season end,
+    and tax on per-passenger and per-person child and senior prices."""
+    SEP30 = dt.datetime(2026, 9, 30, 10, 0)   # Wednesday; the season below ends that day
+    SEASON = {"hourly": 2.0, "daily_max": 10.0, "season": ["05-01", "09-30"]}
+
+    def test_evening_flat_on_periods_is_not_charged_twice(self):
+        # the hourly period stops at the evening start, as the same rule written with paid_hours
+        periods = {"hourly": 2.0, "periods": [{"hours": ["08:00", "21:00"]}], "evening_flat": 6.0,
+                   "evening_from": "18:00"}
+        hours = {"hourly": 2.0, "paid_hours": ["08:00", "21:00"], "evening_flat": 6.0, "evening_from": "18:00"}
+        at = dt.datetime(2026, 10, 14, 17, 0)
+        self.assertEqual(pk.price_rule(hours, at, 180)[0], 8.0)
+        self.assertEqual(pk.price_rule(periods, at, 180)[0], 8.0)
+        self.assertEqual(pk.price_rule(periods, dt.datetime(2026, 10, 14, 9, 0), 180)[0], 6.0)   # daytime only
+
+    def test_straddle_charges_the_off_season_rule(self):
+        rule = dict(self.SEASON, off_season_rule={"hourly": 1.0, "daily_max": 5.0})
+        cost, basis, fits = pk.price_rule(rule, self.SEP30, 3 * 1440)
+        self.assertEqual(cost, 10.0 + 5.0 * 3)            # Sep 30 in season, Oct 1 to 3 off season
+        self.assertTrue(fits)
+        self.assertIn("off season", basis)
+
+    def test_straddle_charges_the_off_season_flat(self):
+        rule = dict(self.SEASON, off_season_flat=4.0)
+        self.assertEqual(pk.price_rule(rule, self.SEP30, 3 * 1440)[0], 14.0)
+
+    def test_straddle_with_unknown_off_season_is_price_unknown(self):
+        cost, basis, _f = pk.price_rule(dict(self.SEASON, off_season="unknown"), self.SEP30, 3 * 1440)
+        self.assertIsNone(cost)
+        self.assertIn("off season", basis)
+
+    def test_straddle_without_off_season_price_stays_free_off_season(self):
+        self.assertEqual(pk.price_rule(self.SEASON, self.SEP30, 3 * 1440)[0], 10.0)
+
+    def test_flat_per_entry_is_the_arrival_days_price(self):
+        rule = {"flat": 21.0, "season": ["05-01", "10-31"], "off_season_flat": 17.5}
+        self.assertEqual(pk.price_rule(rule, dt.datetime(2026, 10, 31, 22, 0), 180)[0], 21.0)
+        self.assertEqual(pk.price_rule(rule, dt.datetime(2026, 4, 30, 22, 0), 180)[0], 17.5)
+
+    def lot(self, rule, party):
+        return pk.make_lot("L", 43.0, -79.0, "park", rule, "Test", "u", "curated", (43.0, -79.0), WED, 60, set(),
+                           party=party)
+
+    def test_per_passenger_fee_is_taxed(self):
+        lot = self.lot({"flat": 10.0, "tax": 0.13, "per_passenger": 5.0}, {"adults": 3})
+        self.assertEqual(lot["cost"], 22.6)                # 11.30 + 2 x 5.65
+        lot = self.lot({"flat": 10.0, "tax": 0.13, "per_passenger": 5.0}, None)
+        self.assertIn("$5.65 per passenger", lot["cost_text"])
+
+    def test_per_person_child_and_senior_are_taxed(self):
+        rule = {"flat": 10.0, "tax": 0.13, "per_person": {"adult": 10.0, "child": 5.0, "senior": 8.0}}
+        lot = self.lot(rule, {"adults": 1, "children": 1, "seniors": 1})
+        self.assertEqual(lot["cost"], 25.99)               # 11.30 + 5.65 + 9.04
+        self.assertIn("child $5.65", self.lot(rule, None)["cost_text"])
+        no_senior = {"flat": 10.0, "tax": 0.13, "per_person": {"adult": 10.0, "child": 5.0}}
+        self.assertEqual(self.lot(no_senior, {"seniors": 1})["cost"], 11.3)   # a senior pays the adult price
+
+    def test_untaxed_per_person_unchanged(self):
+        rule = {"flat": 11.87, "per_person": {"adult": 11.87, "child": 8.19, "senior": 9.32}}
+        self.assertEqual(self.lot(rule, {"adults": 2, "children": 1, "seniors": 1})["cost"], 41.25)
+
+
+class CliStaleNotes(unittest.TestCase):
+    """Muse item 7: parking.py's command line never printed dc.stale_notes(), so an old cached reply that stood in
+    for a failed request was shown with no warning."""
+
+    def test_cli_warns_about_stale_stand_ins(self):
+        self.addCleanup(dc._STALE.clear)
+        res = {"radius_m": 800, "place_rules": [], "reservations": [], "options": [], "check": None,
+               "caveat": "prices change", "sources": []}
+
+        def fake_find(*a, **k):
+            dc._STALE["gis.example.org"] = (72.0, "URLError")
+            return res
+        out = io.StringIO()
+        with mock.patch.object(pk, "find_parking", side_effect=fake_find), mock.patch("sys.stdout", out):
+            pk.main(["43.5", "-79.8", "2026-10-14 10:00", "2"])
+        self.assertIn("WARNING    gis.example.org did not answer (URLError); used its cached reply from 3 days ago",
+                      out.getvalue())
+        self.assertEqual(dc.stale_notes(), [])
+
+
+class OneHolidaySource(unittest.TestCase):
+    """Muse item 9.a: parking.py kept its own copies of trip_hubs' Easter and nth-Monday helpers."""
+
+    def test_anchor_dates_come_from_trip_hubs(self):
+        th = dc.th
+        self.assertFalse(hasattr(pk, "_easter") or hasattr(pk, "_nth_monday"))
+        with mock.patch.object(th, "_easter", return_value=dt.date(2026, 4, 5)) as ea,                 mock.patch.object(th, "_nth_monday", return_value=dt.date(2026, 9, 7)) as nm:
+            self.assertEqual(pk.anchor_date("good_friday", 2026), dt.date(2026, 4, 3))
+            self.assertEqual(pk.anchor_date("easter_monday", 2026), dt.date(2026, 4, 6))
+            self.assertEqual(pk.anchor_date("labour_day", 2026), dt.date(2026, 9, 7))
+        ea.assert_called_with(2026)
+        nm.assert_called_with(2026, 9, 1)
+        for y in range(2000, 2100):   # the dates themselves are unchanged
+            self.assertEqual(pk.anchor_date("thanksgiving", y).weekday(), 0)
+            self.assertEqual(pk.anchor_date("good_friday", y), th._easter(y) - dt.timedelta(days=2))
+
+
 if __name__ == "__main__":
     unittest.main()

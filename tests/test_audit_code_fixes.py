@@ -245,6 +245,50 @@ class DriveGeocodeBlockedTest(unittest.TestCase):
 
 
 
+class MuseItem5Guards(unittest.TestCase):
+    """Muse item 5: an NLR record with a latitude but no longitude aborted the run with KeyError, and a missing
+    usd_cad rate counted US dollar prices at par with no warning."""
+
+    def test_record_without_longitude_is_skipped(self):
+        bad = us_station(9, "No longitude", 80)
+        del bad["longitude"]
+        net = FakeNLR(route=[bad, us_station(1, "Pembroke Service Area", 60)], near=[bad])
+        w = []
+        with mock.patch.object(dc, "fetch", side_effect=net), mock.patch.object(ev, "log"):
+            along, _src = ev.stations_along(us_line(120), w)
+            near = ev.stations_near(42.8864, -78.8784, w)
+        self.assertEqual([s["name"] for s in along], ["Pembroke Service Area"])
+        self.assertEqual(near, [])
+
+    def no_rate(self):
+        tolls = {k: v for k, v in dc.load_data("tolls").items() if k != "usd_cad"}
+        p = mock.patch.dict(dc._DATA, {"tolls": tolls})
+        p.start()
+        self.addCleanup(p.stop)
+
+    def test_missing_rate_warns(self):
+        self.no_rate()
+        route = [us_station(1, "Pembroke 150", 150, pricing="$0.48 per kWh"),
+                 us_station(3, "Syracuse 300", 300, network="EVGO", pricing="$0.52 per kWh")]
+        for r in route:
+            r["country"] = "US"
+        w = []
+        with mock.patch.object(dc, "fetch", side_effect=FakeNLR(route=route)), mock.patch.object(ev.time, "sleep"), \
+                mock.patch.object(ev, "log"):
+            r = ev.plan_charging(us_line(420), 420, DEPART, ev.car_profile("equinox"), 0.8, 10, w, {"hwy_share": 0.85})
+        self.assertTrue(r["stops"])
+        self.assertEqual(sum("usd_cad" in x for x in w), 1, w)   # once per run, not per stop
+
+    def test_stored_rate_does_not_warn(self):
+        w = []
+        st = {"name": "EA Buffalo", "network_code": "Electrify America", "pricing": "$0.48 per kWh", "country": "US"}
+        ev.stop_price(st, ev.car_profile("ioniq5"), 20.0, 20.0, 150.0, w)
+        self.assertEqual(w, [])
+        self.no_rate()
+        ev.stop_price(st, ev.car_profile("ioniq5"), 20.0, 20.0, 150.0, w)
+        self.assertEqual(len(w), 1)
+
+
 class USDollarPrices(unittest.TestCase):
     """A price a US station lists is in US dollars: shown as US$ and converted to CAD for the cost."""
 

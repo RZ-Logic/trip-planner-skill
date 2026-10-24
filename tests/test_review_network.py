@@ -77,6 +77,38 @@ def dt_(hour):
 TRIP = ["--dest", "43.5812,-79.6475", "--depart", "2026-10-21 08:00"]
 
 
+class CheckNetworkErrorPages(unittest.TestCase):
+    """Muse item 12.x: check_network passed any HTTP error as 'ok' (the host answered), so a proxy's 502 or 403
+    page, or a 5xx, passed the preflight and the run failed later."""
+
+    def setUp(self):
+        fresh_cache(self)
+
+    def err(self, code, headers):
+        e = urllib.error.HTTPError("https://example.invalid/", code, "x", headers, io.BytesIO(b""))
+        self.addCleanup(th.close_quietly, e)
+        return e
+
+    def status(self, e):
+        with mock.patch.object(th.urllib.request, "urlopen", side_effect=e):
+            return th.check_network(["example.invalid"])["example.invalid"]
+
+    def test_5xx_page_is_a_failure(self):
+        s = self.status(self.err(502, {"Server": "nginx"}))
+        self.assertTrue(s.startswith("blocked: HTTP 502 error page"), s)
+        self.assertNotIn("(", s.split(" (", 1)[0])   # preflight reads the cause back up to " ("
+
+    def test_proxy_pages_are_failures(self):
+        for e in (self.err(502, {"Server": "squid/5.7"}), self.err(403, {"X-Squid-Error": "ERR_ACCESS_DENIED 0"}),
+                  self.err(403, {"Server": "corporate-proxy"})):
+            self.assertTrue(self.status(e).startswith("blocked: a proxy refused"), self.status(e))
+
+    def test_the_host_answering_is_still_ok(self):
+        self.assertEqual(self.status(self.err(404, {"Server": "nginx"})), "ok")
+        self.assertEqual(self.status(self.err(403, {"Server": "nginx"})), "ok")
+        self.assertEqual(self.status(ConnectionResetError(10054, "reset")), "ok")   # a dropped connection answered
+
+
 class TlsAndCauses(unittest.TestCase):
     """hubs-pricing-io-4: a failed certificate check is its own case (not 'reachable', not an address problem), and
     NETWORK BLOCKED names the cause it saw instead of always saying DNS failure or connection refused."""
@@ -539,6 +571,56 @@ class JsonCache(unittest.TestCase):
             self.assertEqual(w, [])
         self.assertEqual(op.call_count, 2)
 
+    def test_toronto_feed_without_closure_list_warns_and_is_not_cached(self):
+        # Muse item 7: a reply with no "Closure" list silently meant no closures, cached for an hour
+        legs = [("out", [(43.65, -79.40), (43.66, -79.39)], dt_(8), dt_(9))]
+        with self.opener(b'{"Restrictions": []}', json.dumps({"Closure": []}).encode()) as op:
+            w = []
+            dp.toronto_incidents(legs, "America/Toronto", None, w)
+            self.assertTrue(any("Toronto road restrictions" in x and "Closure" in x for x in w), w)
+            w = []
+            dp.toronto_incidents(legs, "America/Toronto", None, w)
+            self.assertEqual(w, [])
+        self.assertEqual(op.call_count, 2)
+
+    def test_valhalla_error_body_not_cached(self):
+        # Muse item 7: a Valhalla error sent with HTTP 200 was cached for 24 h and replayed
+        import drive_route as dr
+        trip = {"status": 0, "legs": []}
+        with self.opener(b'{"error": "Failed to parse json request"}', json.dumps({"trip": trip}).encode()) as op:
+            with self.assertRaises(Exception) as cm:
+                dr._valhalla_fetch((43.5, -79.8), (43.6, -79.7), False, 0)
+            self.assertIn("Failed to parse json request", str(cm.exception))
+            self.assertEqual(dr._valhalla_fetch((43.5, -79.8), (43.6, -79.7), False, 0), [trip])
+        self.assertEqual(op.call_count, 2)
+
+    def test_osrm_error_body_not_cached(self):
+        # Muse item 7: an OSRM reply whose code is not "Ok" was cached for 24 h and replayed
+        import drive_route as dr
+        bad = b'{"code": "InvalidQuery", "message": "Query string malformed"}'
+        with self.opener(bad, bad, bad, bad) as op:
+            for _ in range(2):
+                with self.assertRaises(Exception) as cm:
+                    dr._osrm((43.5, -79.8), (43.6, -79.7), dt_(8), {}, [])
+                self.assertIn("Query string malformed", str(cm.exception))
+        self.assertEqual(op.call_count, 4)   # both servers asked again, no replay from the cache
+
+    def test_oversize_reply_is_refused_and_not_cached(self):
+        # Muse item 11 (security): fetch() read the whole body with no limit, unlike trip_hubs' feed downloads
+        with mock.patch.object(dc, "FETCH_MAX_BYTES", 20):
+            with self.opener(b'{"a": "' + b"x" * 30 + b'"}', b'{"a": 1}') as op:
+                with self.assertRaises(dc.FetchError) as cm:
+                    dc.fetch_json(self.URL, max_age_h=720)
+                self.assertIn("limit", str(cm.exception))
+                self.assertEqual(dc.fetch_json(self.URL, max_age_h=720), {"a": 1})   # under the limit: kept
+            self.assertEqual(op.call_count, 2)
+            big = FakeResp(b"{}")
+            big.headers = {"Content-Length": "5000"}
+            with mock.patch.object(dc._OPENER, "open", return_value=big):
+                with self.assertRaises(dc.FetchError) as cm:
+                    dc.fetch(self.URL + "&big=1")
+            self.assertIn("offers", str(cm.exception))
+
     def test_nlr_html_not_cached(self):
         import ev_charging as evc
         with self.opener(b"<html>proxy</html>", b'{"fuel_stations": []}'):
@@ -959,14 +1041,8 @@ class ConfigurableRouters(unittest.TestCase):
 
     def test_park_and_ride_passes_the_configured_osrm_url(self):
         self.env()
-        ns, _argv = dp.hub_args((43.5, -79.8), (43.65, -79.38), dt_(8), False, 0.17, 4.0, [])
+        ns, _argv = dp.hub_args((43.5, -79.8), (43.65, -79.38), dt_(8), False, 0.17, 4.0)
         self.assertEqual(ns.osrm_url, "http://osrm-a.example:5000")
-        w = []
-        older = mock.Mock(wraps=th, spec=[a for a in dir(th) if a != "build_parser"])
-        with mock.patch.object(dp, "th", older):
-            ns, _argv = dp.hub_args((43.5, -79.8), (43.65, -79.38), dt_(8), False, 0.17, 4.0, w)
-        self.assertTrue(w, "the older-trip_hubs path was not taken")
-        self.assertEqual(ns.osrm_url, "http://osrm-a.example:5000")   # the older-trip_hubs fallback too
 
     def test_check_network_lists_the_configured_hosts_only(self):
         self.env()

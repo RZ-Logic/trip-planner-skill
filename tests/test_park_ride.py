@@ -14,6 +14,7 @@ _atexit.register(_shutil.rmtree, _TMP, True)            # even when exported: se
 _os.environ["TRIP_PLANNER_CONFIG"] = _os.path.join(_TMP, "config", "car.json")
 _os.environ["TRIP_PLANNER_CACHE"] = _os.path.join(_TMP, "cache")
 _os.environ.setdefault("TRIP_PLANNER_QUIET", "1")   # no progress lines on stderr (TRIP_PLANNER_QUIET=0 shows them)
+import datetime as dt
 import io
 import json
 import os
@@ -82,12 +83,32 @@ class Helpers(unittest.TestCase):
         self.assertEqual(th.station_key("Milton GO"), "milton")
 
     def test_charge_cost(self):
-        self.assertEqual(th.charge_cost("$2/hr;$5 max", 240), 5.0)
-        self.assertEqual(th.charge_cost("1.75 CAD/30 minutes", 240), 14.0)
-        self.assertEqual(th.charge_cost("$10/day", 240), 10.0)
-        self.assertEqual(th.charge_cost("$3/h, $12/day", 600), 12.0)
-        self.assertIsNone(th.charge_cost("ask the attendant", 240))
-        self.assertIsNone(th.charge_cost("", 240))
+        at = dt.datetime.combine(DAY, dt.time(10, 0))
+        self.assertEqual(th.charge_cost("$2/hr;$5 max", 240, at), 5.0)
+        self.assertEqual(th.charge_cost("1.75 CAD/30 minutes", 240, at), 14.0)
+        self.assertEqual(th.charge_cost("$10/day", 240, at), 10.0)
+        self.assertEqual(th.charge_cost("$3/h, $12/day", 600, at), 12.0)
+        self.assertIsNone(th.charge_cost("ask the attendant", 240, at))
+        self.assertIsNone(th.charge_cost("", 240, at))
+
+    def test_charge_cost_reads_day_and_time_windows_like_driving_mode(self):
+        # Muse item 9.c: a weekday-only rate was $8 for 4 h on Saturday, where parking.py says $0
+        import parking as pk
+        tag = "Mo-Fr 08:00-18:00 $2/hr; Sa,Su free"
+        for when, want in ((dt.datetime(2026, 10, 17, 10, 0), 0.0), (dt.datetime(2026, 10, 15, 10, 0), 8.0),
+                           (dt.datetime(2026, 10, 15, 16, 0), 4.0),
+                           (dt.datetime(2026, 10, 12, 10, 0), 8.0)):   # the tag does not free holidays
+            hol = {"2026-10-12"}
+            self.assertEqual(th.charge_cost(tag, 240, when, hol), want, when)
+            self.assertEqual(th.charge_cost(tag, 240, when, hol),
+                             pk.price_rule(pk.osm_charge_rule({"charge": tag})[0], when, 240, hol)[0])
+
+    def test_one_osm_lots_name(self):
+        # Muse item 9.b: trip_hubs.osm_lots(elements) only parses Overpass elements, while parking.osm_lots looks
+        # lots up and prices them; one name for two jobs
+        import parking as pk
+        self.assertFalse(hasattr(th, "osm_lots"))
+        self.assertTrue(callable(th.parse_osm_lots) and callable(pk.osm_lots))
 
     def test_osm_lots_keep_public_parking_only(self):
         els = LOTS + [{"type": "node", "id": 9, "lat": 43.6, "lon": -79.7, "tags": {"amenity": "parking",
@@ -95,7 +116,7 @@ class Helpers(unittest.TestCase):
                       lot(11, 43.6, -79.7, name="Pick-up Drop-off"), lot(12, 43.6, -79.7, name="Kiss & Ride"),
                       {"type": "node", "id": 10, "lat": 43.6, "lon": -79.7,
                        "tags": {"amenity": "parking", "park_ride": "no", "maxstay": "2 hours"}}]
-        lots = th.osm_lots(els)
+        lots = th.parse_osm_lots(els)
         self.assertEqual([x["id"] for x in lots], ["way/1", "way/2", "node/10"])
         self.assertTrue(lots[0]["park_ride"])
         self.assertFalse(lots[2]["park_ride"])
@@ -143,7 +164,7 @@ class HubParking(unittest.TestCase):
         return {self.net.stop_name[c["stops"][0]]: c["parking"] for c in kept}
 
     def test_rules_osm_and_exclusions(self):
-        kept, summary = th.hub_parking(self.net, self.clusters, [BLOCK], th.osm_lots(LOTS), 240, DAY, set())
+        kept, summary = th.hub_parking(self.net, self.clusters, [BLOCK], th.parse_osm_lots(LOTS), 240, DAY, set())
         got = self.names(kept)
         self.assertEqual(got["Hub A"]["basis"], "T rule")                 # (a) rail station of a listed agency
         self.assertEqual(got["Hub A"]["cost"], 0.0)
@@ -166,14 +187,24 @@ class HubParking(unittest.TestCase):
 
     def test_bus_stop_is_not_a_station_for_nearby_parking(self):
         free_by_d = [lot(5, 43.5055, -79.8000, fee="no")]   # public lot (not park_ride) beside the bus-only stop
-        kept, _ = th.hub_parking(self.net, self.clusters, [], th.osm_lots(free_by_d), 240, DAY, set())
+        kept, _ = th.hub_parking(self.net, self.clusters, [], th.parse_osm_lots(free_by_d), 240, DAY, set())
         self.assertNotIn("Hub D", self.names(kept))
+
+    def test_osm_charge_is_priced_at_the_parking_time(self):
+        # Muse item 9.c: the hub's OSM charge tag is priced for the day and hours the car is parked
+        weekday = [lot(5, 43.5060, -79.8000, park_ride="yes", fee="yes", charge="Mo-Fr 08:00-18:00 $2/hr; Sa,Su free")]
+        sat = dt.datetime(2026, 10, 17, 10, 0)
+        kept, _ = th.hub_parking(self.net, self.clusters, [], th.parse_osm_lots(weekday), 240, sat.date(), set(), arrive=sat)
+        self.assertEqual(self.names(kept)["Hub D"]["cost"], 0.0)
+        thu = dt.datetime.combine(DAY, dt.time(10, 0))
+        kept, _ = th.hub_parking(self.net, self.clusters, [], th.parse_osm_lots(weekday), 240, DAY, set(), arrive=thu)
+        self.assertEqual(self.names(kept)["Hub D"]["cost"], 8.0)
 
     def test_maxstay_shorter_than_the_stay_is_skipped(self):
         short = [lot(6, 43.5060, -79.8000, park_ride="yes", maxstay="2 hours")]
-        kept, _ = th.hub_parking(self.net, self.clusters, [], th.osm_lots(short), 240, DAY, set())
+        kept, _ = th.hub_parking(self.net, self.clusters, [], th.parse_osm_lots(short), 240, DAY, set())
         self.assertNotIn("Hub D", self.names(kept))
-        kept, _ = th.hub_parking(self.net, self.clusters, [], th.osm_lots(short), 90, DAY, set())
+        kept, _ = th.hub_parking(self.net, self.clusters, [], th.parse_osm_lots(short), 90, DAY, set())
         self.assertIn("Hub D", self.names(kept))
 
 
@@ -280,6 +311,53 @@ class CarModePlan(unittest.TestCase):
         self.assertEqual(a["parking"]["cost"], 7.0)
         self.assertAlmostEqual(a["car_cost"], round(a["ride_km"] * 0.17 + 7.0, 2))
 
+    def test_osm_charge_window_priced_from_the_start_time(self):
+        # Muse item 9.c: plan() prices a hub's OSM charge from the trip's start: 10:00 Thursday, 4 h stay,
+        # paid until 11:00 = 1 h at $2 (was 4 h, $8)
+        paid = lot(1, 43.5060, -79.8000, park_ride="yes", fee="yes", charge="Mo-Fr 08:00-11:00 $2/hr", name="D lot")
+        with mock.patch.object(th, "hub_parking", wraps=th.hub_parking) as hp:
+            self.run_plan(REGION, ["--access", "car", "--json"], osm=(paid,))
+        self.assertEqual(hp.call_args[1]["arrive"], dt.datetime(2026, 10, 15, 10, 0))
+        kept, _ = th.hub_parking(*hp.call_args[0], **hp.call_args[1])
+        d = [c["parking"] for c in kept if c["parking"]["basis"] == "OSM park_ride"]
+        self.assertEqual([x["cost"] for x in d], [2.0])
+
+    def test_car_mode_result_has_every_key_park_and_ride_reads(self):
+        # Muse item 9.l: drive_plan.park_and_ride reads this result with .get() defaults, so a renamed key would
+        # pass both sides' own tests and quietly fall back to a default; this pins the real result to its reads
+        import drive_plan as dp
+        box = {}
+        real = th.plan
+
+        def spy(a):
+            box["res"] = real(a)
+            return box["res"]
+        with mock.patch.object(th, "plan", side_effect=spy):
+            self.run_plan(REGION, ["--access", "car", "--json"])
+        res = box["res"]
+        self.assertEqual(res["access"], "car")
+        self.assertTrue({"warnings", "pareto", "others", "hubs_with_service"} <= set(res))
+        opts = res["pareto"] + res["others"]
+        self.assertTrue(opts)
+        for op in opts:
+            self.assertTrue({"hub", "legs", "parking", "parking_unknown", "car_cost", "ride_km", "ride_min",
+                             "fare_complete", "transit_fare", "fare_parts", "book_by", "board", "arrive",
+                             "backup"} <= set(op), sorted(op))
+            self.assertTrue({"text", "cost", "free", "price_unknown", "basis"} <= set(op["parking"]))
+            rides = [lg for lg in op["legs"] if lg.get("type") == "ride"]   # the legs park_and_ride reads
+            self.assertTrue(rides and all("depart" in lg for lg in rides))
+        # the real result through park_and_ride: its values arrive, not the defaults
+        ctx = {"drive_rt": 500.0, "day": DAY, "door": dt.datetime(2026, 10, 15, 11, 30)}
+        with mock.patch.object(dp.th, "plan", return_value=res):
+            pr = dp.park_and_ride((43.4990, -79.8000), (43.5500, -79.8000), dt.datetime(2026, 10, 15, 10, 0), False,
+                                  0.17, 4.0, 250.0, 0.0, [], 30, ctx=ctx)
+        self.assertTrue(pr["ran"] and pr["options"], pr)
+        a = {op["hub"]: op for op in opts}["Hub A"]
+        got = {op["hub"]: op for op in pr["options"]}["Hub A"]
+        self.assertEqual((got["km"], got["car_cost"], got["parking"]["basis"], got["arrive_s"]),
+                         (a["ride_km"], round(a["car_cost"], 2), "T rule", a["arrive"]))
+        self.assertEqual(got["board"], th.fmt_t(a["board"]))
+
     def test_ride_mode_ignores_the_block_and_skips_overpass(self):
         plain = dict(REGION)
         plain.pop("park_and_ride")
@@ -347,7 +425,7 @@ class Fixes(unittest.TestCase):
                lot(22, 43.689, -79.616, fee="yes", name="Value Park Lot", operator="GTAA"),
                lot(23, 43.684, -79.596, fee="yes", name="Park 'N Fly Self Park A", park_ride="yes", access="yes"),
                lot(24, 43.700, -79.513, fee="no", name="Weston GO parking")]
-        self.assertEqual([x["id"] for x in th.osm_lots(els)], ["way/24"])
+        self.assertEqual([x["id"] for x in th.parse_osm_lots(els)], ["way/24"])
 
     # ---- UX6: car mode plans the drive on the planning-allowance factor with the drive_plan spare
     def test_plan_traffic_factor_rows(self):
@@ -376,7 +454,7 @@ class FixParking(HubParking):
     """PR4 (no-free and paid-only stations) and PR11 (a station's lot is not a bus-stop hub)."""
 
     def test_no_free_station_osm_lot_is_paid_not_free(self):
-        kept, _ = th.hub_parking(self.net, self.clusters, [BLOCK], th.osm_lots(LOTS), 240, DAY, set())
+        kept, _ = th.hub_parking(self.net, self.clusters, [BLOCK], th.parse_osm_lots(LOTS), 240, DAY, set())
         b = self.names(kept)["Transfer B"]                        # GO-style no_free_parking + an OSM fee=no lot
         self.assertIsNone(b["cost"])
         self.assertTrue(b["price_unknown"])
@@ -385,22 +463,22 @@ class FixParking(HubParking):
 
     def test_paid_only_station_osm_lot_is_not_free(self):
         near_e = [lot(7, 43.6010, -79.8000, fee="no", name="E lot")]
-        kept, _ = th.hub_parking(self.net, self.clusters, [BLOCK], th.osm_lots(near_e), 240, DAY, set())
+        kept, _ = th.hub_parking(self.net, self.clusters, [BLOCK], th.parse_osm_lots(near_e), 240, DAY, set())
         self.assertIsNone(self.names(kept)["Far E"]["cost"])
         # an OSM charge tag still prices it
         priced = [lot(8, 43.6010, -79.8000, fee="yes", charge="$5/day")]
-        kept, _ = th.hub_parking(self.net, self.clusters, [BLOCK], th.osm_lots(priced), 240, DAY, set())
+        kept, _ = th.hub_parking(self.net, self.clusters, [BLOCK], th.parse_osm_lots(priced), 240, DAY, set())
         self.assertEqual(self.names(kept)["Far E"]["cost"], 5.0)
 
     def test_station_lot_is_not_a_bus_stop_hub(self):
         # a park_ride lot 334 m from rail Hub A and 222 m from bus-only Hub D belongs to Hub A
         shared = [lot(9, 43.5030, -79.8000, park_ride="yes", fee="no", name="A GO lot")]
-        kept, _ = th.hub_parking(self.net, self.clusters, [], th.osm_lots(shared), 240, DAY, set())
+        kept, _ = th.hub_parking(self.net, self.clusters, [], th.parse_osm_lots(shared), 240, DAY, set())
         got = self.names(kept)
         self.assertNotIn("Hub D", got)
         self.assertEqual(got["Hub A"]["basis"], "OSM parking near a station")
         # a lot only the bus stop reaches still makes it a hub
-        kept, _ = th.hub_parking(self.net, self.clusters, [], th.osm_lots(LOTS[:1]), 240, DAY, set())
+        kept, _ = th.hub_parking(self.net, self.clusters, [], th.parse_osm_lots(LOTS[:1]), 240, DAY, set())
         self.assertIn("Hub D", self.names(kept))
 
 

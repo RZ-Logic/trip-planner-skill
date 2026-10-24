@@ -4,6 +4,74 @@ Releases of the trip-planner skill. Before shipping, each release was reviewed b
 agents (separate sessions with no part in the build) or an outside GPT review; agent findings were
 re-checked by a verifier before anything was fixed. Counts are given where they were recorded.
 
+## Unreleased
+
+**Review:** an outside AI review of 0.9.9 (Muse) made 173 claims; verifiers checked each one against the code
+at 988dc8a (42% true, 26% true but documented design, 25% partly, 6% false). The issues it found real are
+fixed here, test first; numbers in brackets are Muse's item numbers. Two data notes need new source data,
+not code: 20 of the 39 Ontario feeds are hand-entered timetables (fresh-1; marked and warned since 0.9.9),
+and 43 of the 54 curated parking places carry no rate year (fresh-2; the driving data age warning below now
+covers them). Its false items were not applied: the 407 flat_toll_max cap, the currency change to EV
+network estimates, the --provider change, redirect query stripping and refusing an old GTFS cache. Tests: 1241 at 0.9.9, 1298 now, on Python 3.8 and 3.14. Drive
+times are unchanged, except that an EV plan can stop at a different charger where a site mixes fast and
+slow posts; transit times change only at untimed stops (below); the prices below can change which hub or
+lot ranks first.
+
+- **Hub parking prices like driving mode.** A park-and-ride hub's OSM charge tag is read with parking.py's
+  rate parser for the car parked at the trip's start, so a weekday-only "$2/hr" tag is free on Saturday
+  instead of $8 for 4 h. [9.c]
+- **Error replies are not cached.** A Valhalla reply with no trip, or an OSRM reply whose code is not "Ok",
+  sent with HTTP 200 is no longer cached for 24 h and replayed. A Toronto restrictions reply with no
+  "Closure" list warns that closures were not checked instead of reading as none. [7]
+- **Parking prices.** A periods rule with an evening flat rate no longer charges the evening twice. A stay
+  partly in season prices its off-season part with off_season_rule or off_season_flat (it was free), is
+  price unknown with off_season "unknown", and a flat price per entry is the arrival day's. Per-passenger
+  fees and per-person child and senior prices get the rule's tax, as the vehicle price does; no shipped
+  rule combines them, so shipped prices are unchanged. [4]
+- **Fast chargers counted per power level.** One 350 kW stall beside four 50 kW posts is one fast port, not
+  five, so such a site is no longer a "good" charger (100 kW, 2 ports). [5]
+- **Preflight.** --check-network and the preflight report a 5xx page or a proxy's own error page as
+  blocked, not reachable; a 4xx from the host still counts as an answer. [12.x]
+- **Zone fares.** A feed's fare rules that use contains_id are still not read, and the run now warns that
+  fares on trips they cover may be missing or wrong. [12.p]
+- **Guards.** --temp-c rejects nan and inf like every other number flag [11]. A missing or broken bundled
+  JSON file (costs, traffic, tolls, parking or a region file) stops drive_plan, trip_hubs and parking.py
+  with one line naming the file; the EV and parking layers still carry on without theirs [11, 12.w]. An
+  NLR record without a longitude is skipped [5]. With no usd_cad rate in tolls.json, US charger prices are
+  still counted at par but the run warns [5]. An arrive-by leave-by time whose step back did not settle is
+  flagged in WARNINGS when it still arrives late [11]. parking.py's command line prints the stale-cache
+  warnings that drive_plan already printed [7].
+- **Docs.** The README licence badge says code MIT, data see NOTICE; the plugin README lists the Google
+  Places key among the optional keys; architecture.md counts 10 car presets plus a generic fallback; the
+  0.9.9 line below says where 3.14 ran; the 407 account fee text follows tolls.json; driving.md says a 407
+  piece whose ends snap to the same interchange is dropped. [docs-struct-5, pkg-2, docs-disc-2,
+  docs-disc-4, 11]
+- **Reply size.** drive_common.fetch refuses a reply over 100 MB instead of reading any size (the largest
+  cached in testing is 3.6 MB). [11]
+- **Cleanup.** parking.py uses trip_hubs' Easter and nth-Monday helpers instead of its own copies [9.a];
+  trip_hubs.osm_lots, which only parses Overpass elements, is now parse_osm_lots, so it no longer shares a
+  name with parking.osm_lots [9.b]; drive_plan's copy of trip_hubs' defaults for an "older trip_hubs" is
+  gone (it had drifted and could not run) [9.k]. No change to results.
+- **Google review rates.** A hotel price ("$90 for the hotel"), a fee on top named other ways ("$3 credit
+  card processing fee", "$4 service charge", "$3 extra") and an older price ("back in 2023 it was $12", "$10
+  two years ago") are no longer quoted as parking rates; "$15 parking fee", dropped before as a fee on top,
+  now counts [10.a to 10.e]. A nearer weekday or weekend word beats an event word elsewhere in the sentence
+  [10.m]. Reviews quoting the same rate are counted, "$15 per day (Sep 2026, 3 reviews)", instead of reading
+  as one [10.h]. park_and_ride places are searched with the other Table A parking types [10.j]. Review
+  quotes stay unverified and never become a cost.
+- **Untimed stops placed by distance.** A stop the feed gives no time is placed by the feed's
+  shape_dist_traveled, else by straight-line distance between stops, instead of evenly by stop count
+  (stop count stays the fallback). Of 151 feeds cached in testing, 10 have untimed stops; the only Canadian
+  one is VIA Rail's Winnipeg to Churchill line (up to 12 min at Budd). [12.a]
+- **Driving data age.** A run warns once the bundled driving files (costs, tolls, traffic, parking, ev.json
+  for an EV) were last checked more than six months ago, as region files already do; the README says the
+  data is as of 2026-10-10. [fresh-3, docs-struct-3]
+- **Feed errors.** A bug in trip_hubs.py while loading a feed is reported as one ("an error in
+  trip_hubs.py, not in the feed", with the file and line), not as a broken feed. [12.v]
+- **Park and ride contract.** A test runs the real car-mode plan and checks every key drive_plan's park and
+  ride step reads. [9.l]
+- **407 fee note.** tolls.py prints the account fee with its cents instead of rounding it ($5 today).
+
 ## 0.9.9 (2026-10-20)
 
 **Review:** a ten-area review of 0.9.8 (reviewers, then one adversarial verifier per area) produced 110
@@ -11,7 +79,7 @@ verified findings, fixed in seven batches below, test first; IDs in brackets ref
 review of the fixes (7 reviewers, 3 verifiers that reproduced every finding) confirmed 31 more problems, all
 fixed. Six owner decisions were settled. Still partly open: data-integrity-12 (one 407 km-post conflict),
 parking-10 (Blue Mountain P2 hours not published) and ten bundled coverage grids with no licence found
-(listed in NOTICE). Tests: 850 at 0.9.8, 1241 now, on Python 3.8 and 3.14.
+(listed in NOTICE). Tests: 850 at 0.9.8, 1241 now, run locally on Python 3.8 and 3.14 (CI runs 3.8 and 3.12).
 
 ### Batch 1: critical and high
 

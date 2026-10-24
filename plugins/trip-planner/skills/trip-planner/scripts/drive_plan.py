@@ -129,6 +129,27 @@ def home_rate_note(day):
     return None
 
 
+DATA_STALE_DAYS = th.REGION_STALE_DAYS   # the region files' rule: re-check after six months
+DATA_FILES = ("costs", "tolls", "traffic", "parking", "parking-places-east", "parking-places-west")
+
+
+def data_age_notes(today, ev=False):
+    """One warning per "verified" date for the bundled driving files (ev.json too for an EV) last checked more
+    than six months before `today`. A missing or broken file is left to the code that reads it."""
+    old = {}
+    for name in DATA_FILES + (("ev",) if ev else ()):
+        try:
+            ver = dc.load_data(name).get("verified")
+            age = (today - dt.date.fromisoformat(ver)).days
+        except (TypeError, ValueError, AttributeError):   # th.DataFileError is a ValueError
+            continue
+        if age > DATA_STALE_DAYS:
+            old.setdefault((ver, age), []).append(name + ".json")
+    return ["bundled driving data in references/driving (%s) was last checked %s, %d months ago: its fuel, energy, "
+            "toll and parking prices may have changed; references/sources.md lists the sources to check"
+            % (", ".join(names), ver, age // 30) for (ver, age), names in sorted(old.items())]
+
+
 def _mod(name):
     """Sibling module written by another part of the planner, or None when it is missing or broken."""
     try:
@@ -1286,6 +1307,11 @@ def plan_backwards(dr, route, deadline, extra_s, opts):
         else:
             dr.retime(route, dep, opts)
             break
+    over = late(dep)
+    if over > 0:   # the step back did not settle (a time model that is not first-in first-out): still late
+        route["leave_by_late_s"] = over
+    else:
+        route.pop("leave_by_late_s", None)
     return dep
 
 
@@ -1304,6 +1330,17 @@ def route_stops(route, charging, border_min):
 def route_tolls(route, transponder):
     t = route.get("toll_407_transponder" if transponder else "toll_407_camera") or 0.0
     return t + (route.get("toll_other_cad") or 0.0)
+
+
+def account_fee():
+    """407 ETR's monthly account fee without a transponder (tolls.json account_fee_monthly)."""
+    return float(dc.load_data("tolls")["etr407"].get("account_fee_monthly", 5.0))
+
+
+def fee_text():
+    """The account fee as the texts print it: '$5' for whole dollars, else '$5.50'."""
+    f = account_fee()
+    return "$%d" % f if f == int(f) else dc.money(f)
 
 
 def trade_off(items, vot, transponder, round_trip=False, fee_included=False, arrive_by=False):
@@ -1365,9 +1402,9 @@ def trade_off(items, vot, transponder, round_trip=False, fee_included=False, arr
         tag += ", tolls not priced"
     out["text"] = "%s At $%g/h of your time: take %s (%s)." % (lead, vot, rec["letter"], tag)
     if has_etr and not transponder:
-        out["fee_note"] = ("Without a transponder 407 ETR also bills a $5 account fee in any month you drive on it "
-                           + ("(counted once in the 407 totals above; pass --407-this-month if you already drive "
-                              "it this month)." if fee_included else "(camera charges are included above)."))
+        out["fee_note"] = ("Without a transponder 407 ETR also bills a %s account fee in any month you drive on it %s"
+                           % (fee_text(), "(counted once in the 407 totals above; pass --407-this-month if you already "
+                              "drive it this month)." if fee_included else "(camera charges are included above)."))
     return out
 
 
@@ -1488,11 +1525,14 @@ def fix_json_escapes(text):
 
 
 def _toronto_check(body):
-    """fetch `validate` for the Toronto restrictions feed (JSON once fix_json_escapes has run)."""
+    """fetch `validate` for the Toronto restrictions feed (JSON once fix_json_escapes has run, with a Closure
+    list: a reply without one would read as no closures)."""
     try:
-        json.loads(fix_json_escapes(body.decode("utf-8", "replace")))
+        data = json.loads(fix_json_escapes(body.decode("utf-8", "replace")))
     except ValueError:
         return "not JSON"
+    if not isinstance(data, dict) or "Closure" not in data:
+        return "no Closure list in the reply, so closures were not checked"
     return None
 
 
@@ -1738,19 +1778,7 @@ def on511_incidents(key, legs, tzname, region, warnings):
 
 # --------------------------------------------------------------------------- park and ride
 
-TH_DEFAULTS = {   # trip_hubs defaults (v0.8.1 main) for when build_parser is missing
-    "origin": None, "dest": None, "depart": "now", "arrive_by": None, "region": "auto", "feed": None,
-    "no_discover": False, "radius_km": None, "dest_walk_m": 1500, "origin_walk_m": 1200, "footpath_m": 400,
-    "min_change_min": 2.0, "pickup_wait_min": None, "safety_min": 3.0, "min_gain_min": 10.0, "payment": "card",
-    "max_hours": None, "final_ride": "auto", "routing": "auto", "osrm_url": "https://router.project-osrm.org",
-    "traffic_factor": None, "min_saving": None, "crosscheck": False, "top": 8, "all": False, "json": True,
-    "refresh": False, "max_age_hours": 72.0, "discover": False, "allow_street_match": False,
-    "check_network": False, "timetable": None, "access": "car", "car_cost_per_km": 0.17, "park_min": 4.0,
-    "stay_hours": 4.0,
-}
-
-
-def hub_args(o, d, when, arrive_by, cost_per_km, stay_h, warnings, traffic_factor=None, safety_min=None):
+def hub_args(o, d, when, arrive_by, cost_per_km, stay_h, traffic_factor=None, safety_min=None):
     """trip_hubs arguments for --access car. traffic_factor and safety_min put the hub drive on the same footing
     as the drive plan (the planning allowance, the same minutes spare)."""
     argv = ["--origin", ll(o), "--dest", ll(d), "--arrive-by" if arrive_by else "--depart",
@@ -1761,17 +1789,7 @@ def hub_args(o, d, when, arrive_by, cost_per_km, stay_h, warnings, traffic_facto
     if safety_min is not None:
         argv += ["--safety-min", "%g" % safety_min]
     argv.append("--json")
-    if hasattr(th, "build_parser"):
-        return th.build_parser().parse_args(argv), argv
-    warnings.append("trip_hubs.build_parser is missing (older trip_hubs), so park and ride uses built-in defaults")
-    ns = dict(TH_DEFAULTS, origin=ll(o), dest=ll(d), car_cost_per_km=cost_per_km, stay_hours=stay_h,
-              osrm_url=getattr(th, "osrm_bases", lambda: [TH_DEFAULTS["osrm_url"]])()[0])
-    ns["arrive_by" if arrive_by else "depart"] = when.strftime("%Y-%m-%d %H:%M")
-    if traffic_factor:
-        ns["traffic_factor"] = round(traffic_factor, 2)
-    if safety_min is not None:
-        ns["safety_min"] = float(safety_min)
-    return argparse.Namespace(**ns), argv
+    return th.build_parser().parse_args(argv), argv
 
 
 def _run_with_timeout(fn, arg, timeout_s, cancel=None):
@@ -1905,7 +1923,7 @@ def park_and_ride(o, d, when, arrive_by, cost_per_km, stay_h, drive_total, park_
     """Run trip_hubs in car mode and keep the hubs that beat driving on the round trip cost or on time.
     ctx: {"drive_rt", "door" (depart mode), "drive_leave" (arrive-by), "day", "traffic_factor", "safety_min"}."""
     ctx = ctx or {}
-    ns, argv = hub_args(o, d, when, arrive_by, cost_per_km, stay_h, warnings, ctx.get("traffic_factor"),
+    ns, argv = hub_args(o, d, when, arrive_by, cost_per_km, stay_h, ctx.get("traffic_factor"),
                         ctx.get("safety_min"))
     cmd = "python3 trip_hubs.py " + " ".join('"%s"' % a if " " in a else a for a in argv[:-1])
     log("park and ride: running trip_hubs in car mode")
@@ -1913,7 +1931,7 @@ def park_and_ride(o, d, when, arrive_by, cost_per_km, stay_h, drive_total, park_
     if err:
         warnings.append("park and ride search failed (%s). Run it yourself: %s" % (err, cmd))
         return {"ran": False, "command": cmd, "error": err}
-    if res.get("access", "car" if hasattr(th, "build_parser") else "ride") != "car":
+    if res.get("access", "car") != "car":
         warnings.append("trip_hubs did not run in car mode (no --access car support yet), so park and ride is not "
                         "shown. Run: %s" % cmd)
         return {"ran": False, "command": cmd, "error": "no car mode"}
@@ -2252,6 +2270,7 @@ def _plan(args):
     rate_note = home_rate_note(depart.date()) if ev else None
     if rate_note:   # the home rate prices every EV plan's energy
         warnings.append(rate_note)
+    warnings.extend(data_age_notes(now.date(), ev))
     shared = {}
     api_key = dc.env_key("NLR_API_KEY") or "DEMO_KEY"
 
@@ -2494,7 +2513,7 @@ def _plan(args):
                 warnings.append("return trip could not be priced (%s)" % e)
 
     # ---- trade-off
-    fee_amt = dc.load_data("tolls")["etr407"].get("account_fee_monthly", 5.0)
+    fee_amt = account_fee()
     count_fee = not args.transponder and not args.etr_this_month
 
     def item_for(i, r):
@@ -2537,6 +2556,12 @@ def _plan(args):
                     " and ".join(it["letter"] for it in late),
                     " / ".join(dc.fmt_clock(it["route"]["leave_by"]) for it in late),
                     "it is" if len(late) == 1 else "they are"))
+            for it in its:
+                over = it["route"].get("leave_by_late_s")
+                if over:
+                    notes.append("%s: leaving by %s still arrives about %d min after the deadline by the traffic "
+                                 "model (its leave-by did not settle); leave earlier" % (
+                                     it["letter"], dc.fmt_clock(it["route"]["leave_by"]), int(math.ceil(over / 60.0))))
 
         # a route whose charging stops (or drive back) cannot be planned is not recommended while another's can
         def no_charge(it):
@@ -2874,7 +2899,7 @@ def etr_lines(r, transponder, fee):
     for s in r.get("etr") or []:
         out.append("407 ETR %s, %s: %s with a transponder, %s without%s" % (
             DIRS.get(s.get("direction"), ""), band_text(s), dc.money(s.get("toll_transponder") or 0.0),
-            dc.money(s.get("toll_camera") or 0.0), " (+$5 account fee that month)" if fee else ""))
+            dc.money(s.get("toll_camera") or 0.0), " (+%s account fee that month)" % fee_text() if fee else ""))
         if s.get("note") and "rates" in s["note"] and "not published" in s["note"]:
             out.append("  (%s)" % s["note"])
     for b in r.get("bridges") or []:
@@ -3001,14 +3026,21 @@ def review_rates(pr, mentions, limit=3, authors=True, links=False):
     """'$15 flat (Aug 2026, Jane D.), $20 per day (Mar 2026, Sam K.)': newest first, one per distinct rate. Each
     keeps its review's author and month (Google's terms: credit the author of review content shown); links=True
     adds the review's own Google Maps link (googleMapsUri of the review, else of its place) so the reader can open
-    the individual review; a string `links` is the link used when a mention has none."""
-    seen, bits = set(), []
+    the individual review; a string `links` is the link used when a mention has none. A rate more than one
+    review quotes says so ('Jane D. and 2 more reviews')."""
+    seen, bits, counts = set(), [], {}
+    for m in mentions or []:   # one mention is one review's report of that rate
+        counts[pr.mention_text(m)] = counts.get(pr.mention_text(m), 0) + 1
     for m in sorted(mentions or [], key=lambda x: x.get("date") or "", reverse=True):
         t = pr.mention_text(m)
         if t in seen:
             continue
         seen.add(t)
-        tag = [x for x in (_ym_text(m.get("date")), _nodash(m.get("author")) if authors else "",
+        who, more = _nodash(m.get("author")) if authors else "", counts[t] - 1
+        if more:
+            who = ("%s and %d more review%s" % (who, more, "" if more == 1 else "s") if who
+                   else "%d reviews" % counts[t])
+        tag = [x for x in (_ym_text(m.get("date")), who,
                            "translated" if authors and m.get("translated") else "",
                            (m.get("review_url") or m.get("maps_url") or (links if isinstance(links, str) else ""))
                            if links else "") if x]
@@ -3573,11 +3605,11 @@ def build_parser():
     ap.add_argument("--nacs-adapter", action="store_true", help="the EV can use Tesla Superchargers with an adapter")
     ap.add_argument("--transponder", action="store_true", help="you have a 407 ETR transponder")
     ap.add_argument("--407-this-month", dest="etr_this_month", action="store_true",
-                    help="you already drive the 407 this month without a transponder, so the $5 account fee is "
-                         "not counted")
+                    help="you already drive the 407 this month without a transponder, so the monthly account fee "
+                         "is not counted")
     ap.add_argument("--value-of-time", type=_num_arg(0), default=30.0, help="$ per hour of your time (default 30)")
     ap.add_argument("--weather", choices=["auto", "clear", "rain", "snow"], default="auto")
-    ap.add_argument("--temp-c", type=float, help="outside temperature (default forecast or month normal)")
+    ap.add_argument("--temp-c", type=_num_arg(), help="outside temperature (default forecast or month normal)")
     ap.add_argument("--provider", choices=["auto", "tomtom", "valhalla", "osrm"], default="auto")
     ap.add_argument("--max-walk-m", type=_num_arg(0, lo_open=True, cast=int), default=800,
                     help="max walk from parking to the door")
@@ -3614,6 +3646,13 @@ def car_only(args):
 
 
 def main(argv=None):
+    try:
+        return _main(argv)
+    except th.DataFileError as e:   # a broken install (costs, traffic or tolls file): one line, not a traceback
+        raise SystemExit(str(e))
+
+
+def _main(argv=None):
     if hasattr(sys.stdout, "reconfigure"):
         try:
             sys.stdout.reconfigure(encoding="utf-8", errors="replace")

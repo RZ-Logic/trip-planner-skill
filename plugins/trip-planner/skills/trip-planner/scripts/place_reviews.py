@@ -16,7 +16,8 @@ Docs facts (read 2026-10-10)
     Body: includedTypes (Table A, up to 50), maxResultCount 1..20 (default 20), rankPreference POPULARITY
     (default) or DISTANCE, locationRestriction.circle {center {latitude, longitude}, radius 0 < r <= 50000 m}.
     Reply {"places": [Place]} with only the masked fields; {} when nothing matches.
-  Parking types in Table A: parking, parking_garage, parking_lot (the last two added 2026-02-12), park_and_ride.
+  Parking types in Table A: parking, parking_garage, parking_lot (the last two added 2026-02-12), park_and_ride
+    (under Transportation; still listed 2026-10-24). All four are searched.
     https://developers.google.com/maps/documentation/places/web-service/place-types
   Text Search (New): POST https://places.googleapis.com/v1/places:searchText, textQuery required, includedType,
     locationBias circle or rectangle, locationRestriction rectangle only, pageSize 1..20 (maxResultCount is
@@ -69,7 +70,7 @@ import trip_hubs as th  # noqa: E402
 ENDPOINT = "https://places.googleapis.com/v1/places:searchNearby"
 FIELD_MASK = ",".join("places." + f for f in
                       ("displayName", "formattedAddress", "location", "googleMapsUri", "types", "reviews"))
-INCLUDED_TYPES = ["parking", "parking_garage", "parking_lot"]
+INCLUDED_TYPES = ["parking", "parking_garage", "parking_lot", "park_and_ride"]
 SOURCE = "Google reviews via Places API"
 ATTRIBUTION = ("Rates quoted from Google Maps reviews: unverified review reports, not confirmed by the operator, "
                "and Google does not verify reviews. Google returns at most 5 reviews per place, ordered by "
@@ -111,11 +112,19 @@ _SKIP = re.compile(
     r"\bchargers?\b|\bev\b|electric vehicle|charging (?:station|stall|spot|port|point)s?|car ?wash|detailing|"
     r"\brefund|voucher|\bdeposit|"
     r"\bamende\b|\bcontravention\b|remorqu", re.I)
-# R3 (b), R6: one amount, judged by the words right around it: a fee on top, a difference, a past price
-_SKIP_AFTER = re.compile(r"^\s*(?:\w+\s+){0,2}(?:fee|surcharge)\b|^\s*(?:cheaper|more|less|off)\b", re.I)
+# R3 (b), R6: one amount, judged by the words right around it: a fee on top (but not a fee that is the parking
+# itself, '$15 parking fee'), a difference, a past price, another purchase ('$90 for the hotel')
+_SKIP_AFTER = re.compile(
+    r"^\s*(?!(?:\w+\s+){0,2}?(?:parking|lot|garage|entry|entrance|daily|day)\s+fee\b)(?:\w+\s+){0,3}(?:fee|surcharge)\b|"
+    r"^\s*(?:\w+\s+){0,2}(?:service|convenience|processing|booking|transaction)\s+charge\b|"
+    r"^\s*(?:extra|cheaper|more|less|off)\b|^\s*(?:\w+\s+){0,2}?(?:back then|(?:years?|months?) ago)\b|"
+    r"^\s*(?:for|on)\s+(?:the|our|my|a|an)?\s*(?:hotel|motel|room|suite)s?\b", re.I)
 _SKIP_BEFORE = re.compile(r"(?:more|less) than\s*$|\bsave[sd]?\s*$|"
                           r"(?:used to be|was previously|previously|last year|before (?:it|they)|old rate|originally)"
-                          r"\s*(?:\w+\s+)?$", re.I)
+                          r"\s*(?:\w+\s+)?$|\bback in (?:19|20)\d\d\b(?:\s+\w+){0,3}\s*$|"
+                          r"\b(?:recall|remember)(?:ed)?\s+(?:paying|it (?:was|being))\s*$|"
+                          r"\b(?:hotel|motel|room|suite)s?\s+(?:(?!park\w*\b|lot\b|garage\b)\w+\s+)?"
+                          r"(?:was|is|cost|costs|came to)\s*$", re.I)
 
 _HALF = re.compile(r"^\s*(?:/|per|an?|every|each|for|for (?:a|each|every))?\s*(?:half[- ]?(?:an? )?hour|"
                    r"30\s?min(?:ute)?s?\b|1/2\s?(?:hr|hour)|demi-heure)", re.I)
@@ -192,18 +201,27 @@ def _snippet(text, s, e):
     return out[:SNIPPET_MAX]
 
 
+def _dist(m, pos):
+    """Characters between a context match and the amount at `pos` (0 when they overlap)."""
+    return pos[0] - m.end() if m.end() <= pos[0] else (m.start() - pos[1] if m.start() >= pos[1] else 0)
+
+
 def _nearest(ctx, pos, units):
     """The context label from `units` whose match lies nearest the amount at `pos` in ctx (ties: list order), or
-    None. An event word anywhere in the clause wins ('on event nights they charge $30'); a nearer weekday word
-    blocks the weekend label ('$6 on weekends and $18 weekdays')."""
-    if "event" in units and _CTX[0][1].search(ctx):
-        return "event"
+    None. An event word anywhere in the clause wins ('on event nights they charge $30') unless a weekday or
+    weekend word is nearer the amount ('the event staff were nice and they charge $10 on weekdays'); a nearer
+    weekday word blocks the weekend label ('$6 on weekends and $18 weekdays')."""
+    if "event" in units:
+        ev = [_dist(m, pos) for m in _CTX[0][1].finditer(ctx)]
+        days = [_dist(m, pos) for unit, rx in _CTX if unit in ("weekend", "weekday") for m in rx.finditer(ctx)]
+        if ev and (not days or min(ev) <= min(days)):
+            return "event"
     best = None
     for rank, (unit, rx) in enumerate(_CTX):
         if unit not in units and unit != "weekday":
             continue
         for m in rx.finditer(ctx):
-            d = pos[0] - m.end() if m.end() <= pos[0] else (m.start() - pos[1] if m.start() >= pos[1] else 0)
+            d = _dist(m, pos)
             if best is None or (d, rank) < best[:2]:
                 best = (d, rank, unit)
     if best is None or (best[2] == "weekday" and "weekday" not in units):
@@ -258,8 +276,10 @@ def extract_mentions(text, date="", rating=None):
     """CAD amounts near parking words in one review: [{"amount", "unit", "text", "date", "rating"} plus "max"
     for a range like $20-25, "duration_h" for '2 hours for $8' and "per_min" for '$2 per 20 minutes']. Skips
     tickets, fines, towing, tips, food, tolls, monthly permits, EV charging, car washes, refunds, amounts over
-    $100, and single amounts that are a fee on top, a difference ('$5 cheaper', '$5 off', 'more than $10') or a
-    past price ('used to be $7'). Text is cleaned (no en or em dashes)."""
+    $100, and single amounts that are a fee on top ('$3 card processing fee', '$4 service charge', '$3 extra';
+    not '$15 parking fee'), a difference ('$5 cheaper', '$5 off', 'more than $10'), a past price ('used to be
+    $7', 'back in 2023 it was $12', '$10 two years ago') or another purchase ('$90 for the hotel'). Text is
+    cleaned (no en or em dashes)."""
     text = _clean(text)
     out, seen = [], set()
     for ss, se in _spans(text, _STRONG, 0, len(text)):
@@ -338,16 +358,26 @@ def _month_text(ym):
         return ""
 
 
+def rate_counts(mentions):
+    """{rate text: number of reviews quoting it}: one mention is one review's report of that rate."""
+    out = {}
+    for m in mentions or []:
+        t = mention_text(m)
+        out[t] = out.get(t, 0) + 1
+    return out
+
+
 def summary_text(mentions, limit=4):
-    """'reviews mention $15 flat (Aug 2026), $20 per day (Mar 2026)', newest first, one per distinct rate."""
-    seen, bits = set(), []
+    """'reviews mention $15 flat (Aug 2026, 3 reviews), $20 per day (Mar 2026)', newest first, one per distinct
+    rate, with how many reviews quote it when more than one."""
+    seen, bits, counts = set(), [], rate_counts(mentions)
     for m in sorted(mentions, key=lambda x: x.get("date") or "", reverse=True):
         t = mention_text(m)
         if t in seen:
             continue
         seen.add(t)
-        mt = _month_text(m.get("date") or "")
-        bits.append("%s (%s)" % (t, mt) if mt else t)
+        tag = [x for x in (_month_text(m.get("date") or ""), "%d reviews" % counts[t] if counts[t] > 1 else "") if x]
+        bits.append("%s (%s)" % (t, ", ".join(tag)) if tag else t)
         if len(bits) >= limit:
             break
     return ("reviews mention " + ", ".join(bits)) if bits else ""
@@ -459,7 +489,7 @@ def review_prices(lat, lon, radius_m, warnings, key=None, today=None):
             mentions.extend(found)
         uniq, seen = [], set()
         for m in sorted(mentions, key=lambda x: x["date"], reverse=True):
-            k = (m["amount"], m.get("max"), m["unit"], m.get("duration_h"), m["date"])
+            k = (m["amount"], m.get("max"), m["unit"], m.get("duration_h"), m["date"], m.get("author"))
             if k not in seen:
                 seen.add(k)
                 uniq.append(m)
@@ -564,9 +594,9 @@ def match_lots(places, lots, max_m=80.0, dest=None):
         mentions = [dict(m, place=p["name"], maps_url=p.get("maps_url") or "") for m in p["mentions"]]
         if lot is not None:
             have = lot.setdefault("review_mentions", [])
-            keys = set((m["amount"], m.get("max"), m["unit"], m.get("duration_h"), m["date"]) for m in have)
+            keys = set((m["amount"], m.get("max"), m["unit"], m.get("duration_h"), m["date"], m.get("author")) for m in have)
             for m in mentions:
-                k = (m["amount"], m.get("max"), m["unit"], m.get("duration_h"), m["date"])
+                k = (m["amount"], m.get("max"), m["unit"], m.get("duration_h"), m["date"], m.get("author"))
                 if k not in keys:
                     keys.add(k)
                     have.append(m)

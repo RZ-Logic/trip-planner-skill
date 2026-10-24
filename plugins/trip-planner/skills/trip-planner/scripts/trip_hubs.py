@@ -31,6 +31,7 @@ import re
 import sys
 import threading
 import time
+import traceback
 import unicodedata
 import urllib.error
 import urllib.parse
@@ -624,10 +625,20 @@ def _tls_refused(reason):
             and "timed out" not in str(reason).lower())
 
 
+def _proxy_page(e):
+    """An HTTPError page a proxy sent itself (Squid and similar name themselves in Server or add their own
+    headers), not the host's answer."""
+    hdrs = e.headers or {}
+    server = str(hdrs.get("Server", "")).lower()
+    return "proxy" in server or "squid" in server or any(hdrs.get(k) for k in ("X-Squid-Error", "Proxy-Agent"))
+
+
 def _net_cause(e):
     """Short cause for an _unreachable() error, for NETWORK BLOCKED (no parentheses: preflight reads it back)."""
     import socket
     if isinstance(e, urllib.error.HTTPError):
+        if e.code != 407 and not _proxy_page(e):
+            return "HTTP %d error page, from the service or a proxy" % e.code
         return "a proxy refused"
     reason = e.reason if isinstance(e, urllib.error.URLError) else e
     text = str(reason).lower()
@@ -988,7 +999,8 @@ def network_blocked_message(blocked, hosts, note="", causes=None, offline=""):
 
 
 def check_network(hosts, timeout=6):
-    """{host: 'ok' | 'tls failed: error' | 'blocked: cause (error)'} using one light request per host."""
+    """{host: 'ok' | 'tls failed: error' | 'blocked: cause (error)'} using one light request per host. An HTTP
+    error counts as the host answering, except a 5xx page or a page a proxy sent."""
     out = {}
     for h in hosts:
         check_cancelled()
@@ -1000,7 +1012,7 @@ def check_network(hosts, timeout=6):
         except Exception as e:  # noqa: BLE001
             if _tls_failed(e):
                 out[h] = "tls failed: %s" % e
-            elif _unreachable(e):
+            elif _unreachable(e) or (isinstance(e, urllib.error.HTTPError) and (e.code >= 500 or _proxy_page(e))):
                 out[h] = "blocked: %s (%s)" % (_net_cause(e), e)
             else:
                 out[h] = "ok"   # the host answered (an HTTP error, even a dropped connection)
@@ -1052,13 +1064,28 @@ def preflight(args, regions, warnings):
 
 # --------------------------------------------------------------------------- regions and feeds
 
+class DataFileError(ValueError):
+    """A bundled file under references/ is missing or not valid JSON (a partial or edited install). Its text is
+    the one line the command-line tools stop with."""
+
+
+def read_data_file(path, rel):
+    """json.load of a bundled file; DataFileError naming `rel`, its path inside the skill, when it cannot be read."""
+    try:
+        with open(path, encoding="utf-8") as fh:
+            return json.load(fh)
+    except (OSError, ValueError) as e:
+        why = e.strerror if isinstance(e, OSError) and e.strerror else str(e)   # never the home folder path
+        raise DataFileError("DATA FILE UNREADABLE: %s (%s). Reinstall the skill or restore the file."
+                            % (rel, why)) from None
+
+
 def load_regions():
     regions = []
     if os.path.isdir(REGIONS_DIR):
         for name in sorted(os.listdir(REGIONS_DIR)):
             if name.endswith(".json"):
-                with open(os.path.join(REGIONS_DIR, name), encoding="utf-8") as fh:
-                    reg = json.load(fh)
+                reg = read_data_file(os.path.join(REGIONS_DIR, name), "references/regions/" + name)
                 reg.setdefault("id", name[:-5])
                 regions.append(reg)
     return regions
@@ -1416,6 +1443,10 @@ def fetch_url(fid, url, max_age_h, refresh, warnings=None):
                 pass
 
 
+# exceptions that mean a bug in this code rather than a broken feed (bad data raises OSError, ValueError,
+# KeyError, IndexError, zipfile and csv errors)
+CODE_ERRORS = (TypeError, AttributeError, NameError, AssertionError, ZeroDivisionError, RecursionError, ImportError,
+               NotImplementedError)
 FEED_MAX_BYTES = 1000 * 10 ** 6       # a feed download larger than this is refused (the TTC feed is about 80 MB)
 MEMBER_MAX_BYTES = 4000 * 10 ** 6     # largest file inside a feed zip, unpacked (TTC: about 412 MB for all files)
 MEMBER_MAX_RATIO = 100                # unpacked / packed size above which a large member is a zip bomb, not text
@@ -1601,8 +1632,10 @@ def choose_feed_file(fid, label, urls, day, near, args, warnings, bad_urls=None)
     raise RuntimeError("; ".join(notes) or "no URL")
 
 
-def fill_missing_times(rows):
-    """rows: sorted [seq, arr, dep, stop, pk, dk]; interpolate stops with no times."""
+def fill_missing_times(rows, pos=None):
+    """rows: sorted [seq, arr, dep, stop, pk, dk, ...]; interpolate stops with no times. `pos` (each row's
+    distance from the trip's start, see trip_positions) places them by distance where it grows across the gap;
+    otherwise they are spread evenly by stop count."""
     known = [i for i, r in enumerate(rows) if r[1] is not None]
     if len(known) == len(rows):
         return rows
@@ -1612,12 +1645,38 @@ def fill_missing_times(rows):
     for a, b in zip(known, known[1:]):
         out.append(rows[a])
         t0, t1 = rows[a][2], rows[b][1]
+        by_dist = (pos is not None and pos[b] > pos[a]
+                   and all(pos[k - 1] <= pos[k] for k in range(a + 1, b + 1)))
         for k in range(a + 1, b):
-            t = int(t0 + (t1 - t0) * (k - a) / (b - a))
+            if by_dist:
+                t = int(round(t0 + (t1 - t0) * (pos[k] - pos[a]) / (pos[b] - pos[a])))
+            else:
+                t = int(t0 + (t1 - t0) * (k - a) / (b - a))
             r = list(rows[k])
             r[1] = r[2] = t
             out.append(r)
     out.append(rows[known[-1]])
+    return out
+
+
+def trip_positions(rows, stops_raw):
+    """Each row's distance from the trip's first stop, for fill_missing_times: the feed's shape_dist_traveled
+    (row[9]) when every row has a number, else the straight-line metres stop to stop; None when a stop has no
+    coordinates."""
+    try:
+        if all(len(r) > 9 and r[9] for r in rows):
+            return [float(r[9]) for r in rows]
+    except ValueError:
+        pass
+    out, prev, tot = [], None, 0.0
+    for r in rows:
+        raw = stops_raw.get(r[3])
+        if raw is None or raw[1] is None or raw[2] is None:
+            return None
+        if prev is not None:
+            tot += haversine_m(prev[0], prev[1], raw[1], raw[2])
+        prev = (raw[1], raw[2])
+        out.append(tot)
     return out
 
 
@@ -1689,17 +1748,20 @@ def load_fares(gz):
                                              col(r, idx, "transfers"), col(r, idx, "transfer_duration"))
         except ValueError:
             continue
-    rules = {}
+    rules, skipped = {}, 0
     if gz.has("fare_rules.txt"):
         idx, rows = gz.table("fare_rules.txt")
         for r in rows:
-            if not r or col(r, idx, "contains_id"):
+            if not r:
+                continue
+            if col(r, idx, "contains_id"):   # priced by the zones passed through: not read (load_feed warns)
+                skipped += 1
                 continue
             key = (col(r, idx, "origin_id"), col(r, idx, "destination_id"))
             rules.setdefault(key, []).append((col(r, idx, "fare_id"), col(r, idx, "route_id")))
     if not attrs:
         return None
-    return {"attrs": attrs, "rules": rules}
+    return {"attrs": attrs, "rules": rules, "contains_skipped": skipped}
 
 
 def fare_lookup(model, route_id, oz, dz):
@@ -1884,6 +1946,12 @@ def load_feed(net, fid, label, path, day, t0, t_end, holidays=None, local_tz=Non
     fares = load_fares(gz)
     if fares:
         net.fares[label] = fares
+        if fares["contains_skipped"]:
+            n = fares["contains_skipped"]
+            net.warnings.append("%s: %d fare rule%s by the zones a trip passes through (contains_id) %s not read, "
+                                "so fares on trips %s may be missing or wrong."
+                                % (label, n, "" if n == 1 else "s", "is" if n == 1 else "are",
+                                   "it covers" if n == 1 else "they cover"))
 
     trip_off, trip_meta, trip_sid = {}, {}, {}
     idx, rows = gz.table("trips.txt")
@@ -1944,6 +2012,7 @@ def load_feed(net, fid, label, path, day, t0, t_end, holidays=None, local_tz=Non
         i_trip, i_arr, i_dep = idx["trip_id"], idx["arrival_time"], idx["departure_time"]
         i_stop, i_seq = idx["stop_id"], idx["stop_sequence"]
         i_pk, i_dk, i_sh = idx.get("pickup_type"), idx.get("drop_off_type"), idx.get("stop_headsign")
+        i_sd = idx.get("shape_dist_traveled")
         need = max(i_trip, i_arr, i_dep, i_stop, i_seq)
         for r in rows:
             if not r:
@@ -1984,7 +2053,8 @@ def load_feed(net, fid, label, path, day, t0, t_end, holidays=None, local_tz=Non
             sh = r[i_sh].strip() if i_sh is not None and i_sh < len(r) else ""
             pkc = r[i_pk].strip() if i_pk is not None and i_pk < len(r) else ""
             dkc = r[i_dk].strip() if i_dk is not None and i_dk < len(r) else ""
-            found.setdefault(tid, []).append([seq, a, d, r[i_stop].strip(), pk, dk, sh, pkc, dkc])
+            sd = r[i_sd].strip() if i_sd is not None and i_sd < len(r) else ""
+            found.setdefault(tid, []).append([seq, a, d, r[i_stop].strip(), pk, dk, sh, pkc, dkc, sd])
         return found, untimed
 
     per_trip, untimed = stream_stop_times()
@@ -2015,7 +2085,8 @@ def load_feed(net, fid, label, path, day, t0, t_end, holidays=None, local_tz=Non
             bad_order += 1
             continue
         wrapped_n += wrapped
-        trows = fill_missing_times(trows)
+        if any(r[1] is None for r in trows):   # untimed stops: placed by distance along the trip where known
+            trows = fill_missing_times(trows, trip_positions(trows, stops_raw))
         if len(trows) < 2:
             continue
         rid, head = trip_meta[tid]
@@ -3037,7 +3108,7 @@ def _minutes(text):
     return float(m.group(1)) * (1 if unit.startswith("m") else 60)
 
 
-def osm_lots(elements):
+def parse_osm_lots(elements):
     """Overpass elements -> public parking lots {id, lat, lon, name, park_ride, fee, charge, maxstay_min, capacity}
     (drop-off, pick-up, staff and permit areas left out by name)."""
     out = []
@@ -3062,29 +3133,25 @@ def osm_lots(elements):
     return out
 
 
-def charge_cost(charge, stay_min):
-    """Cost of a stay under an OSM charge tag ('$2/hr;$5 max', '1.75 CAD/30 minutes', '$10/day'), or None."""
-    hourly, daily, cap = None, None, None
-    for amt, per_n, unit in re.findall(r"\$?\s*(\d+(?:\.\d+)?)\s*(?:CAD|\$)?\s*(?:/|per|an?\b)?\s*(\d+)?\s*"
-                                       r"(minutes|minute|mins|min|hours|hour|hrs|hr|h|day|daily|max|maximum)\b",
-                                       charge or "", re.I):
-        amt, unit = float(amt), unit.lower()
-        if unit.startswith("max"):
-            cap = amt
-        elif unit in ("day", "daily"):
-            daily = amt
-        else:
-            mins = float(per_n or 1) * (1 if unit.startswith("m") else 60)
-            hourly = amt * 60.0 / mins
-    if hourly is not None:
-        cost = hourly * math.ceil(stay_min / 60.0)
-        for lim in (cap, daily):
-            if lim is not None:
-                cost = min(cost, lim * max(1, math.ceil(stay_min / 1440.0)))
-        return round(cost, 2)
-    if daily is not None:
-        return round(daily * max(1, math.ceil(stay_min / 1440.0)), 2)
-    return None
+def _parking():
+    """parking.py, imported on first use (it imports drive_common, which imports this module: run as a script,
+    this module is registered under its own name first so no second copy loads)."""
+    if __name__ == "__main__":
+        sys.modules.setdefault("trip_hubs", sys.modules["__main__"])
+    import parking
+    return parking
+
+
+def charge_cost(charge, stay_min, arrive, holidays=None):
+    """Cost of a stay parked at `arrive` under an OSM charge tag ('$2/hr;$5 max', '1.75 CAD/30 minutes',
+    'Mo-Fr 08:00-18:00 $2/hr; Sa,Su free'), read by parking.py's rate parser so both planners price a tag alike,
+    day and time windows included. None when the tag has no price or says no parking during the stay."""
+    pk = _parking()
+    rule, _notes = pk.osm_charge_rule({"charge": charge or ""})
+    if not rule:
+        return None
+    cost, _basis, fits = pk.price_rule(rule, arrive, stay_min, holidays or set())
+    return cost if fits else None
 
 
 def agency_price(ent, day, holidays):
@@ -3099,12 +3166,14 @@ def agency_price(ent, day, holidays):
     return None, ent.get("text", "price unknown, check signs")
 
 
-def hub_parking(net, clusters, blocks, lots, stay_min, day, holidays):
+def hub_parking(net, clusters, blocks, lots, stay_min, day, holidays, arrive=None):
     """--access car: keep only hubs with somewhere to park. A hub qualifies by (a) a rail station of an agency in
     a region's park_and_ride block (except its no_free_parking names; paid_only names are paid, price unknown),
     (a2) a stop whose name says park and ride or carpool, (b) an OSM park_ride lot within 300 m of its stops, or
     (c) public OSM parking within 400 m of a rail station among its stops. Each kept hub gets c["parking"] (the
-    cheapest known choice). Returns (kept clusters, summary)."""
+    cheapest known choice). OSM charge tags are priced for a car parked at `arrive` (default noon on `day`).
+    Returns (kept clusters, summary)."""
+    arrive = arrive or dt.datetime.combine(day, dt.time(12, 0))
     rail = {}
     for (dep, arr, s0, s1, ti, *_r) in net.conns:
         tr = net.trips[ti]
@@ -3195,7 +3264,7 @@ def hub_parking(net, clusters, blocks, lots, stay_min, day, holidays):
             if lot["fee"] == "no" and not paid_here:
                 cost, what = 0.0, "free"
             else:
-                cost = charge_cost(lot["charge"], stay_min)
+                cost = charge_cost(lot["charge"], stay_min, arrive, holidays)
                 if cost is not None:
                     what = "$%.2f for %g h (OSM charge: %s)" % (cost, stay_h, lot["charge"])
                 elif paid_here:   # the agency lists no free parking here: an untagged or fee=no lot is not free
@@ -3545,8 +3614,16 @@ def plan(args):
         except Exception as e:  # noqa: BLE001
             failed.append(label)
             failed_urls[label] = list(urls)
-            warnings.append("feed %s failed to load, so its service is missing from this answer: %s" % (label, e))
-            log("warning: feed %s failed: %s" % (label, e))
+            if isinstance(e, CODE_ERRORS):   # a bug here, not a broken feed: say so, with where it happened
+                tb = traceback.extract_tb(e.__traceback__)
+                at = (" at %s:%d" % (os.path.basename(tb[-1].filename), tb[-1].lineno)) if tb else ""
+                warnings.append("feed %s failed to load because of an error in trip_hubs.py, not in the feed "
+                                "(%s: %s%s), so its service is missing from this answer; please report it"
+                                % (label, type(e).__name__, e, at))
+                log("warning: feed %s failed: %s" % (label, traceback.format_exc()))
+            else:
+                warnings.append("feed %s failed to load, so its service is missing from this answer: %s" % (label, e))
+                log("warning: feed %s failed: %s" % (label, e))
             return False
 
     n_discovered = n_tried = 0
@@ -3885,9 +3962,10 @@ def plan(args):
         if clusters:
             box = box_around(o_lat, o_lon, STATION_RADIUS_FACTOR * radius_m + STATION_PARKING_M + 200)
             elements = overpass_parking(box, warnings)
-            lots = None if elements is None else osm_lots(elements)
+            lots = None if elements is None else parse_osm_lots(elements)
             overpass_used = elements is not None
-        clusters, parking_summary = hub_parking(net, clusters, blocks, lots, stay_min, day, hol)
+        # OSM charge tags priced from the trip's start (the time the traffic estimate uses), not the hub arrival
+        clusters, parking_summary = hub_parking(net, clusters, blocks, lots, stay_min, day, hol, arrive=ride_time)
         parking_summary["region_rules"] = bool(blocks)
         log("park and ride: %d of %d hubs have parking" % (parking_summary["with_parking"],
                                                             parking_summary["hubs_in_range"]))
@@ -5251,6 +5329,13 @@ def build_parser():
 
 
 def main(argv=None):
+    try:
+        return _main(argv)
+    except DataFileError as e:   # a broken install: one line, not a traceback
+        raise SystemExit(str(e))
+
+
+def _main(argv=None):
     if hasattr(sys.stdout, "reconfigure"):
         try:
             sys.stdout.reconfigure(encoding="utf-8", errors="replace")

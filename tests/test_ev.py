@@ -668,5 +668,36 @@ class ReturnTripTest(unittest.TestCase):
         self.assertNotIn("return_plan", r)
 
 
+class PortsPerPowerLevel(unittest.TestCase):
+    """Muse item 5: norm_nlr kept one (max kW, all ports) pair per connector, so a site with one 350 kW stall
+    and four 50 kW posts counted as five 350 kW ports, a good charger."""
+
+    def mixed(self, fast):
+        r = rec(1, "Mixed site", 100, {"J1772COMBO": (350.0, fast)})
+        r["ev_charging_units"].append({"network": "FLO", "charging_level": "dc_fast", "port_count": 4,
+                                       "connectors": {"J1772COMBO": {"power_kw": 50.0, "port_count": 4}}})
+        return ev.norm_nlr(r)
+
+    def cand(self, st):
+        return ev._candidates([st], line(300), 300, ev.car_profile("ioniq5"), ev._ev()["model"])[0]
+
+    def test_levels_kept(self):
+        st = self.mixed(1)
+        self.assertEqual(st["units"], {"J1772COMBO": (350.0, 5)})        # best kW and all ports, as before
+        self.assertEqual(sorted(st["levels"]["J1772COMBO"]), [(50.0, 4), (350.0, 1)])
+
+    def test_one_fast_stall_is_not_a_good_charger(self):
+        c = self.cand(self.mixed(1))
+        self.assertFalse(c["good"])
+        self.assertEqual((c["max_kw"], c["ports"]), (350.0, 5))
+
+    def test_two_fast_stalls_are_a_good_charger(self):
+        self.assertTrue(self.cand(self.mixed(2))["good"])
+
+    def test_single_level_site_unchanged(self):
+        self.assertTrue(self.cand(ev.norm_nlr(rec(2, "Plain", 100, {"J1772COMBO": (150.0, 4)})))["good"])
+        self.assertTrue(self.cand(nst(100))["good"])                       # a record with no levels (OSM, older)
+
+
 if __name__ == "__main__":
     unittest.main()

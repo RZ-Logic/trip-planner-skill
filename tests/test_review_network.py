@@ -77,6 +77,38 @@ def dt_(hour):
 TRIP = ["--dest", "43.5812,-79.6475", "--depart", "2026-10-21 08:00"]
 
 
+class CheckNetworkErrorPages(unittest.TestCase):
+    """Muse item 12.x: check_network passed any HTTP error as 'ok' (the host answered), so a proxy's 502 or 403
+    page, or a 5xx, passed the preflight and the run failed later."""
+
+    def setUp(self):
+        fresh_cache(self)
+
+    def err(self, code, headers):
+        e = urllib.error.HTTPError("https://example.invalid/", code, "x", headers, io.BytesIO(b""))
+        self.addCleanup(th.close_quietly, e)
+        return e
+
+    def status(self, e):
+        with mock.patch.object(th.urllib.request, "urlopen", side_effect=e):
+            return th.check_network(["example.invalid"])["example.invalid"]
+
+    def test_5xx_page_is_a_failure(self):
+        s = self.status(self.err(502, {"Server": "nginx"}))
+        self.assertTrue(s.startswith("blocked: HTTP 502 error page"), s)
+        self.assertNotIn("(", s.split(" (", 1)[0])   # preflight reads the cause back up to " ("
+
+    def test_proxy_pages_are_failures(self):
+        for e in (self.err(502, {"Server": "squid/5.7"}), self.err(403, {"X-Squid-Error": "ERR_ACCESS_DENIED 0"}),
+                  self.err(403, {"Server": "corporate-proxy"})):
+            self.assertTrue(self.status(e).startswith("blocked: a proxy refused"), self.status(e))
+
+    def test_the_host_answering_is_still_ok(self):
+        self.assertEqual(self.status(self.err(404, {"Server": "nginx"})), "ok")
+        self.assertEqual(self.status(self.err(403, {"Server": "nginx"})), "ok")
+        self.assertEqual(self.status(ConnectionResetError(10054, "reset")), "ok")   # a dropped connection answered
+
+
 class TlsAndCauses(unittest.TestCase):
     """hubs-pricing-io-4: a failed certificate check is its own case (not 'reachable', not an address problem), and
     NETWORK BLOCKED names the cause it saw instead of always saying DNS failure or connection refused."""

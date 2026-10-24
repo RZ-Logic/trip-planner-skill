@@ -624,10 +624,20 @@ def _tls_refused(reason):
             and "timed out" not in str(reason).lower())
 
 
+def _proxy_page(e):
+    """An HTTPError page a proxy sent itself (Squid and similar name themselves in Server or add their own
+    headers), not the host's answer."""
+    hdrs = e.headers or {}
+    server = str(hdrs.get("Server", "")).lower()
+    return "proxy" in server or "squid" in server or any(hdrs.get(k) for k in ("X-Squid-Error", "Proxy-Agent"))
+
+
 def _net_cause(e):
     """Short cause for an _unreachable() error, for NETWORK BLOCKED (no parentheses: preflight reads it back)."""
     import socket
     if isinstance(e, urllib.error.HTTPError):
+        if e.code != 407 and not _proxy_page(e):
+            return "HTTP %d error page, from the service or a proxy" % e.code
         return "a proxy refused"
     reason = e.reason if isinstance(e, urllib.error.URLError) else e
     text = str(reason).lower()
@@ -988,7 +998,8 @@ def network_blocked_message(blocked, hosts, note="", causes=None, offline=""):
 
 
 def check_network(hosts, timeout=6):
-    """{host: 'ok' | 'tls failed: error' | 'blocked: cause (error)'} using one light request per host."""
+    """{host: 'ok' | 'tls failed: error' | 'blocked: cause (error)'} using one light request per host. An HTTP
+    error counts as the host answering, except a 5xx page or a page a proxy sent."""
     out = {}
     for h in hosts:
         check_cancelled()
@@ -1000,7 +1011,7 @@ def check_network(hosts, timeout=6):
         except Exception as e:  # noqa: BLE001
             if _tls_failed(e):
                 out[h] = "tls failed: %s" % e
-            elif _unreachable(e):
+            elif _unreachable(e) or (isinstance(e, urllib.error.HTTPError) and (e.code >= 500 or _proxy_page(e))):
                 out[h] = "blocked: %s (%s)" % (_net_cause(e), e)
             else:
                 out[h] = "ok"   # the host answered (an HTTP error, even a dropped connection)

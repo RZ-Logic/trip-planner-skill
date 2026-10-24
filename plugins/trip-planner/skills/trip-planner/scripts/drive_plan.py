@@ -1311,6 +1311,17 @@ def route_tolls(route, transponder):
     return t + (route.get("toll_other_cad") or 0.0)
 
 
+def account_fee():
+    """407 ETR's monthly account fee without a transponder (tolls.json account_fee_monthly)."""
+    return float(dc.load_data("tolls")["etr407"].get("account_fee_monthly", 5.0))
+
+
+def fee_text():
+    """The account fee as the texts print it: '$5' for whole dollars, else '$5.50'."""
+    f = account_fee()
+    return "$%d" % f if f == int(f) else dc.money(f)
+
+
 def trade_off(items, vot, transponder, round_trip=False, fee_included=False, arrive_by=False):
     """items: [{"letter", "route", "money", "time_s", "typical_s"}]. Scored on the whole minutes shown; a tie goes
     to the cheaper route. In arrive-by mode time_s runs from the leave-by time to the door (the allow time), so the
@@ -1370,9 +1381,9 @@ def trade_off(items, vot, transponder, round_trip=False, fee_included=False, arr
         tag += ", tolls not priced"
     out["text"] = "%s At $%g/h of your time: take %s (%s)." % (lead, vot, rec["letter"], tag)
     if has_etr and not transponder:
-        out["fee_note"] = ("Without a transponder 407 ETR also bills a $5 account fee in any month you drive on it "
-                           + ("(counted once in the 407 totals above; pass --407-this-month if you already drive "
-                              "it this month)." if fee_included else "(camera charges are included above)."))
+        out["fee_note"] = ("Without a transponder 407 ETR also bills a %s account fee in any month you drive on it %s"
+                           % (fee_text(), "(counted once in the 407 totals above; pass --407-this-month if you already "
+                              "drive it this month)." if fee_included else "(camera charges are included above)."))
     return out
 
 
@@ -2502,7 +2513,7 @@ def _plan(args):
                 warnings.append("return trip could not be priced (%s)" % e)
 
     # ---- trade-off
-    fee_amt = dc.load_data("tolls")["etr407"].get("account_fee_monthly", 5.0)
+    fee_amt = account_fee()
     count_fee = not args.transponder and not args.etr_this_month
 
     def item_for(i, r):
@@ -2888,7 +2899,7 @@ def etr_lines(r, transponder, fee):
     for s in r.get("etr") or []:
         out.append("407 ETR %s, %s: %s with a transponder, %s without%s" % (
             DIRS.get(s.get("direction"), ""), band_text(s), dc.money(s.get("toll_transponder") or 0.0),
-            dc.money(s.get("toll_camera") or 0.0), " (+$5 account fee that month)" if fee else ""))
+            dc.money(s.get("toll_camera") or 0.0), " (+%s account fee that month)" % fee_text() if fee else ""))
         if s.get("note") and "rates" in s["note"] and "not published" in s["note"]:
             out.append("  (%s)" % s["note"])
     for b in r.get("bridges") or []:
@@ -3587,8 +3598,8 @@ def build_parser():
     ap.add_argument("--nacs-adapter", action="store_true", help="the EV can use Tesla Superchargers with an adapter")
     ap.add_argument("--transponder", action="store_true", help="you have a 407 ETR transponder")
     ap.add_argument("--407-this-month", dest="etr_this_month", action="store_true",
-                    help="you already drive the 407 this month without a transponder, so the $5 account fee is "
-                         "not counted")
+                    help="you already drive the 407 this month without a transponder, so the monthly account fee "
+                         "is not counted")
     ap.add_argument("--value-of-time", type=_num_arg(0), default=30.0, help="$ per hour of your time (default 30)")
     ap.add_argument("--weather", choices=["auto", "clear", "rain", "snow"], default="auto")
     ap.add_argument("--temp-c", type=_num_arg(), help="outside temperature (default forecast or month normal)")

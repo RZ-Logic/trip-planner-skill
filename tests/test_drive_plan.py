@@ -285,6 +285,19 @@ class TradeOffTests(unittest.TestCase):
         self.assertIn("take B (toll-free)", t["text"])
         self.assertIn("$5 account fee", t["fee_note"])
 
+    def test_fee_text_follows_the_data(self):
+        # Muse item 11: the fee note and the 407 line said "$5" whatever tolls.json holds
+        tolls = dict(dp.dc.load_data("tolls"))
+        tolls["etr407"] = dict(tolls["etr407"], account_fee_monthly=6.5)
+        seg = {"direction": "E", "band_start": "07:00", "band_end": "09:30", "day_type": "weekday",
+               "toll_transponder": 7.75, "toll_camera": 13.05}
+        with mock.patch.dict(dp.dc._DATA, {"tolls": tolls}):
+            t = dp.trade_off(self.items(), 30, False)
+            line = dp.etr_lines({"etr": [seg]}, False, True)[0]
+        self.assertIn("a $6.50 account fee", t["fee_note"])
+        self.assertTrue(line.endswith("(+$6.50 account fee that month)"), line)
+        self.assertNotIn("$5", dp.build_parser().format_help().split("--407-this-month", 1)[1].split("--", 1)[0])
+
     def test_high_value_of_time_takes_407(self):
         t = dp.trade_off(self.items(), 300, True)
         self.assertEqual(t["rec"], "A")

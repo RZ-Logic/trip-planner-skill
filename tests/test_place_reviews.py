@@ -164,7 +164,8 @@ class Extractor(unittest.TestCase):
     def test_summary(self):
         ms = [{"amount": 20.0, "unit": "day", "date": "2026-03"}, {"amount": 15.0, "unit": "flat", "date": "2026-08"},
               {"amount": 15.0, "unit": "flat", "date": "2026-01"}]
-        self.assertEqual(pr.summary_text(ms), "reviews mention $15 flat (Aug 2026), $20 per day (Mar 2026)")
+        self.assertEqual(pr.summary_text(ms), "reviews mention $15 flat (Aug 2026, 2 reviews), $20 per day (Mar 2026)")
+        self.assertEqual(pr.summary_text(ms[:2]), "reviews mention $15 flat (Aug 2026), $20 per day (Mar 2026)")
         self.assertEqual(pr.summary_text([]), "")
 
 
@@ -272,6 +273,18 @@ class Api(unittest.TestCase):
             res = pr.review_prices(43.64, -79.37, 800, [], key=KEY, today=TODAY)
         ms = res["places"][0]["mentions"]
         self.assertEqual([(m["amount"], m["date"]) for m in ms], [(10.0, "2026-07"), (11.0, "2026-06")])
+
+    def test_reviewers_of_the_same_rate_are_counted(self):
+        # Muse item 10.h: two reviewers quoting the same rate in the same month were kept as one, and the summary
+        # read the same for one report as for three
+        revs = [review("Parking $15 per day.", when="2026-09-02T10:00:00Z", author="A"),
+                review("Parking $15 per day, fine.", when="2026-09-20T10:00:00Z", author="B"),
+                review("Parking was $15 per day.", when="2026-05-03T10:00:00Z", author="C")]
+        with mock.patch.object(dc, "fetch", return_value=reply(place("Lot C", 43.641, -79.376, revs))):
+            res = pr.review_prices(43.64, -79.37, 800, [], key=KEY, today=TODAY)
+        p = res["places"][0]
+        self.assertEqual(sorted(m["author"] for m in p["mentions"]), ["A", "B", "C"])
+        self.assertEqual(p["summary"], "reviews mention $15 per day (Sep 2026, 3 reviews)")
 
     def test_places_without_reviews_kept_last(self):
         body = reply(place("Near no reviews", 43.6407, -79.3757),

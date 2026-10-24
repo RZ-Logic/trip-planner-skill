@@ -357,16 +357,26 @@ def _month_text(ym):
         return ""
 
 
+def rate_counts(mentions):
+    """{rate text: number of reviews quoting it}: one mention is one review's report of that rate."""
+    out = {}
+    for m in mentions or []:
+        t = mention_text(m)
+        out[t] = out.get(t, 0) + 1
+    return out
+
+
 def summary_text(mentions, limit=4):
-    """'reviews mention $15 flat (Aug 2026), $20 per day (Mar 2026)', newest first, one per distinct rate."""
-    seen, bits = set(), []
+    """'reviews mention $15 flat (Aug 2026, 3 reviews), $20 per day (Mar 2026)', newest first, one per distinct
+    rate, with how many reviews quote it when more than one."""
+    seen, bits, counts = set(), [], rate_counts(mentions)
     for m in sorted(mentions, key=lambda x: x.get("date") or "", reverse=True):
         t = mention_text(m)
         if t in seen:
             continue
         seen.add(t)
-        mt = _month_text(m.get("date") or "")
-        bits.append("%s (%s)" % (t, mt) if mt else t)
+        tag = [x for x in (_month_text(m.get("date") or ""), "%d reviews" % counts[t] if counts[t] > 1 else "") if x]
+        bits.append("%s (%s)" % (t, ", ".join(tag)) if tag else t)
         if len(bits) >= limit:
             break
     return ("reviews mention " + ", ".join(bits)) if bits else ""
@@ -478,7 +488,7 @@ def review_prices(lat, lon, radius_m, warnings, key=None, today=None):
             mentions.extend(found)
         uniq, seen = [], set()
         for m in sorted(mentions, key=lambda x: x["date"], reverse=True):
-            k = (m["amount"], m.get("max"), m["unit"], m.get("duration_h"), m["date"])
+            k = (m["amount"], m.get("max"), m["unit"], m.get("duration_h"), m["date"], m.get("author"))
             if k not in seen:
                 seen.add(k)
                 uniq.append(m)
@@ -583,9 +593,9 @@ def match_lots(places, lots, max_m=80.0, dest=None):
         mentions = [dict(m, place=p["name"], maps_url=p.get("maps_url") or "") for m in p["mentions"]]
         if lot is not None:
             have = lot.setdefault("review_mentions", [])
-            keys = set((m["amount"], m.get("max"), m["unit"], m.get("duration_h"), m["date"]) for m in have)
+            keys = set((m["amount"], m.get("max"), m["unit"], m.get("duration_h"), m["date"], m.get("author")) for m in have)
             for m in mentions:
-                k = (m["amount"], m.get("max"), m["unit"], m.get("duration_h"), m["date"])
+                k = (m["amount"], m.get("max"), m["unit"], m.get("duration_h"), m["date"], m.get("author"))
                 if k not in keys:
                     keys.add(k)
                     have.append(m)

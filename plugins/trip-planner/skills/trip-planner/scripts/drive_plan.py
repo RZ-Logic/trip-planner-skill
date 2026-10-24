@@ -3004,14 +3004,21 @@ def review_rates(pr, mentions, limit=3, authors=True, links=False):
     """'$15 flat (Aug 2026, Jane D.), $20 per day (Mar 2026, Sam K.)': newest first, one per distinct rate. Each
     keeps its review's author and month (Google's terms: credit the author of review content shown); links=True
     adds the review's own Google Maps link (googleMapsUri of the review, else of its place) so the reader can open
-    the individual review; a string `links` is the link used when a mention has none."""
-    seen, bits = set(), []
+    the individual review; a string `links` is the link used when a mention has none. A rate more than one
+    review quotes says so ('Jane D. and 2 more reviews')."""
+    seen, bits, counts = set(), [], {}
+    for m in mentions or []:   # one mention is one review's report of that rate
+        counts[pr.mention_text(m)] = counts.get(pr.mention_text(m), 0) + 1
     for m in sorted(mentions or [], key=lambda x: x.get("date") or "", reverse=True):
         t = pr.mention_text(m)
         if t in seen:
             continue
         seen.add(t)
-        tag = [x for x in (_ym_text(m.get("date")), _nodash(m.get("author")) if authors else "",
+        who, more = _nodash(m.get("author")) if authors else "", counts[t] - 1
+        if more:
+            who = ("%s and %d more review%s" % (who, more, "" if more == 1 else "s") if who
+                   else "%d reviews" % counts[t])
+        tag = [x for x in (_ym_text(m.get("date")), who,
                            "translated" if authors and m.get("translated") else "",
                            (m.get("review_url") or m.get("maps_url") or (links if isinstance(links, str) else ""))
                            if links else "") if x]

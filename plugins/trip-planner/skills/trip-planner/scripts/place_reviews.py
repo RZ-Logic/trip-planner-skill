@@ -16,7 +16,8 @@ Docs facts (read 2026-10-10)
     Body: includedTypes (Table A, up to 50), maxResultCount 1..20 (default 20), rankPreference POPULARITY
     (default) or DISTANCE, locationRestriction.circle {center {latitude, longitude}, radius 0 < r <= 50000 m}.
     Reply {"places": [Place]} with only the masked fields; {} when nothing matches.
-  Parking types in Table A: parking, parking_garage, parking_lot (the last two added 2026-02-12), park_and_ride.
+  Parking types in Table A: parking, parking_garage, parking_lot (the last two added 2026-02-12), park_and_ride
+    (under Transportation; still listed 2026-10-24). All four are searched.
     https://developers.google.com/maps/documentation/places/web-service/place-types
   Text Search (New): POST https://places.googleapis.com/v1/places:searchText, textQuery required, includedType,
     locationBias circle or rectangle, locationRestriction rectangle only, pageSize 1..20 (maxResultCount is
@@ -69,7 +70,7 @@ import trip_hubs as th  # noqa: E402
 ENDPOINT = "https://places.googleapis.com/v1/places:searchNearby"
 FIELD_MASK = ",".join("places." + f for f in
                       ("displayName", "formattedAddress", "location", "googleMapsUri", "types", "reviews"))
-INCLUDED_TYPES = ["parking", "parking_garage", "parking_lot"]
+INCLUDED_TYPES = ["parking", "parking_garage", "parking_lot", "park_and_ride"]
 SOURCE = "Google reviews via Places API"
 ATTRIBUTION = ("Rates quoted from Google Maps reviews: unverified review reports, not confirmed by the operator, "
                "and Google does not verify reviews. Google returns at most 5 reviews per place, ordered by "

@@ -203,7 +203,8 @@ class Api(unittest.TestCase):
         self.assertIn("places.reviews", mask)
         self.assertIn("places.googleMapsUri", mask)
         sent = json.loads(kw["data"])
-        self.assertEqual(sent["includedTypes"], ["parking", "parking_garage", "parking_lot"])
+        # Muse item 10.j: every Table A parking type the module header lists, park_and_ride included
+        self.assertEqual(sent["includedTypes"], ["parking", "parking_garage", "parking_lot", "park_and_ride"])
         self.assertEqual(sent["maxResultCount"], 20)
         self.assertEqual(sent["locationRestriction"]["circle"]["radius"], 800.0)
         self.assertEqual(sent["locationRestriction"]["circle"]["center"], {"latitude": 43.6406, "longitude": -79.3756})

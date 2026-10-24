@@ -379,7 +379,9 @@ def _nlr_call(path, params, key, warnings, post=False, with_total=False):
 
 
 def norm_nlr(r):
-    units = {}
+    """An NLR record -> station. "units" holds the best kW and all ports per connector; "levels" keeps the ports
+    at each power level ([(kW or None, ports)]), so a 350 kW stall beside 50 kW posts is one fast port."""
+    units, levels = {}, {}
     for u in r.get("ev_charging_units") or []:
         level = u.get("charging_level") or ""
         for code, c in (u.get("connectors") or {}).items():
@@ -391,6 +393,7 @@ def norm_nlr(r):
             kw, ports = units.get(k, (None, 0))
             pk = c.get("power_kw")
             units[k] = (max(kw or 0, pk or 0) or None, ports + n)
+            levels.setdefault(k, []).append((pk or None, n))
     if not units:   # older records: connector list and counts only
         for code in r.get("ev_connector_types") or []:
             if code in DC_CODES:
@@ -400,7 +403,7 @@ def norm_nlr(r):
     addr = ", ".join(x for x in (r.get("street_address"), r.get("city")) if x)
     return {"id": "nlr:%s" % r.get("id"), "name": r.get("station_name") or "charger", "network_code": r.get("ev_network") or "",
             "lat": float(r["latitude"]), "lon": float(r["longitude"]), "address": addr, "units": units,
-            "pricing": r.get("ev_pricing") or "", "access_text": r.get("access_days_time") or "",
+            "levels": levels, "pricing": r.get("ev_pricing") or "", "access_text": r.get("access_days_time") or "",
             "dc_num": r.get("ev_dc_fast_num") or 0, "l2_num": r.get("ev_level2_evse_num") or 0,
             "status": r.get("status_code") or "E", "source": "NLR", "country": (r.get("country") or "").upper()}
 
@@ -578,6 +581,16 @@ def compatible(st, car, dc_only=True):
     if not codes:
         return None
     return best, ports, sorted(codes), note
+
+
+def ports_at(st, codes, min_kw, assumed_kw):
+    """Ports of these connectors rated at least `min_kw` (an unrated port counts as `assumed_kw`), from the
+    per-level counts where the record has them, else from its best kW."""
+    n = 0
+    for code in codes:
+        lv = (st.get("levels") or {}).get(code) or [st["units"][code]]
+        n += sum(p for kw, p in lv if (kw or assumed_kw) >= min_kw)
+    return n
 
 
 # --------------------------------------------------------------------------- planner
@@ -1049,9 +1062,10 @@ def _candidates(stations, poly, route_km, car, m):
         dkm = 2 * off * 1.3 / 1000.0
         dmin = dkm / m["detour_speed_kmh"] * 60.0 + (m["detour_ramp_min"] if off > 300 else 0.0)
         min_kw = min(good["min_kw"], car["max_dc_kw"])
+        fast = ports_at(st, codes, min_kw, m["assumed_kw_when_missing"])   # ports at good power, not all ports
         c = {"st": st, "km": km, "off_m": off, "detour_km": dkm, "detour_min": dmin, "max_kw": kw,
              "ports": ports, "codes": codes, "note": note,
-             "good": (kw or m["assumed_kw_when_missing"]) >= min_kw and ports >= good["min_ports"]}
+             "good": (kw or m["assumed_kw_when_missing"]) >= min_kw and fast >= good["min_ports"]}
         # co-located records (a FLO post beside a Supercharger): keep the faster site, then the one with more ports
         sig = (round(st["lat"], 3), round(st["lon"], 3))
         old = best_by_sig.get(sig)

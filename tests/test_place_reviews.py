@@ -104,6 +104,27 @@ class Extractor(unittest.TestCase):
             got = [(m["amount"], m["unit"]) for m in pr.extract_mentions(text, "2026-08", 4)]
             self.assertEqual(got, want, text)
 
+    def test_muse_item_10_skip_rules(self):
+        # Muse items 10.a to 10.e: a hotel price, add-on fees named other ways and older past-price phrasings
+        # were read as parking rates; a "$15 parking fee" was dropped as a fee on top
+        cases = [
+            ("Parking was easy, then I paid $90 for the hotel.", []),
+            ("Parking was fine but the hotel room was $90.", []),
+            ("Hotel parking was $25 a day.", [(25.0, "day")]),
+            ("Parking is $12, plus a $3 credit card processing fee.", [(12.0, "unknown")]),
+            ("Parking is $12 and $3 extra for the credit card.", [(12.0, "unknown")]),
+            ("Parking $12 plus a $4 service charge.", [(12.0, "unknown")]),
+            ("Parking: back in 2023 it was $12, now $15 a day.", [(15.0, "day")]),
+            ("I recall paying $12 back then for parking, now $15 a day.", [(15.0, "day")]),
+            ("Parking was $10 two years ago, now $14 a day.", [(14.0, "day")]),
+            ("Paid the $15 parking fee.", [(15.0, "unknown")]),
+            ("The $20 daily parking fee is steep.", [(20.0, "day")]),
+            ("Parking was $10 plus a $2 booking fee.", [(10.0, "unknown")]),
+        ]
+        for text, want in cases:
+            got = [(m["amount"], m["unit"]) for m in pr.extract_mentions(text, "2026-08", 4)]
+            self.assertEqual(got, want, text)
+
     def test_range_and_duration_fields(self):
         m = pr.extract_mentions("Parking is $20-25 depending on the day.", "2026-08")[0]
         self.assertEqual(m["max"], 25.0)

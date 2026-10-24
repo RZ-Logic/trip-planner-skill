@@ -111,11 +111,19 @@ _SKIP = re.compile(
     r"\bchargers?\b|\bev\b|electric vehicle|charging (?:station|stall|spot|port|point)s?|car ?wash|detailing|"
     r"\brefund|voucher|\bdeposit|"
     r"\bamende\b|\bcontravention\b|remorqu", re.I)
-# R3 (b), R6: one amount, judged by the words right around it: a fee on top, a difference, a past price
-_SKIP_AFTER = re.compile(r"^\s*(?:\w+\s+){0,2}(?:fee|surcharge)\b|^\s*(?:cheaper|more|less|off)\b", re.I)
+# R3 (b), R6: one amount, judged by the words right around it: a fee on top (but not a fee that is the parking
+# itself, '$15 parking fee'), a difference, a past price, another purchase ('$90 for the hotel')
+_SKIP_AFTER = re.compile(
+    r"^\s*(?!(?:\w+\s+){0,2}?(?:parking|lot|garage|entry|entrance|daily|day)\s+fee\b)(?:\w+\s+){0,3}(?:fee|surcharge)\b|"
+    r"^\s*(?:\w+\s+){0,2}(?:service|convenience|processing|booking|transaction)\s+charge\b|"
+    r"^\s*(?:extra|cheaper|more|less|off)\b|^\s*(?:\w+\s+){0,2}?(?:back then|(?:years?|months?) ago)\b|"
+    r"^\s*(?:for|on)\s+(?:the|our|my|a|an)?\s*(?:hotel|motel|room|suite)s?\b", re.I)
 _SKIP_BEFORE = re.compile(r"(?:more|less) than\s*$|\bsave[sd]?\s*$|"
                           r"(?:used to be|was previously|previously|last year|before (?:it|they)|old rate|originally)"
-                          r"\s*(?:\w+\s+)?$", re.I)
+                          r"\s*(?:\w+\s+)?$|\bback in (?:19|20)\d\d\b(?:\s+\w+){0,3}\s*$|"
+                          r"\b(?:recall|remember)(?:ed)?\s+(?:paying|it (?:was|being))\s*$|"
+                          r"\b(?:hotel|motel|room|suite)s?\s+(?:(?!park\w*\b|lot\b|garage\b)\w+\s+)?"
+                          r"(?:was|is|cost|costs|came to)\s*$", re.I)
 
 _HALF = re.compile(r"^\s*(?:/|per|an?|every|each|for|for (?:a|each|every))?\s*(?:half[- ]?(?:an? )?hour|"
                    r"30\s?min(?:ute)?s?\b|1/2\s?(?:hr|hour)|demi-heure)", re.I)
@@ -258,8 +266,10 @@ def extract_mentions(text, date="", rating=None):
     """CAD amounts near parking words in one review: [{"amount", "unit", "text", "date", "rating"} plus "max"
     for a range like $20-25, "duration_h" for '2 hours for $8' and "per_min" for '$2 per 20 minutes']. Skips
     tickets, fines, towing, tips, food, tolls, monthly permits, EV charging, car washes, refunds, amounts over
-    $100, and single amounts that are a fee on top, a difference ('$5 cheaper', '$5 off', 'more than $10') or a
-    past price ('used to be $7'). Text is cleaned (no en or em dashes)."""
+    $100, and single amounts that are a fee on top ('$3 card processing fee', '$4 service charge', '$3 extra';
+    not '$15 parking fee'), a difference ('$5 cheaper', '$5 off', 'more than $10'), a past price ('used to be
+    $7', 'back in 2023 it was $12', '$10 two years ago') or another purchase ('$90 for the hotel'). Text is
+    cleaned (no en or em dashes)."""
     text = _clean(text)
     out, seen = [], set()
     for ss, se in _spans(text, _STRONG, 0, len(text)):

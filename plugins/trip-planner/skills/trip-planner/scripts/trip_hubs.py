@@ -1700,17 +1700,20 @@ def load_fares(gz):
                                              col(r, idx, "transfers"), col(r, idx, "transfer_duration"))
         except ValueError:
             continue
-    rules = {}
+    rules, skipped = {}, 0
     if gz.has("fare_rules.txt"):
         idx, rows = gz.table("fare_rules.txt")
         for r in rows:
-            if not r or col(r, idx, "contains_id"):
+            if not r:
+                continue
+            if col(r, idx, "contains_id"):   # priced by the zones passed through: not read (load_feed warns)
+                skipped += 1
                 continue
             key = (col(r, idx, "origin_id"), col(r, idx, "destination_id"))
             rules.setdefault(key, []).append((col(r, idx, "fare_id"), col(r, idx, "route_id")))
     if not attrs:
         return None
-    return {"attrs": attrs, "rules": rules}
+    return {"attrs": attrs, "rules": rules, "contains_skipped": skipped}
 
 
 def fare_lookup(model, route_id, oz, dz):
@@ -1895,6 +1898,12 @@ def load_feed(net, fid, label, path, day, t0, t_end, holidays=None, local_tz=Non
     fares = load_fares(gz)
     if fares:
         net.fares[label] = fares
+        if fares["contains_skipped"]:
+            n = fares["contains_skipped"]
+            net.warnings.append("%s: %d fare rule%s by the zones a trip passes through (contains_id) %s not read, "
+                                "so fares on trips %s may be missing or wrong."
+                                % (label, n, "" if n == 1 else "s", "is" if n == 1 else "are",
+                                   "it covers" if n == 1 else "they cover"))
 
     trip_off, trip_meta, trip_sid = {}, {}, {}
     idx, rows = gz.table("trips.txt")

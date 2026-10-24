@@ -469,5 +469,30 @@ class RankingNoFinerThanTheRateCard(unittest.TestCase):
         self.assertEqual([o["hub"] for o in res["pareto"]], ["Hub A", "Hub B"])
 
 
+class ContainsIdRules(unittest.TestCase):
+    """Muse item 12.p: fare_rules rows priced by the zones a trip passes through (contains_id) were dropped
+    with no warning."""
+    ATTRS = "fare_id,price,currency_type,payment_method,transfers\na,3.00,CAD,1,\nb,4.00,CAD,1,\n"
+    RULES = "fare_id,origin_id,destination_id,contains_id\na,,,1\nb,,,2\na,1,1,\n"
+
+    def test_model_counts_the_skipped_rules(self):
+        m = fare_model(self.ATTRS, self.RULES)
+        self.assertEqual(m["rules"], {("1", "1"): [("a", "")]})
+        self.assertEqual(m["contains_skipped"], 2)
+        self.assertEqual(fare_model(self.ATTRS, "fare_id,origin_id,destination_id\na,1,1\n")["contains_skipped"], 0)
+
+    def test_load_feed_warns(self):
+        from test_engine import STOPS
+        p = os.path.join(tempfile.mkdtemp(dir=_TMP), "f.zip")
+        make_feed(p, STOPS, [("1", "WK", "t1", "C")],
+                  [("t1", "08:00:00", "08:00:00", "A", 1, 0, 0), ("t1", "08:30:00", "08:30:00", "C", 2, 0, 0)])
+        add_files(p, {"fare_attributes.txt": self.ATTRS, "fare_rules.txt": self.RULES})
+        net = th.Network()
+        net.warnings = []
+        th.load_feed(net, "t", "Test feed", p, DAY, hm("07:00"), hm("12:00"))
+        self.assertTrue(any("Test feed" in w and "2 fare rules" in w and "contains_id" in w for w in net.warnings),
+                        net.warnings)
+
+
 if __name__ == "__main__":
     unittest.main()

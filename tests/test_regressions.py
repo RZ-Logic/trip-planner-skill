@@ -100,10 +100,11 @@ class ReviewRegressions(unittest.TestCase):
         p = self.feed("interp.zip", [("1", "WK", "T", "C")],
                       [("T", "08:00:00", "08:00:00", "A", 1, 0, 0), ("T", "", "", "D", 2, 0, 0),
                        ("T", "", "", "B", 3, 0, 0), ("T", "", "", "B2", 4, 0, 0),
-                       ("T", "10:00:00", "10:00:00", "C", 5, 0, 0)])
+                       ("T", "11:30:00", "11:30:00", "C", 5, 0, 0)])
         net, scan, idx = scan_for(p, hms(9, 15), hms(12, 15))
-        # B2 is interpolated to 09:30, inside the window, even though A (08:00) is before t0 - 1 h
-        self.assertEqual(scan.evaluate(idx["Transfer B across street"], hms(9, 20))[0], hms(10, 0))
+        # B2 (2.24 km of 5.56 km) is interpolated to 09:24, inside the window, even though A (08:00) is before
+        # t0 - 1 h
+        self.assertEqual(scan.evaluate(idx["Transfer B across street"], hms(9, 20))[0], hms(11, 30))
 
     def test_same_trip_id_in_two_feeds_is_not_the_same_vehicle(self):
         a = self.feed("a.zip", [("R", "WK", "T1", "C")],

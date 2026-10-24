@@ -1632,8 +1632,10 @@ def choose_feed_file(fid, label, urls, day, near, args, warnings, bad_urls=None)
     raise RuntimeError("; ".join(notes) or "no URL")
 
 
-def fill_missing_times(rows):
-    """rows: sorted [seq, arr, dep, stop, pk, dk]; interpolate stops with no times."""
+def fill_missing_times(rows, pos=None):
+    """rows: sorted [seq, arr, dep, stop, pk, dk, ...]; interpolate stops with no times. `pos` (each row's
+    distance from the trip's start, see trip_positions) places them by distance where it grows across the gap;
+    otherwise they are spread evenly by stop count."""
     known = [i for i, r in enumerate(rows) if r[1] is not None]
     if len(known) == len(rows):
         return rows
@@ -1643,12 +1645,38 @@ def fill_missing_times(rows):
     for a, b in zip(known, known[1:]):
         out.append(rows[a])
         t0, t1 = rows[a][2], rows[b][1]
+        by_dist = (pos is not None and pos[b] > pos[a]
+                   and all(pos[k - 1] <= pos[k] for k in range(a + 1, b + 1)))
         for k in range(a + 1, b):
-            t = int(t0 + (t1 - t0) * (k - a) / (b - a))
+            if by_dist:
+                t = int(round(t0 + (t1 - t0) * (pos[k] - pos[a]) / (pos[b] - pos[a])))
+            else:
+                t = int(t0 + (t1 - t0) * (k - a) / (b - a))
             r = list(rows[k])
             r[1] = r[2] = t
             out.append(r)
     out.append(rows[known[-1]])
+    return out
+
+
+def trip_positions(rows, stops_raw):
+    """Each row's distance from the trip's first stop, for fill_missing_times: the feed's shape_dist_traveled
+    (row[9]) when every row has a number, else the straight-line metres stop to stop; None when a stop has no
+    coordinates."""
+    try:
+        if all(len(r) > 9 and r[9] for r in rows):
+            return [float(r[9]) for r in rows]
+    except ValueError:
+        pass
+    out, prev, tot = [], None, 0.0
+    for r in rows:
+        raw = stops_raw.get(r[3])
+        if raw is None or raw[1] is None or raw[2] is None:
+            return None
+        if prev is not None:
+            tot += haversine_m(prev[0], prev[1], raw[1], raw[2])
+        prev = (raw[1], raw[2])
+        out.append(tot)
     return out
 
 
@@ -1984,6 +2012,7 @@ def load_feed(net, fid, label, path, day, t0, t_end, holidays=None, local_tz=Non
         i_trip, i_arr, i_dep = idx["trip_id"], idx["arrival_time"], idx["departure_time"]
         i_stop, i_seq = idx["stop_id"], idx["stop_sequence"]
         i_pk, i_dk, i_sh = idx.get("pickup_type"), idx.get("drop_off_type"), idx.get("stop_headsign")
+        i_sd = idx.get("shape_dist_traveled")
         need = max(i_trip, i_arr, i_dep, i_stop, i_seq)
         for r in rows:
             if not r:
@@ -2024,7 +2053,8 @@ def load_feed(net, fid, label, path, day, t0, t_end, holidays=None, local_tz=Non
             sh = r[i_sh].strip() if i_sh is not None and i_sh < len(r) else ""
             pkc = r[i_pk].strip() if i_pk is not None and i_pk < len(r) else ""
             dkc = r[i_dk].strip() if i_dk is not None and i_dk < len(r) else ""
-            found.setdefault(tid, []).append([seq, a, d, r[i_stop].strip(), pk, dk, sh, pkc, dkc])
+            sd = r[i_sd].strip() if i_sd is not None and i_sd < len(r) else ""
+            found.setdefault(tid, []).append([seq, a, d, r[i_stop].strip(), pk, dk, sh, pkc, dkc, sd])
         return found, untimed
 
     per_trip, untimed = stream_stop_times()
@@ -2055,7 +2085,8 @@ def load_feed(net, fid, label, path, day, t0, t_end, holidays=None, local_tz=Non
             bad_order += 1
             continue
         wrapped_n += wrapped
-        trows = fill_missing_times(trows)
+        if any(r[1] is None for r in trows):   # untimed stops: placed by distance along the trip where known
+            trows = fill_missing_times(trows, trip_positions(trows, stops_raw))
         if len(trows) < 2:
             continue
         rid, head = trip_meta[tid]

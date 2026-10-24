@@ -181,8 +181,9 @@ class ProfileScanTests(unittest.TestCase):
             [("t1", "10:00:00", "10:00:00", "A", 1, 0, 0), ("t1", "", "", "D", 2, 0, 0),
              ("t1", "10:20:00", "10:20:00", "C", 3, 0, 0)])
         _, scan, idx = scan_for(p, hms(9, 0), hms(13, 0))
-        self.assertEqual(scan.evaluate(idx["Hub D"], hms(10, 5))[0], hms(10, 20))
-        self.assertGreaterEqual(scan.evaluate(idx["Hub D"], hms(10, 11))[0], th.INF)
+        # D is 556 m into the 5.56 km trip, so it is passed at 10:02 (by distance, not halfway by stop count)
+        self.assertEqual(scan.evaluate(idx["Hub D"], hms(10, 1))[0], hms(10, 20))
+        self.assertGreaterEqual(scan.evaluate(idx["Hub D"], hms(10, 3))[0], th.INF)
 
     def test_unsorted_stop_times(self):
         p = self.feed(

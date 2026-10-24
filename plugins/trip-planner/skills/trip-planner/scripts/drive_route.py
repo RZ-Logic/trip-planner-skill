@@ -263,6 +263,24 @@ def _valhalla_trip(trip):
     return b, {"engine_toll": bool(summ.get("has_toll"))}
 
 
+def _valhalla_check(body):
+    """dc.fetch validate for a Valhalla route: a reply with no trip (an error sent with HTTP 200) is not cached."""
+    data = json.loads(body)
+    if not isinstance(data, dict) or "trip" not in data:
+        return str((data.get("error") if isinstance(data, dict) else None) or "no route")[:120]
+    return None
+
+
+def _osrm_check(body):
+    """dc.fetch validate for an OSRM route: a reply whose code is not "Ok" or has no routes is not cached."""
+    data = json.loads(body)
+    if not isinstance(data, dict):
+        return "no route"
+    if data.get("code") != "Ok" or not data.get("routes"):
+        return str(data.get("message") or data.get("code") or "no route")[:120]
+    return None
+
+
 def _valhalla_fetch(o, d, exclude_tolls, alternates, avoid_tolls_soft=False, through=None):
     """exclude_tolls bans every toll edge (border bridges too); avoid_tolls_soft (use_tolls 0) only makes
     them costly, so a border trip keeps its bridge but leaves the 407. through: [{"lat", "lon", "heading"}]
@@ -280,7 +298,7 @@ def _valhalla_fetch(o, d, exclude_tolls, alternates, avoid_tolls_soft=False, thr
     elif exclude_tolls:
         req["costing_options"] = {"auto": {"exclude_tolls": True}}
     url = th.valhalla_base() + "/route?json=" + urllib.parse.quote(json.dumps(req, separators=(",", ":")))
-    data = dc.fetch_json(url, timeout=40, min_interval=1.0, max_age_h=KEYLESS_CACHE_H)
+    data = dc.fetch_json(url, timeout=40, min_interval=1.0, max_age_h=KEYLESS_CACHE_H, validate=_valhalla_check)
     if not isinstance(data, dict) or "trip" not in data:
         raise RuntimeError((data or {}).get("error") or "no route")
     trips = [data["trip"]] + [a["trip"] for a in data.get("alternates") or [] if a.get("trip")]
@@ -465,7 +483,7 @@ def _osrm(o, d, depart, opts, warnings, arrive_at=None):
         url = "%s/route/v1/driving/%.6f,%.6f;%.6f,%.6f?overview=false&steps=true&geometries=geojson&alternatives=3" % (
             base, o[1], o[0], d[1], d[0])
         try:
-            data = dc.fetch_json(url, timeout=40, min_interval=1.0, max_age_h=KEYLESS_CACHE_H)
+            data = dc.fetch_json(url, timeout=40, min_interval=1.0, max_age_h=KEYLESS_CACHE_H, validate=_osrm_check)
             if data.get("code") != "Ok" or not data.get("routes"):
                 raise RuntimeError(data.get("message") or data.get("code") or "no route")
             break

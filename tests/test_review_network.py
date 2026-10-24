@@ -539,6 +539,40 @@ class JsonCache(unittest.TestCase):
             self.assertEqual(w, [])
         self.assertEqual(op.call_count, 2)
 
+    def test_toronto_feed_without_closure_list_warns_and_is_not_cached(self):
+        # Muse item 7: a reply with no "Closure" list silently meant no closures, cached for an hour
+        legs = [("out", [(43.65, -79.40), (43.66, -79.39)], dt_(8), dt_(9))]
+        with self.opener(b'{"Restrictions": []}', json.dumps({"Closure": []}).encode()) as op:
+            w = []
+            dp.toronto_incidents(legs, "America/Toronto", None, w)
+            self.assertTrue(any("Toronto road restrictions" in x and "Closure" in x for x in w), w)
+            w = []
+            dp.toronto_incidents(legs, "America/Toronto", None, w)
+            self.assertEqual(w, [])
+        self.assertEqual(op.call_count, 2)
+
+    def test_valhalla_error_body_not_cached(self):
+        # Muse item 7: a Valhalla error sent with HTTP 200 was cached for 24 h and replayed
+        import drive_route as dr
+        trip = {"status": 0, "legs": []}
+        with self.opener(b'{"error": "Failed to parse json request"}', json.dumps({"trip": trip}).encode()) as op:
+            with self.assertRaises(Exception) as cm:
+                dr._valhalla_fetch((43.5, -79.8), (43.6, -79.7), False, 0)
+            self.assertIn("Failed to parse json request", str(cm.exception))
+            self.assertEqual(dr._valhalla_fetch((43.5, -79.8), (43.6, -79.7), False, 0), [trip])
+        self.assertEqual(op.call_count, 2)
+
+    def test_osrm_error_body_not_cached(self):
+        # Muse item 7: an OSRM reply whose code is not "Ok" was cached for 24 h and replayed
+        import drive_route as dr
+        bad = b'{"code": "InvalidQuery", "message": "Query string malformed"}'
+        with self.opener(bad, bad, bad, bad) as op:
+            for _ in range(2):
+                with self.assertRaises(Exception) as cm:
+                    dr._osrm((43.5, -79.8), (43.6, -79.7), dt_(8), {}, [])
+                self.assertIn("Query string malformed", str(cm.exception))
+        self.assertEqual(op.call_count, 4)   # both servers asked again, no replay from the cache
+
     def test_nlr_html_not_cached(self):
         import ev_charging as evc
         with self.opener(b"<html>proxy</html>", b'{"fuel_stations": []}'):

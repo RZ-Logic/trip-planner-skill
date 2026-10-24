@@ -1488,11 +1488,14 @@ def fix_json_escapes(text):
 
 
 def _toronto_check(body):
-    """fetch `validate` for the Toronto restrictions feed (JSON once fix_json_escapes has run)."""
+    """fetch `validate` for the Toronto restrictions feed (JSON once fix_json_escapes has run, with a Closure
+    list: a reply without one would read as no closures)."""
     try:
-        json.loads(fix_json_escapes(body.decode("utf-8", "replace")))
+        data = json.loads(fix_json_escapes(body.decode("utf-8", "replace")))
     except ValueError:
         return "not JSON"
+    if not isinstance(data, dict) or "Closure" not in data:
+        return "no Closure list in the reply, so closures were not checked"
     return None
 
 

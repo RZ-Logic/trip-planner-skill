@@ -8,14 +8,14 @@ re-checked by a verifier before anything was fixed. Counts are given where they 
 
 **Review:** an outside AI review of 0.9.9 (Muse) made 173 claims; verifiers checked each one against the code
 at 988dc8a (42% true, 26% true but documented design, 25% partly, 6% false). The issues it found real are
-fixed here, test first, except those still open below; numbers in brackets are Muse's item numbers. Its
-false items were not applied: the 407 flat_toll_max cap, the currency change to EV network estimates, the
---provider change, redirect query stripping and refusing an old GTFS cache. Still open: untimed GTFS stops
-are spread by stop count, not distance (12.a; held while drive and transit times are checked against Google
-Maps), no age check on the bundled driving prices, a test pinning trip_hubs' car-mode keys to park and ride
-(9.l) and the per-feed error handler (12.v). Tests: 1241 at 0.9.9, 1287 now, on Python 3.8 and 3.14.
-Routing and drive times are unchanged, except that an EV plan can stop at a different charger where a site
-mixes fast and slow posts, and the prices below can change which hub or lot ranks first.
+fixed here, test first; numbers in brackets are Muse's item numbers. Two data notes need new source data,
+not code: 20 of the 39 Ontario feeds are hand-entered timetables (fresh-1; marked and warned since 0.9.9),
+and 43 of the 54 curated parking places carry no rate year (fresh-2; the driving data age warning below now
+covers them). Its false items were not applied: the 407 flat_toll_max cap, the currency change to EV
+network estimates, the --provider change, redirect query stripping and refusing an old GTFS cache. Tests: 1241 at 0.9.9, 1298 now, on Python 3.8 and 3.14. Drive
+times are unchanged, except that an EV plan can stop at a different charger where a site mixes fast and
+slow posts; transit times change only at untimed stops (below); the prices below can change which hub or
+lot ranks first.
 
 - **Hub parking prices like driving mode.** A park-and-ride hub's OSM charge tag is read with parking.py's
   rate parser for the car parked at the trip's start, so a weekday-only "$2/hr" tag is free on Saturday
@@ -59,6 +59,18 @@ mixes fast and slow posts, and the prices below can change which hub or lot rank
   [10.m]. Reviews quoting the same rate are counted, "$15 per day (Sep 2026, 3 reviews)", instead of reading
   as one [10.h]. park_and_ride places are searched with the other Table A parking types [10.j]. Review
   quotes stay unverified and never become a cost.
+- **Untimed stops placed by distance.** A stop the feed gives no time is placed by the feed's
+  shape_dist_traveled, else by straight-line distance between stops, instead of evenly by stop count
+  (stop count stays the fallback). Of 151 feeds cached in testing, 10 have untimed stops; the only Canadian
+  one is VIA Rail's Winnipeg to Churchill line (up to 12 min at Budd). [12.a]
+- **Driving data age.** A run warns once the bundled driving files (costs, tolls, traffic, parking, ev.json
+  for an EV) were last checked more than six months ago, as region files already do; the README says the
+  data is as of 2026-10-10. [fresh-3, docs-struct-3]
+- **Feed errors.** A bug in trip_hubs.py while loading a feed is reported as one ("an error in
+  trip_hubs.py, not in the feed", with the file and line), not as a broken feed. [12.v]
+- **Park and ride contract.** A test runs the real car-mode plan and checks every key drive_plan's park and
+  ride step reads. [9.l]
+- **407 fee note.** tolls.py prints the account fee with its cents instead of rounding it ($5 today).
 
 ## 0.9.9 (2026-10-20)
 

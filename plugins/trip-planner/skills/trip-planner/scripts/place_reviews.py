@@ -200,18 +200,27 @@ def _snippet(text, s, e):
     return out[:SNIPPET_MAX]
 
 
+def _dist(m, pos):
+    """Characters between a context match and the amount at `pos` (0 when they overlap)."""
+    return pos[0] - m.end() if m.end() <= pos[0] else (m.start() - pos[1] if m.start() >= pos[1] else 0)
+
+
 def _nearest(ctx, pos, units):
     """The context label from `units` whose match lies nearest the amount at `pos` in ctx (ties: list order), or
-    None. An event word anywhere in the clause wins ('on event nights they charge $30'); a nearer weekday word
-    blocks the weekend label ('$6 on weekends and $18 weekdays')."""
-    if "event" in units and _CTX[0][1].search(ctx):
-        return "event"
+    None. An event word anywhere in the clause wins ('on event nights they charge $30') unless a weekday or
+    weekend word is nearer the amount ('the event staff were nice and they charge $10 on weekdays'); a nearer
+    weekday word blocks the weekend label ('$6 on weekends and $18 weekdays')."""
+    if "event" in units:
+        ev = [_dist(m, pos) for m in _CTX[0][1].finditer(ctx)]
+        days = [_dist(m, pos) for unit, rx in _CTX if unit in ("weekend", "weekday") for m in rx.finditer(ctx)]
+        if ev and (not days or min(ev) <= min(days)):
+            return "event"
     best = None
     for rank, (unit, rx) in enumerate(_CTX):
         if unit not in units and unit != "weekday":
             continue
         for m in rx.finditer(ctx):
-            d = pos[0] - m.end() if m.end() <= pos[0] else (m.start() - pos[1] if m.start() >= pos[1] else 0)
+            d = _dist(m, pos)
             if best is None or (d, rank) < best[:2]:
                 best = (d, rank, unit)
     if best is None or (best[2] == "weekday" and "weekday" not in units):

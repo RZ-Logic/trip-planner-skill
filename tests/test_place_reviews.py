@@ -125,6 +125,18 @@ class Extractor(unittest.TestCase):
             got = [(m["amount"], m["unit"]) for m in pr.extract_mentions(text, "2026-08", 4)]
             self.assertEqual(got, want, text)
 
+    def test_event_word_loses_to_a_nearer_day_word(self):
+        # Muse item 10.m: an event word anywhere in the clause won the label
+        cases = [
+            ("The event staff were nice and they charge $10 on weekdays for parking.", [(10.0, "weekday")]),
+            ("Event parking aside, they charge $8 on weekends.", [(8.0, "weekend")]),
+            ("On event nights they charge $30, so plan ahead.", [(30.0, "event")]),
+            ("Leafs game night parking was $40 flat.", [(40.0, "event")]),
+        ]
+        for text, want in cases:
+            got = [(m["amount"], m["unit"]) for m in pr.extract_mentions(text, "2026-08", 4)]
+            self.assertEqual(got, want, text)
+
     def test_range_and_duration_fields(self):
         m = pr.extract_mentions("Parking is $20-25 depending on the day.", "2026-08")[0]
         self.assertEqual(m["max"], 25.0)

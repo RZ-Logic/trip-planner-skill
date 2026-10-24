@@ -132,6 +132,28 @@ class _RedirectHandler(urllib.request.HTTPRedirectHandler):
 
 
 _OPENER = urllib.request.build_opener(_RedirectHandler)
+FETCH_MAX_BYTES = 100 * 10 ** 6   # a reply larger than this is refused (the largest cached in testing, 2026-10-24: 3.6 MB)
+
+
+def _read_capped(r):
+    """The reply body; FetchError once it passes FETCH_MAX_BYTES (a misbehaving server), so a huge reply is never
+    held in memory or cached."""
+    try:
+        size = int((getattr(r, "headers", None) or {}).get("Content-Length") or 0)
+    except (TypeError, ValueError):
+        size = 0
+    if size > FETCH_MAX_BYTES:
+        raise FetchError("the server offers %.0f MB, over the %d MB limit" % (size / 1e6, FETCH_MAX_BYTES // 10 ** 6))
+    parts, got = [], 0
+    while True:
+        chunk = r.read(1 << 20)
+        if not chunk:
+            break
+        got += len(chunk)
+        if got > FETCH_MAX_BYTES:
+            raise FetchError("the reply passed the %d MB limit" % (FETCH_MAX_BYTES // 10 ** 6))
+        parts.append(chunk)
+    return b"".join(parts)
 
 
 def fetch(url, data=None, headers=None, timeout=30, min_interval=0.0, max_age_h=0.0, cache_key=None,
@@ -176,7 +198,7 @@ def fetch(url, data=None, headers=None, timeout=30, min_interval=0.0, max_age_h=
         if allowed:
             req._allowed_hosts = allowed
         with _OPENER.open(req, timeout=timeout) as r:
-            body = r.read()
+            body = _read_capped(r)
         why = _valid(body, validate)
         if why:
             raise FetchError(why)

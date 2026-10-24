@@ -605,6 +605,22 @@ class JsonCache(unittest.TestCase):
                 self.assertIn("Query string malformed", str(cm.exception))
         self.assertEqual(op.call_count, 4)   # both servers asked again, no replay from the cache
 
+    def test_oversize_reply_is_refused_and_not_cached(self):
+        # Muse item 11 (security): fetch() read the whole body with no limit, unlike trip_hubs' feed downloads
+        with mock.patch.object(dc, "FETCH_MAX_BYTES", 20):
+            with self.opener(b'{"a": "' + b"x" * 30 + b'"}', b'{"a": 1}') as op:
+                with self.assertRaises(dc.FetchError) as cm:
+                    dc.fetch_json(self.URL, max_age_h=720)
+                self.assertIn("limit", str(cm.exception))
+                self.assertEqual(dc.fetch_json(self.URL, max_age_h=720), {"a": 1})   # under the limit: kept
+            self.assertEqual(op.call_count, 2)
+            big = FakeResp(b"{}")
+            big.headers = {"Content-Length": "5000"}
+            with mock.patch.object(dc._OPENER, "open", return_value=big):
+                with self.assertRaises(dc.FetchError) as cm:
+                    dc.fetch(self.URL + "&big=1")
+            self.assertIn("offers", str(cm.exception))
+
     def test_nlr_html_not_cached(self):
         import ev_charging as evc
         with self.opener(b"<html>proxy</html>", b'{"fuel_stations": []}'):

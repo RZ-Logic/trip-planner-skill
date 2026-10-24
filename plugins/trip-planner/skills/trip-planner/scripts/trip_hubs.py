@@ -3072,7 +3072,7 @@ def _minutes(text):
     return float(m.group(1)) * (1 if unit.startswith("m") else 60)
 
 
-def osm_lots(elements):
+def parse_osm_lots(elements):
     """Overpass elements -> public parking lots {id, lat, lon, name, park_ride, fee, charge, maxstay_min, capacity}
     (drop-off, pick-up, staff and permit areas left out by name)."""
     out = []
@@ -3918,7 +3918,7 @@ def plan(args):
         if clusters:
             box = box_around(o_lat, o_lon, STATION_RADIUS_FACTOR * radius_m + STATION_PARKING_M + 200)
             elements = overpass_parking(box, warnings)
-            lots = None if elements is None else osm_lots(elements)
+            lots = None if elements is None else parse_osm_lots(elements)
             overpass_used = elements is not None
         # OSM charge tags priced from the trip's start (the time the traffic estimate uses), not the hub arrival
         clusters, parking_summary = hub_parking(net, clusters, blocks, lots, stay_min, day, hol, arrive=ride_time)

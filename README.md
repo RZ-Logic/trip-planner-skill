@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-blue?style=for-the-badge" alt="License: MIT"/></a>
+  <a href="#-license"><img src="https://img.shields.io/badge/License-code_MIT%2C_data_see_NOTICE-blue?style=for-the-badge" alt="License: code MIT, data see NOTICE"/></a>
   <a href="https://github.com/RZ-Logic/trip-planner-skill/actions/workflows/tests.yml"><img src="https://img.shields.io/github/actions/workflow/status/RZ-Logic/trip-planner-skill/tests.yml?style=for-the-badge&label=tests" alt="Tests (CI)"/></a>
   <a href="https://www.python.org/"><img src="https://img.shields.io/badge/Python-3.8%2B_stdlib-3776AB?style=for-the-badge&logo=python&logoColor=white" alt="Python 3.8+ standard library"/></a>
   <a href="https://agentskills.io"><img src="https://img.shields.io/badge/Agent_Skills-standard-7C3AED?style=for-the-badge" alt="Agent Skills standard"/></a>

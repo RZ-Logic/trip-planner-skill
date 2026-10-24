@@ -11,7 +11,7 @@ and cost. It also plans drives in your own car (`drive_plan.py`):
 
 Contains one Agent Skill: `skills/trip-planner`.
 
-Standard library Python 3.8+, no API keys needed (TomTom, NLR and Ontario 511 keys are optional). Live
+Standard library Python 3.8+, no API keys needed (TomTom, NLR, Ontario 511 and Google Places keys are optional). Live
 mode downloads public GTFS timetables and uses the free OSRM, Valhalla, Nominatim and Transitous services,
 plus open parking, fuel-price, weather and charger data for driving.
 

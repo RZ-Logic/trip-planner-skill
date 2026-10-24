@@ -428,6 +428,14 @@ class ArgValidationTests(unittest.TestCase):
                 self.assertRaises(SystemExit, dp.build_parser().parse_args, self.ARGS + extra)
         self.assertEqual(dp.build_parser().parse_args(self.ARGS + ["--value-of-time", "45"]).value_of_time, 45.0)
 
+    def test_drive_plan_temp_c_rejects_nan_and_inf(self):
+        # Muse item 11: --temp-c was a plain float, so nan, inf and 1e999 passed
+        import drive_plan as dp
+        for v in ("nan", "inf", "-inf", "1e999", "warm"):
+            with self.subTest(v=v), redirect_stderr(io.StringIO()):
+                self.assertRaises(SystemExit, dp.build_parser().parse_args, self.ARGS + ["--temp-c", v])
+        self.assertEqual(dp.build_parser().parse_args(self.ARGS + ["--temp-c", "-12.5"]).temp_c, -12.5)
+
     def test_footpath_zero_plans(self):
         p = feed(FootpathTests.TRIPS, FootpathTests.TIMES)
         res = run(self.ARGS + ["--depart", "2026-10-15 09:45", "--feed", "t=" + p, "--footpath-m", "0",

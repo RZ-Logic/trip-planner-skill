@@ -3580,7 +3580,7 @@ def build_parser():
                          "not counted")
     ap.add_argument("--value-of-time", type=_num_arg(0), default=30.0, help="$ per hour of your time (default 30)")
     ap.add_argument("--weather", choices=["auto", "clear", "rain", "snow"], default="auto")
-    ap.add_argument("--temp-c", type=float, help="outside temperature (default forecast or month normal)")
+    ap.add_argument("--temp-c", type=_num_arg(), help="outside temperature (default forecast or month normal)")
     ap.add_argument("--provider", choices=["auto", "tomtom", "valhalla", "osrm"], default="auto")
     ap.add_argument("--max-walk-m", type=_num_arg(0, lo_open=True, cast=int), default=800,
                     help="max walk from parking to the door")

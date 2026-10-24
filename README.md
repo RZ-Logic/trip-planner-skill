@@ -225,6 +225,7 @@ On Windows, Python trusts only root certificates Windows has already downloaded.
 
 ## 🫡 Limitations
 
+- **Bundled data is as of 2026-10-10.** The region files and the driving prices (fuel and electricity costs, 407 tolls, parking, EV charging) were last checked then, and a run warns once a file is more than six months old. [`references/sources.md`](plugins/trip-planner/skills/trip-planner/references/sources.md) lists every source.
 - **Without TomTom, times come from a model.** It knows rush hours, not today's collision. It was calibrated on nine routes, all from Milton.
 - **Parking data has gaps.**
   - Commercial operators (Impark, Indigo, SpotHero) publish no open prices and forbid scraping. Their lots are priced only when OpenStreetMap carries a fee tag, which can be years old (tagged `osm` or `stale`).

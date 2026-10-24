@@ -129,6 +129,27 @@ def home_rate_note(day):
     return None
 
 
+DATA_STALE_DAYS = th.REGION_STALE_DAYS   # the region files' rule: re-check after six months
+DATA_FILES = ("costs", "tolls", "traffic", "parking", "parking-places-east", "parking-places-west")
+
+
+def data_age_notes(today, ev=False):
+    """One warning per "verified" date for the bundled driving files (ev.json too for an EV) last checked more
+    than six months before `today`. A missing or broken file is left to the code that reads it."""
+    old = {}
+    for name in DATA_FILES + (("ev",) if ev else ()):
+        try:
+            ver = dc.load_data(name).get("verified")
+            age = (today - dt.date.fromisoformat(ver)).days
+        except (TypeError, ValueError, AttributeError):   # th.DataFileError is a ValueError
+            continue
+        if age > DATA_STALE_DAYS:
+            old.setdefault((ver, age), []).append(name + ".json")
+    return ["bundled driving data in references/driving (%s) was last checked %s, %d months ago: its fuel, energy, "
+            "toll and parking prices may have changed; references/sources.md lists the sources to check"
+            % (", ".join(names), ver, age // 30) for (ver, age), names in sorted(old.items())]
+
+
 def _mod(name):
     """Sibling module written by another part of the planner, or None when it is missing or broken."""
     try:
@@ -2249,6 +2270,7 @@ def _plan(args):
     rate_note = home_rate_note(depart.date()) if ev else None
     if rate_note:   # the home rate prices every EV plan's energy
         warnings.append(rate_note)
+    warnings.extend(data_age_notes(now.date(), ev))
     shared = {}
     api_key = dc.env_key("NLR_API_KEY") or "DEMO_KEY"
 

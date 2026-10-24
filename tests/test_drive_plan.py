@@ -547,6 +547,35 @@ def H(h, m=0):
     return h * 3600 + m * 60
 
 
+class DataAgeTests(unittest.TestCase):
+    """Muse fresh-3 and docs-struct-3: region files warn after six months, but the bundled driving prices (fuel
+    and electricity costs, tolls, parking, EV charging) had no age check."""
+
+    def test_no_warning_while_fresh(self):
+        self.assertEqual(dp.data_age_notes(dt.date(2027, 4, 10)), [])   # 182 days after 2026-10-10
+
+    def test_one_warning_once_six_months_old(self):
+        w = dp.data_age_notes(dt.date(2027, 5, 1))
+        self.assertEqual(len(w), 1, w)
+        self.assertIn("costs.json", w[0])
+        self.assertIn("tolls.json", w[0])
+        self.assertIn("parking-places-east.json", w[0])
+        self.assertNotIn("ev.json", w[0])                                # a gas car does not read it
+        self.assertIn("last checked 2026-10-10, 6 months ago", w[0])
+        self.assertIn("ev.json", dp.data_age_notes(dt.date(2027, 5, 1), ev=True)[0])
+
+    def test_plan_warns(self):
+        old = dt.datetime(2027, 5, 1, 12, 0)
+        with Env(), at_now(old):
+            res = dp.plan(args_for(*BASE, "--dest", "%f,%f" % MARKHAM, "--depart", "2027-05-03 10:00",
+                                   "--park-and-ride", "off"))
+        self.assertEqual(sum("bundled driving data" in w for w in res["warnings"]), 1, res["warnings"])
+        with Env(), at_now(NOW):
+            res = dp.plan(args_for(*BASE, "--dest", "%f,%f" % MARKHAM, "--depart", "2026-10-14 10:00",
+                                   "--park-and-ride", "off"))
+        self.assertFalse([w for w in res["warnings"] if "bundled driving data" in w])
+
+
 class ParkRideSelectTests(unittest.TestCase):
     """K2, F7, PR1, PR2, PR7, PR8, PR9, PR12."""
     DAY = dt.date(2026, 10, 14)

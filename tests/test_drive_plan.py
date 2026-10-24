@@ -797,6 +797,32 @@ class ArriveByTests(unittest.TestCase):
         route = {"plan_s": 3600}
         dep = dp.plan_backwards(DR(), route, dt.datetime(2026, 10, 14, 9, 30), 60, {})
         self.assertLessEqual(dep + dt.timedelta(seconds=route["plan_s"] + 60), dt.datetime(2026, 10, 14, 9, 30))
+        self.assertNotIn("leave_by_late_s", route)
+
+    def test_backsolve_that_does_not_settle_is_flagged(self):
+        # Muse item 11: when the step back does not converge, the leave-by can still be late; it is flagged
+        deadline = dt.datetime(2026, 10, 14, 10, 0)
+
+        class DR:   # not first-in first-out: every departure arrives 10 min after the deadline
+            def retime(self, route, dep, opts):
+                route["depart"] = dep
+                route["plan_s"] = (deadline - dep).total_seconds() + 600
+        route = {"plan_s": 3600}
+        dep = dp.plan_backwards(DR(), route, deadline, 0, {})
+        self.assertGreater(dep + dt.timedelta(seconds=route["plan_s"]), deadline)
+        self.assertEqual(route["leave_by_late_s"], 600)
+
+    def test_late_leave_by_is_a_warning(self):
+        real = dp.plan_backwards
+
+        def late(dr, route, deadline, extra_s, opts):
+            dep = real(dr, route, deadline, extra_s, opts)
+            route["leave_by_late_s"] = 300
+            return dep
+        with Env(), at_now(NOW), mock.patch.object(dp, "plan_backwards", side_effect=late):
+            res = dp.plan(args_for(*BASE, "--dest", "%f,%f" % UNION, "--arrive-by", "2026-10-14 09:00",
+                                   "--park-and-ride", "off"))
+        self.assertTrue(any("about 5 min after the deadline" in w for w in res["warnings"]), res["warnings"])
 
 
 class ParkingAgainTests(unittest.TestCase):   # F8, UX8

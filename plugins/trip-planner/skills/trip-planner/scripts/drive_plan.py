@@ -1286,6 +1286,11 @@ def plan_backwards(dr, route, deadline, extra_s, opts):
         else:
             dr.retime(route, dep, opts)
             break
+    over = late(dep)
+    if over > 0:   # the step back did not settle (a time model that is not first-in first-out): still late
+        route["leave_by_late_s"] = over
+    else:
+        route.pop("leave_by_late_s", None)
     return dep
 
 
@@ -2540,6 +2545,12 @@ def _plan(args):
                     " and ".join(it["letter"] for it in late),
                     " / ".join(dc.fmt_clock(it["route"]["leave_by"]) for it in late),
                     "it is" if len(late) == 1 else "they are"))
+            for it in its:
+                over = it["route"].get("leave_by_late_s")
+                if over:
+                    notes.append("%s: leaving by %s still arrives about %d min after the deadline by the traffic "
+                                 "model (its leave-by did not settle); leave earlier" % (
+                                     it["letter"], dc.fmt_clock(it["route"]["leave_by"]), int(math.ceil(over / 60.0))))
 
         # a route whose charging stops (or drive back) cannot be planned is not recommended while another's can
         def no_charge(it):

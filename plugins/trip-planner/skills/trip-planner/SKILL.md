@@ -5,7 +5,7 @@ license: "MIT (code); bundled data: see NOTICE"
 compatibility: Python 3.8+ standard library only. Live mode needs network access to download GTFS timetables, plus OSRM or Valhalla driving routes, Nominatim geocoding and the Transitous router (all free, no keys). The driving mode also reads open parking, fuel-price, weather and charger data (free); TOMTOM_API_KEY, ON511_API_KEY, NLR_API_KEY and GOOGLE_PLACES_API_KEY are optional. Without network or code execution, follow references/manual-method.md (drives: references/driving.md).
 metadata:
   author: Rizwan Ahmed
-  version: "0.9.9"
+  version: "1.0.0"
 ---
 
 # Trip planner: ride + transit, or drive

@@ -16,7 +16,7 @@
   <a href="https://agentskills.io"><img src="https://img.shields.io/badge/Agent_Skills-standard-7C3AED?style=for-the-badge" alt="Agent Skills standard"/></a>
   <img src="https://img.shields.io/badge/Runs_in-Claude_%7C_Codex-D97706?style=for-the-badge" alt="Runs in Claude and Codex"/>
   <img src="https://img.shields.io/badge/API_keys-optional-0EA5E9?style=for-the-badge" alt="API keys optional"/>
-  <img src="https://img.shields.io/badge/Status-v0.9.9-orange?style=for-the-badge" alt="Status v0.9.9"/>
+  <img src="https://img.shields.io/badge/Status-v1.0.0-orange?style=for-the-badge" alt="Status v1.0.0"/>
 </p>
 
 <p align="center">
@@ -185,7 +185,7 @@ Calibration off is today's model without the per-road-class calibration (the 407
 
 ### Review record
 
-Before shipping, each release was reviewed by fresh-context reviewer agents (separate sessions with no part in the build) or an outside GPT review, and agent findings were re-checked by a verifier before anything was fixed. The latest review, of v0.9.8 for v0.9.9, ran ten area reviewers and then an adversarial verifier per area. Its 110 findings were fixed in seven batches, each test first, and six owner decisions were settled. A second review of the fixes, whose verifiers reproduced every finding, caught 31 more problems, all fixed before release. A few items stay partly open where a source is missing or conflicts; the changelog names them. [`CHANGELOG.md`](CHANGELOG.md) lists each release and its review. Code findings each have a regression test; the suite runs offline with no API keys, and CI fails any test run that tries the network.
+Before shipping, each release was reviewed by fresh-context reviewer agents (separate sessions with no part in the build) or an outside GPT review, and agent findings were re-checked by a verifier before anything was fixed. The latest review, of v0.9.9 for v1.0.0, was an outside AI review (Muse) of 173 claims, each checked against the code by verifiers. The 11 false claims (6%) were not applied, and every issue found real was fixed, each test first. Two data notes need new source data rather than code; the changelog names them, with the items still partly open from v0.9.9. [`CHANGELOG.md`](CHANGELOG.md) lists each release and its review. Code findings each have a regression test; the suite runs offline with no API keys, and CI fails any test run that tries the network.
 
 ---
 

@@ -791,5 +791,46 @@ class UnlistedCrossingComparison(unittest.TestCase):
 
 
 
+class BadBundledData(unittest.TestCase):
+    """Muse item 11: a missing or broken costs.json, traffic.json or tolls.json stopped drive_plan with a
+    traceback; it is now one line, and the EV and parking layers still carry on without their files."""
+
+    def broken(self, *names):
+        import tempfile
+        d = tempfile.mkdtemp()
+        self.addCleanup(__import__("shutil").rmtree, d, True)
+        for n in names:
+            with open(os.path.join(d, n + ".json"), "w", encoding="utf-8") as f:
+                f.write("{bad json")
+        for p in (mock.patch.object(dc, "DATA_DIR", d), mock.patch.dict(dc._DATA, clear=True)):
+            p.start()
+            self.addCleanup(p.stop)
+
+    def test_broken_file_is_one_line(self):
+        self.broken("costs")
+        with self.assertRaises(th.DataFileError) as cm:
+            dp.costs()
+        msg = str(cm.exception)
+        self.assertTrue(msg.startswith("DATA FILE UNREADABLE: references/driving/costs.json"), msg)
+        self.assertNotIn("\n", msg)
+        self.assertNotIn(dc.DATA_DIR, msg)   # the file inside the skill, never the home folder path
+
+    def test_missing_file_is_one_line(self):
+        self.broken()
+        with self.assertRaises(th.DataFileError) as cm:
+            drt.traffic_data()
+        self.assertIn("references/driving/traffic.json", str(cm.exception))
+
+    def test_main_stops_with_the_line(self):
+        with mock.patch.object(dp, "plan", side_effect=th.DataFileError("DATA FILE UNREADABLE: x")):
+            with self.assertRaises(SystemExit) as cm:
+                dp.main(["--origin", "43.5,-79.8", "--dest", "43.6,-79.7"])
+        self.assertEqual(str(cm.exception), "DATA FILE UNREADABLE: x")
+
+    def test_ev_layer_still_degrades(self):
+        self.broken("ev")
+        self.assertEqual(dp._ev_presets(), {})
+
+
 if __name__ == "__main__":
     unittest.main()

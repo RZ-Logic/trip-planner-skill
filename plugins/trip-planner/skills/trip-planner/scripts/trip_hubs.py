@@ -1063,13 +1063,28 @@ def preflight(args, regions, warnings):
 
 # --------------------------------------------------------------------------- regions and feeds
 
+class DataFileError(ValueError):
+    """A bundled file under references/ is missing or not valid JSON (a partial or edited install). Its text is
+    the one line the command-line tools stop with."""
+
+
+def read_data_file(path, rel):
+    """json.load of a bundled file; DataFileError naming `rel`, its path inside the skill, when it cannot be read."""
+    try:
+        with open(path, encoding="utf-8") as fh:
+            return json.load(fh)
+    except (OSError, ValueError) as e:
+        why = e.strerror if isinstance(e, OSError) and e.strerror else str(e)   # never the home folder path
+        raise DataFileError("DATA FILE UNREADABLE: %s (%s). Reinstall the skill or restore the file."
+                            % (rel, why)) from None
+
+
 def load_regions():
     regions = []
     if os.path.isdir(REGIONS_DIR):
         for name in sorted(os.listdir(REGIONS_DIR)):
             if name.endswith(".json"):
-                with open(os.path.join(REGIONS_DIR, name), encoding="utf-8") as fh:
-                    reg = json.load(fh)
+                reg = read_data_file(os.path.join(REGIONS_DIR, name), "references/regions/" + name)
                 reg.setdefault("id", name[:-5])
                 regions.append(reg)
     return regions
@@ -5270,6 +5285,13 @@ def build_parser():
 
 
 def main(argv=None):
+    try:
+        return _main(argv)
+    except DataFileError as e:   # a broken install: one line, not a traceback
+        raise SystemExit(str(e))
+
+
+def _main(argv=None):
     if hasattr(sys.stdout, "reconfigure"):
         try:
             sys.stdout.reconfigure(encoding="utf-8", errors="replace")

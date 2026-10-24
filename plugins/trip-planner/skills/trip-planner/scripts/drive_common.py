@@ -35,10 +35,10 @@ class FetchError(Exception):
 
 
 def load_data(name):
-    """references/driving/<name>.json, parsed once per process."""
+    """references/driving/<name>.json, parsed once per process (th.DataFileError, a ValueError, when it is
+    missing or broken)."""
     if name not in _DATA:
-        with open(os.path.join(DATA_DIR, name + ".json"), encoding="utf-8") as f:
-            _DATA[name] = json.load(f)
+        _DATA[name] = th.read_data_file(os.path.join(DATA_DIR, name + ".json"), "references/driving/%s.json" % name)
     return _DATA[name]
 
 

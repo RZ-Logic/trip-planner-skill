@@ -3149,6 +3149,13 @@ def find_parking(lat, lon, arrive, stay_min, opts, warnings):
 
 def main(argv=None):
     """Smoke test: parking.py LAT LON "YYYY-MM-DD HH:MM" STAY_H [MAX_WALK_M]."""
+    try:
+        return _main(argv)
+    except th.DataFileError as e:   # a broken install: one line, not a traceback
+        raise SystemExit(str(e))
+
+
+def _main(argv=None):
     import sys
     a = argv if argv is not None else sys.argv[1:]
     if len(a) < 4:

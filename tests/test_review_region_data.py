@@ -677,5 +677,25 @@ class HarvestedTimetableProvenance(unittest.TestCase):
                             r"manual in ontario\.json are\s+hand-entered from the operators' public pages")
 
 
+class BadRegionFile(unittest.TestCase):
+    """Muse item 12.w: one malformed region file stopped every run, --timetable and --check-network included,
+    with a traceback; it is now one line naming the file."""
+
+    def test_timetable_and_check_network_stop_with_one_line(self):
+        d = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, d, True)
+        with open(os.path.join(d, "bad.json"), "w", encoding="utf-8") as f:
+            f.write("{bad json")
+        for argv in (["--timetable", "list"], ["--check-network"]):
+            with self.subTest(argv=argv), mock.patch.object(th, "REGIONS_DIR", d), \
+                    mock.patch.object(th, "check_network", side_effect=AssertionError("no network")), \
+                    redirect_stdout(io.StringIO()):
+                with self.assertRaises(SystemExit) as cm:
+                    th.main(argv)
+                msg = str(cm.exception)
+                self.assertTrue(msg.startswith("DATA FILE UNREADABLE: references/regions/bad.json"), msg)
+                self.assertNotIn("\n", msg)
+
+
 if __name__ == "__main__":
     unittest.main()

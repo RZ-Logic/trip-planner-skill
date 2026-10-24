@@ -3617,6 +3617,13 @@ def car_only(args):
 
 
 def main(argv=None):
+    try:
+        return _main(argv)
+    except th.DataFileError as e:   # a broken install (costs, traffic or tolls file): one line, not a traceback
+        raise SystemExit(str(e))
+
+
+def _main(argv=None):
     if hasattr(sys.stdout, "reconfigure"):
         try:
             sys.stdout.reconfigure(encoding="utf-8", errors="replace")

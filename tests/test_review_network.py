@@ -1041,14 +1041,8 @@ class ConfigurableRouters(unittest.TestCase):
 
     def test_park_and_ride_passes_the_configured_osrm_url(self):
         self.env()
-        ns, _argv = dp.hub_args((43.5, -79.8), (43.65, -79.38), dt_(8), False, 0.17, 4.0, [])
+        ns, _argv = dp.hub_args((43.5, -79.8), (43.65, -79.38), dt_(8), False, 0.17, 4.0)
         self.assertEqual(ns.osrm_url, "http://osrm-a.example:5000")
-        w = []
-        older = mock.Mock(wraps=th, spec=[a for a in dir(th) if a != "build_parser"])
-        with mock.patch.object(dp, "th", older):
-            ns, _argv = dp.hub_args((43.5, -79.8), (43.65, -79.38), dt_(8), False, 0.17, 4.0, w)
-        self.assertTrue(w, "the older-trip_hubs path was not taken")
-        self.assertEqual(ns.osrm_url, "http://osrm-a.example:5000")   # the older-trip_hubs fallback too
 
     def test_check_network_lists_the_configured_hosts_only(self):
         self.env()

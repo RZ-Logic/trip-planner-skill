@@ -510,26 +510,21 @@ class PlanTests(unittest.TestCase):
         self.assertTrue(any("parking.py is missing" in w for w in res["warnings"]))
         self.assertIn("Navigate to the destination", text)
 
-    def test_hub_args_fallback(self):
-        w = []
-        saved = th.__dict__.pop("build_parser", None)
-        try:
-            ns, argv = dp.hub_args(MILTON, UNION, dt.datetime(2026, 10, 14, 9), True, 0.15, 9, w)
-        finally:
-            if saved is not None:
-                th.build_parser = saved
+    def test_no_built_in_trip_hubs_defaults(self):
+        # Muse item 9.k: a copy of trip_hubs' defaults for an older trip_hubs had already drifted (safety_min 3.0
+        # against the parser's None); both ship together, so the real parser is the only source
+        self.assertFalse(hasattr(dp, "TH_DEFAULTS"))
+        ns, argv = dp.hub_args(MILTON, UNION, dt.datetime(2026, 10, 14, 9), True, 0.15, 9)
+        self.assertEqual(vars(ns), vars(th.build_parser().parse_args(argv)))
+
+    def test_hub_args_parser(self):
+        ns, argv = dp.hub_args(MILTON, UNION, dt.datetime(2026, 10, 14, 9), False, 0.15, 9)
         self.assertEqual(ns.access, "car")
+        self.assertEqual(ns.depart, "2026-10-14 09:00")
+        ns, argv = dp.hub_args(MILTON, UNION, dt.datetime(2026, 10, 14, 9), True, 0.15, 9)
         self.assertEqual(ns.arrive_by, "2026-10-14 09:00")
         self.assertAlmostEqual(ns.car_cost_per_km, 0.15)
         self.assertIn("--access", argv)
-        self.assertTrue(w)
-
-    def test_hub_args_parser(self):
-        if not hasattr(th, "build_parser"):
-            self.skipTest("trip_hubs.build_parser not added yet")
-        ns, argv = dp.hub_args(MILTON, UNION, dt.datetime(2026, 10, 14, 9), False, 0.15, 9, [])
-        self.assertEqual(ns.access, "car")
-        self.assertEqual(ns.depart, "2026-10-14 09:00")
 
 
 NOW = dt.datetime(2026, 10, 10, 12, 0)

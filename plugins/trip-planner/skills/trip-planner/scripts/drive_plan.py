@@ -1757,19 +1757,7 @@ def on511_incidents(key, legs, tzname, region, warnings):
 
 # --------------------------------------------------------------------------- park and ride
 
-TH_DEFAULTS = {   # trip_hubs defaults (v0.8.1 main) for when build_parser is missing
-    "origin": None, "dest": None, "depart": "now", "arrive_by": None, "region": "auto", "feed": None,
-    "no_discover": False, "radius_km": None, "dest_walk_m": 1500, "origin_walk_m": 1200, "footpath_m": 400,
-    "min_change_min": 2.0, "pickup_wait_min": None, "safety_min": 3.0, "min_gain_min": 10.0, "payment": "card",
-    "max_hours": None, "final_ride": "auto", "routing": "auto", "osrm_url": "https://router.project-osrm.org",
-    "traffic_factor": None, "min_saving": None, "crosscheck": False, "top": 8, "all": False, "json": True,
-    "refresh": False, "max_age_hours": 72.0, "discover": False, "allow_street_match": False,
-    "check_network": False, "timetable": None, "access": "car", "car_cost_per_km": 0.17, "park_min": 4.0,
-    "stay_hours": 4.0,
-}
-
-
-def hub_args(o, d, when, arrive_by, cost_per_km, stay_h, warnings, traffic_factor=None, safety_min=None):
+def hub_args(o, d, when, arrive_by, cost_per_km, stay_h, traffic_factor=None, safety_min=None):
     """trip_hubs arguments for --access car. traffic_factor and safety_min put the hub drive on the same footing
     as the drive plan (the planning allowance, the same minutes spare)."""
     argv = ["--origin", ll(o), "--dest", ll(d), "--arrive-by" if arrive_by else "--depart",
@@ -1780,17 +1768,7 @@ def hub_args(o, d, when, arrive_by, cost_per_km, stay_h, warnings, traffic_facto
     if safety_min is not None:
         argv += ["--safety-min", "%g" % safety_min]
     argv.append("--json")
-    if hasattr(th, "build_parser"):
-        return th.build_parser().parse_args(argv), argv
-    warnings.append("trip_hubs.build_parser is missing (older trip_hubs), so park and ride uses built-in defaults")
-    ns = dict(TH_DEFAULTS, origin=ll(o), dest=ll(d), car_cost_per_km=cost_per_km, stay_hours=stay_h,
-              osrm_url=getattr(th, "osrm_bases", lambda: [TH_DEFAULTS["osrm_url"]])()[0])
-    ns["arrive_by" if arrive_by else "depart"] = when.strftime("%Y-%m-%d %H:%M")
-    if traffic_factor:
-        ns["traffic_factor"] = round(traffic_factor, 2)
-    if safety_min is not None:
-        ns["safety_min"] = float(safety_min)
-    return argparse.Namespace(**ns), argv
+    return th.build_parser().parse_args(argv), argv
 
 
 def _run_with_timeout(fn, arg, timeout_s, cancel=None):
@@ -1924,7 +1902,7 @@ def park_and_ride(o, d, when, arrive_by, cost_per_km, stay_h, drive_total, park_
     """Run trip_hubs in car mode and keep the hubs that beat driving on the round trip cost or on time.
     ctx: {"drive_rt", "door" (depart mode), "drive_leave" (arrive-by), "day", "traffic_factor", "safety_min"}."""
     ctx = ctx or {}
-    ns, argv = hub_args(o, d, when, arrive_by, cost_per_km, stay_h, warnings, ctx.get("traffic_factor"),
+    ns, argv = hub_args(o, d, when, arrive_by, cost_per_km, stay_h, ctx.get("traffic_factor"),
                         ctx.get("safety_min"))
     cmd = "python3 trip_hubs.py " + " ".join('"%s"' % a if " " in a else a for a in argv[:-1])
     log("park and ride: running trip_hubs in car mode")
@@ -1932,7 +1910,7 @@ def park_and_ride(o, d, when, arrive_by, cost_per_km, stay_h, drive_total, park_
     if err:
         warnings.append("park and ride search failed (%s). Run it yourself: %s" % (err, cmd))
         return {"ran": False, "command": cmd, "error": err}
-    if res.get("access", "car" if hasattr(th, "build_parser") else "ride") != "car":
+    if res.get("access", "car") != "car":
         warnings.append("trip_hubs did not run in car mode (no --access car support yet), so park and ride is not "
                         "shown. Run: %s" % cmd)
         return {"ran": False, "command": cmd, "error": "no car mode"}

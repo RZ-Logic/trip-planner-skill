@@ -145,8 +145,9 @@ def price_407(seg, entry_time, transponder, holidays=None):
     if holidays is None and entry_time.year not in _stored_years():
         notes.append("%d holidays computed from Ontario ESA rules" % entry_time.year)
     if not transponder:
-        notes.append("plus $%.0f account fee in any month you use the 407 without a transponder"
-                     % e["account_fee_monthly"])
+        fee = float(e["account_fee_monthly"])
+        notes.append("plus %s account fee in any month you use the 407 without a transponder"
+                     % ("$%d" % fee if fee == int(fee) else dc.money(fee)))   # '$5', '$5.50', never rounded
     return {"toll": round(toll, 2), "band_start": starts[band], "day_type": dtype, "direction": direction,
             "km": round(b - a, 1), "zones": zones, "rates_year": e["year"], "note": "; ".join(notes)}
 

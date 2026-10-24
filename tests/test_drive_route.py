@@ -254,6 +254,14 @@ class Price407(unittest.TestCase):
         self.assertIn("$5 account fee", p["note"])
         self.assertEqual(p["rates_year"], 2026)
 
+    def test_account_fee_note_keeps_cents(self):
+        # found while fixing Muse item 11: "$%.0f" would print a $5.50 fee as $6
+        data = dict(tolls.data())
+        data["etr407"] = dict(data["etr407"], account_fee_monthly=5.5)
+        with mock.patch.object(tolls, "data", return_value=data):
+            p = tolls.price_407(self.SEG, dt.datetime(2026, 10, 14, 12, 0), False)
+        self.assertIn("plus $5.50 account fee", p["note"])
+
     def test_westbound_zone_split(self):
         seg = {"entry_km": 84.4, "exit_km": 34.8, "direction": "W"}
         p = tolls.price_407(seg, dt.datetime(2026, 10, 14, 16, 0), True)

@@ -4,7 +4,7 @@ Releases of the trip-planner skill. Before shipping, each release was reviewed b
 agents (separate sessions with no part in the build) or an outside GPT review; agent findings were
 re-checked by a verifier before anything was fixed. Counts are given where they were recorded.
 
-## Unreleased
+## 1.0.0 (2026-10-24)
 
 **Review:** an outside AI review of 0.9.9 (Muse) made 173 claims; verifiers checked each one against the code
 at 988dc8a (42% true, 26% true but documented design, 25% partly, 6% false). The issues it found real are

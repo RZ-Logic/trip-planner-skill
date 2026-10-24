@@ -77,6 +77,36 @@ def run(args, as_json=True):
     return json.loads(out.getvalue()) if as_json else out.getvalue()
 
 
+class FeedLoadErrors(unittest.TestCase):
+    """Muse item 12.v: the per-feed handler turned a bug in trip_hubs.py into 'feed X failed to load: msg', the
+    same words as a broken feed."""
+    ARGS = ["--origin", "43.4990,-79.8000", "--dest", "43.5500,-79.8000", "--depart", "2026-10-15 10:00",
+            "--min-saving", "0", "--radius-km", "5", "--origin-walk-m", "300"] + BASE
+
+    def warnings_for(self, err):
+        good = feed([("X", "WK", "x1", "C")],
+                    [("x1", "10:20:00", "10:20:00", "D", 1, 0, 0), ("x1", "10:35:00", "10:35:00", "C", 2, 0, 0)])
+        real = th.load_feed
+
+        def load(net, fid, *a, **k):
+            if fid == "bad":
+                raise err
+            return real(net, fid, *a, **k)
+        with mock.patch.object(th, "load_feed", side_effect=load):
+            return run(self.ARGS + ["--feed", "good=" + good, "--feed", "bad=" + good])["warnings"]
+
+    def test_a_bug_is_named_as_one(self):
+        w = [x for x in self.warnings_for(TypeError("unsupported operand type(s)")) if "feed bad" in x]
+        self.assertEqual(len(w), 1, w)
+        self.assertIn("an error in trip_hubs.py, not in the feed (TypeError: unsupported operand type(s)", w[0])
+
+    def test_a_broken_feed_keeps_its_wording(self):
+        w = [x for x in self.warnings_for(ValueError("not a GTFS zip (missing stops/trips/stop_times)"))
+             if "feed bad" in x]
+        self.assertEqual(w, ["feed bad failed to load, so its service is missing from this answer: not a GTFS zip "
+                             "(missing stops/trips/stop_times)"])
+
+
 class StopTimesOrderTests(unittest.TestCase):
     """hubs-engine-4: times that fall along a trip never become a connection that arrives before it leaves."""
 

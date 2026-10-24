@@ -31,6 +31,7 @@ import re
 import sys
 import threading
 import time
+import traceback
 import unicodedata
 import urllib.error
 import urllib.parse
@@ -1442,6 +1443,10 @@ def fetch_url(fid, url, max_age_h, refresh, warnings=None):
                 pass
 
 
+# exceptions that mean a bug in this code rather than a broken feed (bad data raises OSError, ValueError,
+# KeyError, IndexError, zipfile and csv errors)
+CODE_ERRORS = (TypeError, AttributeError, NameError, AssertionError, ZeroDivisionError, RecursionError, ImportError,
+               NotImplementedError)
 FEED_MAX_BYTES = 1000 * 10 ** 6       # a feed download larger than this is refused (the TTC feed is about 80 MB)
 MEMBER_MAX_BYTES = 4000 * 10 ** 6     # largest file inside a feed zip, unpacked (TTC: about 412 MB for all files)
 MEMBER_MAX_RATIO = 100                # unpacked / packed size above which a large member is a zip bomb, not text
@@ -3578,8 +3583,16 @@ def plan(args):
         except Exception as e:  # noqa: BLE001
             failed.append(label)
             failed_urls[label] = list(urls)
-            warnings.append("feed %s failed to load, so its service is missing from this answer: %s" % (label, e))
-            log("warning: feed %s failed: %s" % (label, e))
+            if isinstance(e, CODE_ERRORS):   # a bug here, not a broken feed: say so, with where it happened
+                tb = traceback.extract_tb(e.__traceback__)
+                at = (" at %s:%d" % (os.path.basename(tb[-1].filename), tb[-1].lineno)) if tb else ""
+                warnings.append("feed %s failed to load because of an error in trip_hubs.py, not in the feed "
+                                "(%s: %s%s), so its service is missing from this answer; please report it"
+                                % (label, type(e).__name__, e, at))
+                log("warning: feed %s failed: %s" % (label, traceback.format_exc()))
+            else:
+                warnings.append("feed %s failed to load, so its service is missing from this answer: %s" % (label, e))
+                log("warning: feed %s failed: %s" % (label, e))
             return False
 
     n_discovered = n_tried = 0

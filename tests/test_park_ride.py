@@ -322,6 +322,42 @@ class CarModePlan(unittest.TestCase):
         d = [c["parking"] for c in kept if c["parking"]["basis"] == "OSM park_ride"]
         self.assertEqual([x["cost"] for x in d], [2.0])
 
+    def test_car_mode_result_has_every_key_park_and_ride_reads(self):
+        # Muse item 9.l: drive_plan.park_and_ride reads this result with .get() defaults, so a renamed key would
+        # pass both sides' own tests and quietly fall back to a default; this pins the real result to its reads
+        import drive_plan as dp
+        box = {}
+        real = th.plan
+
+        def spy(a):
+            box["res"] = real(a)
+            return box["res"]
+        with mock.patch.object(th, "plan", side_effect=spy):
+            self.run_plan(REGION, ["--access", "car", "--json"])
+        res = box["res"]
+        self.assertEqual(res["access"], "car")
+        self.assertTrue({"warnings", "pareto", "others", "hubs_with_service"} <= set(res))
+        opts = res["pareto"] + res["others"]
+        self.assertTrue(opts)
+        for op in opts:
+            self.assertTrue({"hub", "legs", "parking", "parking_unknown", "car_cost", "ride_km", "ride_min",
+                             "fare_complete", "transit_fare", "fare_parts", "book_by", "board", "arrive",
+                             "backup"} <= set(op), sorted(op))
+            self.assertTrue({"text", "cost", "free", "price_unknown", "basis"} <= set(op["parking"]))
+            rides = [lg for lg in op["legs"] if lg.get("type") == "ride"]   # the legs park_and_ride reads
+            self.assertTrue(rides and all("depart" in lg for lg in rides))
+        # the real result through park_and_ride: its values arrive, not the defaults
+        ctx = {"drive_rt": 500.0, "day": DAY, "door": dt.datetime(2026, 10, 15, 11, 30)}
+        with mock.patch.object(dp.th, "plan", return_value=res):
+            pr = dp.park_and_ride((43.4990, -79.8000), (43.5500, -79.8000), dt.datetime(2026, 10, 15, 10, 0), False,
+                                  0.17, 4.0, 250.0, 0.0, [], 30, ctx=ctx)
+        self.assertTrue(pr["ran"] and pr["options"], pr)
+        a = {op["hub"]: op for op in opts}["Hub A"]
+        got = {op["hub"]: op for op in pr["options"]}["Hub A"]
+        self.assertEqual((got["km"], got["car_cost"], got["parking"]["basis"], got["arrive_s"]),
+                         (a["ride_km"], round(a["car_cost"], 2), "T rule", a["arrive"]))
+        self.assertEqual(got["board"], th.fmt_t(a["board"]))
+
     def test_ride_mode_ignores_the_block_and_skips_overpass(self):
         plain = dict(REGION)
         plain.pop("park_and_ride")

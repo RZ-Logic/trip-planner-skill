@@ -3062,29 +3062,25 @@ def osm_lots(elements):
     return out
 
 
-def charge_cost(charge, stay_min):
-    """Cost of a stay under an OSM charge tag ('$2/hr;$5 max', '1.75 CAD/30 minutes', '$10/day'), or None."""
-    hourly, daily, cap = None, None, None
-    for amt, per_n, unit in re.findall(r"\$?\s*(\d+(?:\.\d+)?)\s*(?:CAD|\$)?\s*(?:/|per|an?\b)?\s*(\d+)?\s*"
-                                       r"(minutes|minute|mins|min|hours|hour|hrs|hr|h|day|daily|max|maximum)\b",
-                                       charge or "", re.I):
-        amt, unit = float(amt), unit.lower()
-        if unit.startswith("max"):
-            cap = amt
-        elif unit in ("day", "daily"):
-            daily = amt
-        else:
-            mins = float(per_n or 1) * (1 if unit.startswith("m") else 60)
-            hourly = amt * 60.0 / mins
-    if hourly is not None:
-        cost = hourly * math.ceil(stay_min / 60.0)
-        for lim in (cap, daily):
-            if lim is not None:
-                cost = min(cost, lim * max(1, math.ceil(stay_min / 1440.0)))
-        return round(cost, 2)
-    if daily is not None:
-        return round(daily * max(1, math.ceil(stay_min / 1440.0)), 2)
-    return None
+def _parking():
+    """parking.py, imported on first use (it imports drive_common, which imports this module: run as a script,
+    this module is registered under its own name first so no second copy loads)."""
+    if __name__ == "__main__":
+        sys.modules.setdefault("trip_hubs", sys.modules["__main__"])
+    import parking
+    return parking
+
+
+def charge_cost(charge, stay_min, arrive, holidays=None):
+    """Cost of a stay parked at `arrive` under an OSM charge tag ('$2/hr;$5 max', '1.75 CAD/30 minutes',
+    'Mo-Fr 08:00-18:00 $2/hr; Sa,Su free'), read by parking.py's rate parser so both planners price a tag alike,
+    day and time windows included. None when the tag has no price or says no parking during the stay."""
+    pk = _parking()
+    rule, _notes = pk.osm_charge_rule({"charge": charge or ""})
+    if not rule:
+        return None
+    cost, _basis, fits = pk.price_rule(rule, arrive, stay_min, holidays or set())
+    return cost if fits else None
 
 
 def agency_price(ent, day, holidays):
@@ -3099,12 +3095,14 @@ def agency_price(ent, day, holidays):
     return None, ent.get("text", "price unknown, check signs")
 
 
-def hub_parking(net, clusters, blocks, lots, stay_min, day, holidays):
+def hub_parking(net, clusters, blocks, lots, stay_min, day, holidays, arrive=None):
     """--access car: keep only hubs with somewhere to park. A hub qualifies by (a) a rail station of an agency in
     a region's park_and_ride block (except its no_free_parking names; paid_only names are paid, price unknown),
     (a2) a stop whose name says park and ride or carpool, (b) an OSM park_ride lot within 300 m of its stops, or
     (c) public OSM parking within 400 m of a rail station among its stops. Each kept hub gets c["parking"] (the
-    cheapest known choice). Returns (kept clusters, summary)."""
+    cheapest known choice). OSM charge tags are priced for a car parked at `arrive` (default noon on `day`).
+    Returns (kept clusters, summary)."""
+    arrive = arrive or dt.datetime.combine(day, dt.time(12, 0))
     rail = {}
     for (dep, arr, s0, s1, ti, *_r) in net.conns:
         tr = net.trips[ti]
@@ -3195,7 +3193,7 @@ def hub_parking(net, clusters, blocks, lots, stay_min, day, holidays):
             if lot["fee"] == "no" and not paid_here:
                 cost, what = 0.0, "free"
             else:
-                cost = charge_cost(lot["charge"], stay_min)
+                cost = charge_cost(lot["charge"], stay_min, arrive, holidays)
                 if cost is not None:
                     what = "$%.2f for %g h (OSM charge: %s)" % (cost, stay_h, lot["charge"])
                 elif paid_here:   # the agency lists no free parking here: an untagged or fee=no lot is not free
@@ -3887,7 +3885,8 @@ def plan(args):
             elements = overpass_parking(box, warnings)
             lots = None if elements is None else osm_lots(elements)
             overpass_used = elements is not None
-        clusters, parking_summary = hub_parking(net, clusters, blocks, lots, stay_min, day, hol)
+        # OSM charge tags priced from the trip's start (the time the traffic estimate uses), not the hub arrival
+        clusters, parking_summary = hub_parking(net, clusters, blocks, lots, stay_min, day, hol, arrive=ride_time)
         parking_summary["region_rules"] = bool(blocks)
         log("park and ride: %d of %d hubs have parking" % (parking_summary["with_parking"],
                                                             parking_summary["hubs_in_range"]))

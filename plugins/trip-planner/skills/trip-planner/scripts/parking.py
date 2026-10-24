@@ -3162,8 +3162,10 @@ def _main(argv=None):
         raise SystemExit('usage: parking.py LAT LON "YYYY-MM-DD HH:MM" STAY_HOURS [MAX_WALK_M]')
     warnings = []
     arrive = dt.datetime.strptime(a[2], "%Y-%m-%d %H:%M")
+    dc.stale_notes()   # forget stand-ins from an earlier search in the same process
     res = find_parking(float(a[0]), float(a[1]), arrive, float(a[3]) * 60, {
         "max_walk_m": int(a[4]) if len(a) > 4 else 800, "holidays": dc.holidays_for()}, warnings)
+    warnings.extend(w for w in dc.stale_notes() if w not in warnings)   # old cached replies that stood in
     print("PARKING    %s stay from %s, radius %d m" % (dur_text(float(a[3]) * 60), arrive.strftime("%a %Y-%m-%d %H:%M"), res["radius_m"]))
     for r in res["place_rules"]:
         print("  rule: %s" % r)

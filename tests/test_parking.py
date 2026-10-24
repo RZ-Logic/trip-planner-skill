@@ -1207,5 +1207,25 @@ class MuseItem4(unittest.TestCase):
         self.assertEqual(self.lot(rule, {"adults": 2, "children": 1, "seniors": 1})["cost"], 41.25)
 
 
+class CliStaleNotes(unittest.TestCase):
+    """Muse item 7: parking.py's command line never printed dc.stale_notes(), so an old cached reply that stood in
+    for a failed request was shown with no warning."""
+
+    def test_cli_warns_about_stale_stand_ins(self):
+        self.addCleanup(dc._STALE.clear)
+        res = {"radius_m": 800, "place_rules": [], "reservations": [], "options": [], "check": None,
+               "caveat": "prices change", "sources": []}
+
+        def fake_find(*a, **k):
+            dc._STALE["gis.example.org"] = (72.0, "URLError")
+            return res
+        out = io.StringIO()
+        with mock.patch.object(pk, "find_parking", side_effect=fake_find), mock.patch("sys.stdout", out):
+            pk.main(["43.5", "-79.8", "2026-10-14 10:00", "2"])
+        self.assertIn("WARNING    gis.example.org did not answer (URLError); used its cached reply from 3 days ago",
+                      out.getvalue())
+        self.assertEqual(dc.stale_notes(), [])
+
+
 if __name__ == "__main__":
     unittest.main()

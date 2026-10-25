@@ -301,7 +301,7 @@ The plan's numbers come from deterministic scripts. The model asks what's missin
 
 ## 🙏 Prior Art & Acknowledgements
 
-- **Muse (Meta AI):** outside focused review of 0.9.9, with the findings fixed in 1.0.0.
+- **[Muse](https://github.com/apps/muse-helper) (Meta AI):** outside focused review of 0.9.9, with the findings fixed in 1.0.0.
 - **Connection Scan Algorithm** (Dibbelt, Pajor, Strasser and Wagner): the profile scan the hub finder implements.
 - **[GTFS](https://gtfs.org)**, **[MobilityDatabase](https://mobilitydatabase.org)** and **[Transitous](https://transitous.org)**: open timetables, the feed catalog and a second-opinion router.
 - **[OpenStreetMap](https://www.openstreetmap.org/copyright) contributors** via [OSRM](https://project-osrm.org), [Valhalla](https://github.com/valhalla/valhalla) on the FOSSGIS servers, [Nominatim](https://nominatim.org), [Photon](https://photon.komoot.io) and [Overpass](https://overpass-api.de) (ODbL).

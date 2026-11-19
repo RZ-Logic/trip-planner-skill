@@ -14,6 +14,15 @@ row shows its best kW with all its ports, and the no-gain charging stop is scree
 compares, not the whole trip. One rule was changed on the owner's ruling: a named day beside an event word
 in a parking review no longer takes the label (see "Parking reviews" below). Tests: 1298 at 1.0.0, 1306 now.
 
+Two more reads of the same fixes (Codex and Muse) added 23 claims that held for the fix commits; they come
+down to 17 separate problems, each run again on this code. One is a bug and is fixed here, test first (see
+"Parking rates" below). Six were already fixed, three of them above. Two cannot matter in a real trip
+(walking transfers north of 78.5 degrees, and two day passes bought 25 hours apart in one trip). Eight are
+documented design and are unchanged: the four listed above, plus an unknown fare counted as the dearest
+exact fare in the run, a ride timed with the traffic of its start, "AWD" keeping every version named AWD,
+and free hours written after the price ("$3/hr, 2 hours free") read only when the text says "first". Tests:
+1309 now.
+
 - **Walking transfers at the edge of the radius.** Two stops in the last half metre under the footpath
   radius (399.55 m to 400 m at the default 400 m) could fall two grid cells apart and get no walking
   transfer. The cells are now a touch over the radius.
@@ -27,6 +36,10 @@ in a parking review no longer takes the label (see "Parking reviews" below). Tes
 - **Parking reviews: a named day beside an event word.** "Concert parking was $30 on Saturday" was labelled
   a weekend rate and is now an event price. A named day (Saturday, Sunday) says when the event was, so it no
   longer takes the label. "Weekends", "weekdays" and plural day names ("Saturdays") still do.
+- **Parking rates: "free all day on weekends".** With no paid days written, "$2/hr, free 24 hours on
+  weekends" and "$2/hr, free all day on weekends" gave no price at all: "24 hours" or "all day" between
+  "free" and its days hid the free days, and they were read as the paid days. They now price Monday to
+  Friday and are free on the weekend, as "$2/hr, free on weekends" already was.
 
 ## 1.0.0 (2026-10-24)
 

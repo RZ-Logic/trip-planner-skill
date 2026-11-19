@@ -4,6 +4,26 @@ Releases of the trip-planner skill. Before shipping, each release was reviewed b
 agents (separate sessions with no part in the build) or an outside GPT review; agent findings were
 re-checked by a verifier before anything was fixed. Counts are given where they were recorded.
 
+## Unreleased
+
+**Review:** an outside review (Codex) raised 21 claims about 17 of the 1.0.0 fixes; checkers ran each one
+as a concrete input. Nine held for the shipped code. Three are bugs and are fixed here, test first. One was
+already fixed in 1.0.0 (a free leg on a credited-back fare gives no transfer window). Five are documented
+design and are unchanged: ride times use no 407 rows, a review's event word beats "flat" and loses to a
+nearer weekday or weekend word, a charger row shows its best kW with all its ports, and the no-gain
+charging stop is screened on the two stops it compares, not the whole trip. Tests: 1298 at 1.0.0, 1305 now.
+
+- **Walking transfers at the edge of the radius.** Two stops in the last half metre under the footpath
+  radius (399.55 m to 400 m at the default 400 m) could fall two grid cells apart and get no walking
+  transfer. The cells are now a touch over the radius.
+- **transfers.txt: a stop pair over its station.** A plain or timed transfer between two named stops (type
+  0, 1 or blank) now lifts a minimum time or a ban set on their station, as a stop-pair minimum or ban
+  already did.
+- **Car lookup: a trim typed beside "AWD".** "2023 Ford Mustang Mach-E Performance AWD" rated the ordinary
+  AWD versions and said no version mentions "performance". It now picks the GT Performance Edition (2021 to
+  2023). Of 33,302 AWD lookups the index can form, 10 change: these six and "2020 Tesla Model Y 21 AWD",
+  which now picks the Performance on 21 inch wheels.
+
 ## 1.0.0 (2026-10-24)
 
 **Review:** an outside AI review of 0.9.9 (Muse) made 173 claims; verifiers checked each one against the code

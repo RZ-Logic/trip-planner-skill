@@ -2357,8 +2357,10 @@ def discover_feeds(box, rows=None, places=None, countries=None, refresh=False):
 
 class Grid:
     def __init__(self, lats, lons, ids, cell_m, ref_lat):
-        self.dlat = cell_m / 111320.0
-        self.dlon = cell_m / (111320.0 * max(0.2, math.cos(math.radians(ref_lat))))
+        # cells a touch over cell_m on haversine_m's sphere (111 195 m per degree): at 111 320 they were 0.1%
+        # short, so two stops just under cell_m apart could sit two cells apart and the 3 x 3 search missed them
+        self.dlat = cell_m * 1.001 / 111195.0
+        self.dlon = self.dlat / max(0.2, math.cos(math.radians(ref_lat)))
         self.cells = {}
         for i in ids:
             self.cells.setdefault(self.key(lats[i], lons[i]), []).append(i)

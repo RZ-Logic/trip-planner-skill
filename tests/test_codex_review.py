@@ -69,5 +69,50 @@ class FootpathGridEdgeTests(unittest.TestCase):
         self.assertFalse(self.build(lat, lon, lat + math.degrees(401.0 / R_M), lon)[0])
 
 
+class StopPairBeatsStationRuleTests(unittest.TestCase):
+    """transfers.txt: a rule naming two stops wins over a rule on their station. A plain (type 0 or blank) or timed
+    (type 1) stop-pair rule recorded nothing, so the station's minimum time or ban still applied to that pair."""
+
+    STOPS_TXT = ("stop_id,stop_name,stop_lat,stop_lon,location_type,parent_station\n"
+                 "P,Big Station,43.52005,-79.80005,1,\n"
+                 "A,Hub A,43.5000,-79.8000,0,\n"
+                 "B,Transfer B,43.5200,-79.8000,0,P\n"
+                 "B2,Transfer B across street,43.5201,-79.8001,0,P\n"
+                 "C,Dest C,43.5500,-79.8000,0,\n")
+    TRIPS = [("1", "WK", "t1", "B"), ("2", "WK", "t2", "C"), ("2", "WK", "t3", "C")]
+    TIMES = [("t1", "08:00:00", "08:00:00", "A", 1, 0, 0), ("t1", "08:10:00", "08:10:00", "B", 2, 0, 0),
+             ("t2", "08:13:00", "08:13:00", "B2", 1, 0, 0), ("t2", "08:25:00", "08:25:00", "C", 2, 0, 0),
+             ("t3", "08:43:00", "08:43:00", "B2", 1, 0, 0), ("t3", "08:55:00", "08:55:00", "C", 2, 0, 0)]
+    HEAD = "from_stop_id,to_stop_id,transfer_type,min_transfer_time\n"
+
+    def arrive(self, rules):
+        """Arrival at C leaving Hub A at 07:55 (INF when the change at the station is not possible)."""
+        p = os.path.join(tempfile.mkdtemp(dir=_TMP), "f.zip")
+        make_feed(p, STOPS, self.TRIPS, self.TIMES)
+        extra = {"stops.txt": self.STOPS_TXT}
+        if rules:
+            extra["transfers.txt"] = self.HEAD + rules
+        add_files(p, extra)
+        _net, scan, idx = scan_for(p, hms(7, 0), hms(11, 0))
+        return scan.evaluate(idx["Hub A"], hms(7, 55))[0]
+
+    def test_station_rules_alone_still_apply(self):
+        self.assertEqual(self.arrive(""), hms(8, 25))
+        self.assertEqual(self.arrive("P,P,2,480\n"), hms(8, 55))   # 8 minutes to change: the 08:13 is missed
+        self.assertGreaterEqual(self.arrive("P,P,3,\n"), th.INF)
+
+    def test_plain_or_timed_stop_pair_lifts_the_station_rule(self):
+        for kind in ("0", "1", ""):
+            with self.subTest(transfer_type=kind):
+                self.assertEqual(self.arrive("P,P,2,480\nB,B2,%s,\n" % kind), hms(8, 25))
+                self.assertEqual(self.arrive("P,P,3,\nB,B2,%s,\n" % kind), hms(8, 25))
+                self.assertEqual(self.arrive("B,B2,%s,\nP,P,2,480\n" % kind), hms(8, 25))   # either row order
+
+    def test_stop_pair_minimum_or_ban_still_wins(self):
+        self.assertEqual(self.arrive("P,P,3,\nB,B2,2,60\n"), hms(8, 25))
+        self.assertEqual(self.arrive("B,B2,0,\nB,B2,2,480\n"), hms(8, 55))   # the stricter row of the same pair
+        self.assertGreaterEqual(self.arrive("P,P,2,60\nB,B2,3,\n"), th.INF)
+
+
 if __name__ == "__main__":
     unittest.main()

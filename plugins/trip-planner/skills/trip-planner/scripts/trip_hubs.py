@@ -2174,7 +2174,8 @@ def load_feed(net, fid, label, path, day, t0, t_end, holidays=None, local_tz=Non
             aa, bb = ends(fa), ends(fb)
             if not aa or not bb:
                 continue
-            lvl = levels[fa in local and fb in local]
+            exact = fa in local and fb in local
+            lvl = levels[exact]
             ttype = col(r, idx, "transfer_type")
             for a in aa:
                 for b in bb:
@@ -2182,11 +2183,18 @@ def load_feed(net, fid, label, path, day, t0, t_end, holidays=None, local_tz=Non
                         lvl[(a, b)] = -1
                     elif ttype == "2":
                         try:
-                            lvl[(a, b)] = max(lvl.get((a, b), 0), int(float(col(r, idx, "min_transfer_time"))))
+                            lvl[(a, b)] = max(lvl.get((a, b)) or 0, int(float(col(r, idx, "min_transfer_time"))))
                         except ValueError:
                             pass
-        for lvl in levels:
-            net.xfer.update(lvl)
+                    elif exact and ttype in ("", "0", "1"):
+                        # a plain or timed transfer between these two stops lifts the station's rule for the pair
+                        lvl.setdefault((a, b), None)
+        net.xfer.update(levels[0])
+        for pair, need in levels[1].items():
+            if need is None:
+                net.xfer.pop(pair, None)
+            else:
+                net.xfer[pair] = need
     return info
 
 

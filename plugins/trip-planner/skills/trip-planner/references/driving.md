@@ -217,7 +217,9 @@ priced.
      no match and Honda's model list). "RWD" or "FWD" keeps the versions named so, never an
      electric Performance, GT, Rally or Plaid trim. "AWD" keeps the versions named with a drive word;
      when none is, those electric trims count as all-wheel drive, with the plain-named versions (the
-     2022 "Model S" is the dual-motor Long Range) but not one naming a single motor. "PowerBoost" and
+     2022 "Model S" is the dual-motor Long Range) but not one naming a single motor. A trim typed beside
+     "AWD" that only one of those electric trims carries picks it ("2023 Mustang Mach-E Performance AWD"
+     is the GT Performance Edition). "PowerBoost" and
      "i-FORCE MAX" pick the hybrid. A word no version carries (other than a trim grade) gives at most
      medium confidence.
   3. The class median from `--car-class`, or for a small SUV by default.

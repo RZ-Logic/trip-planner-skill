@@ -156,6 +156,8 @@ _CTX = [
     ("day", re.compile(r"\bday\b|daily|\bmax(?:imum)?\b|24\s?h|journ[e\u00e9]e|\bjour\b", re.I)),
     ("flat", re.compile(r"\bflat\b|one price|fixed (?:rate|price)|forfait", re.I)),
 ]
+# A singular day name beside an event word says when the event was; 'weekends' and 'Saturdays' are rate classes.
+_NAMED_DAY = ("saturday", "sunday", "sat", "sun")
 _STRONG = re.compile(r"[.!?]+(?=\s|$)\s*|[;\n]+\s*|\s+(?:but|however|whereas|while|though|although|mais)\s+",
                      re.I)
 _WEAK = re.compile(r"(?<!\d),\s*|,(?=\s)\s*|[:()]\s*|\s+-\s+")
@@ -209,11 +211,14 @@ def _dist(m, pos):
 def _nearest(ctx, pos, units):
     """The context label from `units` whose match lies nearest the amount at `pos` in ctx (ties: list order), or
     None. An event word anywhere in the clause wins ('on event nights they charge $30') unless a weekday or
-    weekend word is nearer the amount ('the event staff were nice and they charge $10 on weekdays'); a nearer
-    weekday word blocks the weekend label ('$6 on weekends and $18 weekdays')."""
+    weekend word is nearer the amount ('the event staff were nice and they charge $10 on weekdays'); a named
+    day (Saturday, Sun) does not count: it only says when the event was ('concert parking was $30 on Saturday'),
+    but 'weekends' and 'Saturdays' do; a nearer weekday word blocks the weekend label ('$6 on weekends and $18
+    weekdays')."""
     if "event" in units:
         ev = [_dist(m, pos) for m in _CTX[0][1].finditer(ctx)]
-        days = [_dist(m, pos) for unit, rx in _CTX if unit in ("weekend", "weekday") for m in rx.finditer(ctx)]
+        days = [_dist(m, pos) for unit, rx in _CTX if unit in ("weekend", "weekday") for m in rx.finditer(ctx)
+                if m.group().lower() not in _NAMED_DAY]
         if ev and (not days or min(ev) <= min(days)):
             return "event"
     best = None

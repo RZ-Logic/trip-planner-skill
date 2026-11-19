@@ -137,6 +137,24 @@ class Extractor(unittest.TestCase):
             got = [(m["amount"], m["unit"]) for m in pr.extract_mentions(text, "2026-08", 4)]
             self.assertEqual(got, want, text)
 
+    def test_a_named_day_does_not_beat_an_event_word(self):
+        # Codex review: "Saturday" beside an event word says when the event was, so the event keeps the label.
+        # "weekend", "weekdays" and plural day names ("Saturdays") are rate classes and still beat a farther event word
+        cases = [
+            ("Concert parking was $30 on Saturday.", [(30.0, "event")]),
+            ("Leafs game Saturday night parking was $30.", [(30.0, "event")]),
+            ("Raptors game Sunday, parking was $25.", [(25.0, "event")]),
+            ("Concert parking was $30 on Sat.", [(30.0, "event")]),
+            ("Concert parking was $30 on Sun.", [(30.0, "event")]),
+            ("Event parking aside, they charge $8 on Saturdays.", [(8.0, "weekend")]),
+            ("Concert parking aside, they charge $5 on Sundays.", [(5.0, "weekend")]),
+            ("Concert parking aside, they charge $8 on the weekend.", [(8.0, "weekend")]),
+            ("Parking is $9 on Saturday.", [(9.0, "weekend")]),
+        ]
+        for text, want in cases:
+            got = [(m["amount"], m["unit"]) for m in pr.extract_mentions(text, "2026-08", 4)]
+            self.assertEqual(got, want, text)
+
     def test_range_and_duration_fields(self):
         m = pr.extract_mentions("Parking is $20-25 depending on the day.", "2026-08")[0]
         self.assertEqual(m["max"], 25.0)

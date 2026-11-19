@@ -114,5 +114,39 @@ class StopPairBeatsStationRuleTests(unittest.TestCase):
         self.assertGreaterEqual(self.arrive("P,P,2,60\nB,B2,3,\n"), th.INF)
 
 
+class TrimWordWithAwdTests(unittest.TestCase):
+    """'AWD' kept only the rows named with a drive word before the other words were read, so a trim typed beside
+    it that only a dual-motor trim's row carries ('Mach-E Performance AWD' -> 'GT Performance Edition') was
+    dropped and the ordinary AWD versions were rated instead. Real bundled index, no download."""
+
+    def setUp(self):
+        self.nodl = mock.patch.object(V, "_download_year", return_value=False)
+        self.nodl.start()
+
+    def tearDown(self):
+        self.nodl.stop()
+
+    def look(self, text):
+        w = []
+        return V.lookup(text, w), w
+
+    def test_trim_word_beside_awd_picks_its_own_row(self):
+        for year in (2021, 2022, 2023):
+            got, w = self.look("%d Ford Mustang Mach-E Performance AWD" % year)
+            with self.subTest(year=year):
+                self.assertEqual(got["variant_names"], ["Mustang Mach-E GT Performance Edition"])
+                self.assertEqual((got["city"], got["hwy"]), (23.8, 27.8))
+                self.assertFalse(any("ignored" in x for x in w), w)
+
+    def test_bare_awd_and_an_unlisted_trim_are_unchanged(self):
+        got, w = self.look("2023 Ford Mustang Mach-E AWD")
+        self.assertFalse(any("GT" in n for n in got["variant_names"]), got["variant_names"])
+        got, w = self.look("2025 Ford Mustang Mach-E Performance AWD")   # no 2025 row carries the word
+        self.assertEqual(got["variant_names"], ["Mustang Mach-E Extended Range AWD", "Mustang Mach-E Standard Range AWD"])
+        self.assertTrue(any("ignored 'performance'" in x for x in w), w)
+        got, w = self.look("2025 Tesla Model 3 AWD")
+        self.assertEqual(got["variant_names"], ["Model 3 Long Range AWD (Import)"])
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -1215,6 +1215,11 @@ def lookup(text, warnings, allow_download=True):
         if q["drive"] == "awd":   # a drive word in the name, else the dual-motor EV trims ('Plaid') with the
             # plain-named rows ('Model S', NRCan's dual-motor Long Range), never a row naming a single motor
             d = [r for r in picked if set(r.toks) & DRIVE_WORDS]
+            trims = [tk for tk in left if tk not in STOP_WORDS]
+            if d and trims and not any(_mentions(r, tk) for r in d for tk in trims):
+                # a trim typed beside the drive word ('Mach-E Performance AWD') that only a dual-motor trim's
+                # row carries ('GT Performance Edition'): keep that row, the trim word then picks it
+                d += [r for r in picked if r.drive == "awd" and r not in d and any(_mentions(r, tk) for tk in trims)]
             if not d and any(r.drive == "awd" for r in picked):
                 d = [r for r in picked if r.drive == "awd" or (r.drive is None and "single" not in r.toks)]
         else:   # the word typed ('RWD') in the name, else any 2WD word, else a name with no drive word

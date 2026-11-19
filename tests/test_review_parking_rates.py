@@ -291,6 +291,34 @@ class FreeHoursOnDays(unittest.TestCase):            # follow-up of parking-9
             self.assertEqual(price(text, WED10, 600), 20.0, text)
             self.assertEqual(price(text, SAT10, 120), 0.0, text)
 
+    def test_free_all_day_on_days_with_no_paid_day_list(self):
+        # outside review of the fix above: with no paid days written, "24 hours" or "all day" between "free" and
+        # its days hid the free days, so they were read as the paid days and the lot lost its price (None)
+        for text in ("$2/hr, free 24 hours on weekends", "$2/hr, free all day on weekends", "$2/hr, free 24h on weekends",
+                     "$2/hr, free all day Sat-Sun", "$2/hr; free all day weekends"):
+            rule, notes = pk.parse_rate_text(text)
+            self.assertEqual(rule.get("paid_days"), [0, 1, 2, 3, 4], text)  # before: {} "free days cover every paid day"
+            self.assertNotIn("free_first_min", rule, text)
+            self.assertEqual(notes, [], text)
+            self.assertEqual(price(text, WED10, 120), 4.0, text)            # before: None (no price data)
+            self.assertEqual(price(text, SAT10, 120), 0.0, text)
+            self.assertEqual(price(text, SUN10, 600), 0.0, text)
+        self.assertEqual(price("$2/hr, free all day Sunday", SAT10, 120), 4.0)
+        self.assertEqual(price("$2/hr, free all day Sunday", SUN10, 120), 0.0)
+        text = "$2/hr 8am-6pm, free all day on weekends"                    # the paid window keeps its hours
+        self.assertEqual(price(text, WED10, 120), 4.0)
+        self.assertEqual(price(text, WED10.replace(hour=19), 120), 0.0)
+        self.assertEqual(price(text, SAT10, 120), 0.0)
+
+    def test_text_that_calls_every_day_free_all_day_stays_price_unknown(self):
+        rule, notes = pk.parse_rate_text("$2/hr, free all day Mon-Sun")
+        self.assertEqual(rule, {})                                          # a price and "free every day": never $0
+        self.assertIn("free days cover every paid day; price not used", notes)
+
+    def test_free_hours_on_days_is_still_not_read_as_free_days(self):
+        # "free 2 hours on weekends" is an allowance on those days, not free weekends: stays price unknown
+        self.assertIsNone(price("$2/hr, free 2 hours on weekends", SAT10, 300))
+
 
 class OpeningHoursDaylessFirst(unittest.TestCase):   # follow-up of parking-5
     def test_a_rule_with_no_days_sets_the_week(self):

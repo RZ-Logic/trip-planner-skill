@@ -222,8 +222,10 @@ FREE_FIRST_RE = re.compile(r"first\s+(?P<n>\d+|one|two|half)?\s*(?P<u>hours?|hrs
                            r"|\bfree\s+(?:for\s+)?(?:the\s+)?(?:first\s+)?(?P<n3>\d+|one|two|half)\s*(?P<u3>hours?|hrs?|h|min(?:ute)?s?)\b", re.I)
 EVENING_RE = re.compile(r"\b(eve|evening|night|overnight)\b", re.I)
 CLAUSE_SEP = re.compile(r"[,;|]|//")    # what ends a clause of rate text ("$2/hr Mon-Fri 8am-6pm; $1/hr Sat ...")
-# what may stand between "free" and its days: "free Sat-Sun", "free on weekends", "free evenings and weekends"
-FREE_GAP_RE = re.compile(r"^[\s:,\-]*(?:on\s+)?(?:(?:eve|evenings?|nights?|overnight)\s*(?:,|and|&)\s*)?(?:on\s+)?$", re.I)
+# what may stand between "free" and its days: "free Sat-Sun", "free on weekends", "free evenings and weekends",
+# "free all day on weekends", "free 24 hours on weekends" (the whole day; any other count of hours is not free days)
+FREE_GAP_RE = re.compile(r"^[\s:,\-]*(?:on\s+)?(?:(?:eve|evenings?|nights?|overnight)\s*(?:,|and|&)\s*)?"
+                         r"(?:(?:all\s+day|24\s*-?\s*(?:hours?|hrs?|h))\s*)?(?:on\s+)?$", re.I)
 
 
 def _clock(tok, ap_hint=None):
